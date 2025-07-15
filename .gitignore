@@ -1,0 +1,118 @@
+# Django #
+*.log
+*.pot
+*.pyc
+__pycache__/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media
+
+# 如果你想把整个media文件夹纳入版本控制，但是排除用户上传的文件
+# media/avatars/*
+# !media/avatars/.gitkeep
+# media/uploads/*
+# !media/uploads/.gitkeep
+
+# 如果你的项目使用staticfiles
+# staticfiles/
+
+# 日志文件
+logs/
+*.log.*
+
+# Python #
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE相关
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+.cursor/
+
+# 环境
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# 数据库备份文件
+*.sql
+*.sqlite3-*
+*.bak
+
+# 本地开发设置
+local_*.py
+
+# 临时文件
+temp/
+tmp/
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 密钥和敏感信息
+*.pem
+*.key
+*.crt
+*.secret
+
+# 编译文件
+*.pyc
+*.pyo
+*.pyd
+*.c
+
+# 缓存
+*.cache/ 

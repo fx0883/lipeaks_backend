@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .tab-bar {
+            height: 83px;
+            border-top: 1px solid #dcfce7;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #94a3b8;
+            transition: color 0.2s;
+        }
+        .tab-item.active {
+            color: #22c55e;
+        }
+        .profile-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .setting-item {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            border-bottom: 1px solid #f1f5f9;
+            transition: background-color 0.2s;
+        }
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+        .setting-item:active {
+            background-color: #f8fafc;
+        }
+        .setting-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+        }
+        .gradient-header {
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            border-radius: 16px 16px 0 0;
+            color: white;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #e2e8f0;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #22c55e;
+        }
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        .badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+        .badge-primary {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        .badge-warning {
+            background-color: #fef3c7;
+            color: #d97706;
+        }
+        .achievement-card {
+            border-radius: 12px;
+            background-color: #fff;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .achievement-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+        }
+        .animated-badge {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="p-5 pb-24 overflow-y-auto" style="height: calc(100% - 127px);">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">个人中心</h1>
+            <button class="text-green-500">
+                <i class="fas fa-cog text-xl"></i>
+            </button>
+        </div>
+        
+        <!-- 个人信息卡片 -->
+        <div class="profile-card mb-6 overflow-hidden">
+            <!-- 渐变头部 -->
+            <div class="gradient-header p-5">
+                <div class="flex items-center">
+                    <div class="w-20 h-20 rounded-full bg-cover bg-center border-4 border-white" style="background-image: url('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80')"></div>
+                    <div class="ml-4">
+                        <h2 class="text-2xl font-bold">李明</h2>
+                        <div class="flex items-center mt-1">
+                            <div class="badge badge-primary animated-badge mr-2">连续打卡15天</div>
+                            <div class="badge badge-warning">Lv.5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 个人数据概览 -->
+            <div class="grid grid-cols-3 text-center p-5">
+                <div class="border-r border-gray-100">
+                    <p class="text-2xl font-bold text-green-600">85%</p>
+                    <p class="text-xs text-gray-500">月平均完成率</p>
+                </div>
+                <div class="border-r border-gray-100">
+                    <p class="text-2xl font-bold text-green-600">132</p>
+                    <p class="text-xs text-gray-500">累计打卡天数</p>
+                </div>
+                <div>
+                    <p class="text-2xl font-bold text-green-600">8</p>
+                    <p class="text-xs text-gray-500">已获成就</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 成就展示 -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">我的成就</h2>
+                <a href="#" class="text-green-500 text-sm">查看全部</a>
+            </div>
+            
+            <div class="overflow-x-auto -mx-5 px-5">
+                <div class="flex space-x-4 pb-2">
+                    <!-- 成就1 -->
+                    <div class="achievement-card p-4 flex flex-col items-center" style="min-width: 100px">
+                        <div class="achievement-icon bg-indigo-500 mb-2">
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <p class="text-sm font-medium text-center">初学者</p>
+                        <p class="text-xs text-gray-500 text-center">完成首次打卡</p>
+                    </div>
+                    
+                    <!-- 成就2 -->
+                    <div class="achievement-card p-4 flex flex-col items-center" style="min-width: 100px">
+                        <div class="achievement-icon bg-green-500 mb-2">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <p class="text-sm font-medium text-center">坚持不懈</p>
+                        <p class="text-xs text-gray-500 text-center">连续打卡7天</p>
+                    </div>
+                    
+                    <!-- 成就3 -->
+                    <div class="achievement-card p-4 flex flex-col items-center" style="min-width: 100px">
+                        <div class="achievement-icon bg-yellow-500 mb-2">
+                            <i class="fas fa-fire"></i>
+                        </div>
+                        <p class="text-sm font-medium text-center">火热状态</p>
+                        <p class="text-xs text-gray-500 text-center">单日完成5项任务</p>
+                    </div>
+                    
+                    <!-- 成就4 -->
+                    <div class="achievement-card p-4 flex flex-col items-center" style="min-width: 100px">
+                        <div class="achievement-icon bg-purple-500 mb-2">
+                            <i class="fas fa-trophy"></i>
+                        </div>
+                        <p class="text-sm font-medium text-center">全能达人</p>
+                        <p class="text-xs text-gray-500 text-center">完成所有类型任务</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 统计卡片 -->
+        <div class="profile-card grid grid-cols-3 p-4 mb-4">
+            <a href="statistics.html" class="text-center">
+                <p class="text-2xl font-bold">85%</p>
+                <p class="text-xs text-gray-500">完成率</p>
+            </a>
+            <a href="checkin_records.html" class="text-center">
+                <p class="text-2xl font-bold">138</p>
+                <p class="text-xs text-gray-500">打卡记录</p>
+            </a>
+            <a href="statistics.html" class="text-center">
+                <p class="text-2xl font-bold">12</p>
+                <p class="text-xs text-gray-500">连续打卡</p>
+            </a>
+        </div>
+        
+        <!-- 设置项目 -->
+        <div class="settings-section">
+            <div class="section-title px-4 mb-2">设置</div>
+            <div class="profile-card">
+                <a href="account_settings.html" class="setting-item">
+                    <div class="flex items-center">
+                        <div class="setting-icon bg-blue-100 text-blue-500">
+                            <i class="fas fa-user-circle"></i>
+                        </div>
+                        <span>账号设置</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </a>
+                <a href="notification_settings.html" class="setting-item">
+                    <div class="flex items-center">
+                        <div class="setting-icon bg-indigo-100 text-indigo-500">
+                            <i class="fas fa-bell"></i>
+                        </div>
+                        <span>提醒设置</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </a>
+                <a href="appearance_settings.html" class="setting-item">
+                    <div class="flex items-center">
+                        <div class="setting-icon bg-purple-100 text-purple-500">
+                            <i class="fas fa-palette"></i>
+                        </div>
+                        <span>外观设置</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </a>
+                <a href="privacy_settings.html" class="setting-item">
+                    <div class="flex items-center">
+                        <div class="setting-icon bg-green-100 text-green-500">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <span>隐私设置</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </a>
+                <a href="checkin_records.html" class="setting-item">
+                    <div class="flex items-center">
+                        <div class="setting-icon bg-yellow-100 text-yellow-500">
+                            <i class="fas fa-history"></i>
+                        </div>
+                        <span>打卡记录</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </a>
+                <a href="help_center.html" class="setting-item">
+                    <div class="flex items-center">
+                        <div class="setting-icon bg-pink-100 text-pink-500">
+                            <i class="fas fa-question-circle"></i>
+                        </div>
+                        <span>帮助中心</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </a>
+                <a href="about_us.html" class="setting-item">
+                    <div class="flex items-center">
+                        <div class="setting-icon bg-red-100 text-red-500">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <span>关于我们</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 底部导航栏 -->
+    <div class="tab-bar fixed bottom-0 left-0 right-0 flex justify-around">
+        <div class="tab-item">
+            <i class="fas fa-home text-xl"></i>
+            <span class="text-xs mt-1">首页</span>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-tasks text-xl"></i>
+            <span class="text-xs mt-1">任务</span>
+        </div>
+        <div class="tab-item">
+            <div class="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white">
+                <i class="fas fa-plus"></i>
+            </div>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-chart-bar text-xl"></i>
+            <span class="text-xs mt-1">统计</span>
+        </div>
+        <div class="tab-item active">
+            <i class="fas fa-user text-xl"></i>
+            <span class="text-xs mt-1">我的</span>
+        </div>
+    </div>
+    
+    <script>
+        // 模拟主题切换功能
+        document.getElementById('theme-switch').addEventListener('change', function() {
+            if (this.checked) {
+                // 记录日志
+                console.log('切换到深色模式');
+                alert('切换到深色模式（实际实现中会应用深色主题）');
+            } else {
+                // 记录日志
+                console.log('切换到浅色模式');
+                alert('切换到浅色模式（实际实现中会应用浅色主题）');
+            }
+        });
+        
+        // 模拟设置项点击
+        document.querySelectorAll('.setting-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                // 排除开关组件，避免重复触发
+                if (e.target.tagName !== 'INPUT' && !e.target.classList.contains('slider')) {
+                    const title = this.querySelector('span').textContent;
+                    
+                    // 记录日志
+                    console.log('点击设置项: ' + title);
+                    
+                    // 模拟不同设置项的跳转
+                    if (title !== '外观设置') {
+                        alert('进入' + title + '页面');
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

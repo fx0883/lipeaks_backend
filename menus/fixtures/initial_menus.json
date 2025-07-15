@@ -1,0 +1,104 @@
+[
+  {
+    "model": "menus.menu",
+    "pk": 1,
+    "fields": {
+      "name": "仪表盘",
+      "code": "dashboard",
+      "icon": "dashboard",
+      "path": "/dashboard",
+      "component": "layout/Dashboard",
+      "rank": 1,
+      "parent": null,
+      "is_active": true,
+      "remarks": "系统仪表盘",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 2,
+    "fields": {
+      "name": "用户管理",
+      "code": "user_management",
+      "icon": "user-group",
+      "path": "/users",
+      "component": "layout/UserManagement",
+      "rank": 2,
+      "parent": null,
+      "is_active": true,
+      "remarks": "用户管理模块",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 3,
+    "fields": {
+      "name": "用户列表",
+      "code": "user_list",
+      "icon": "list",
+      "path": "/users/list",
+      "component": "views/users/UserList",
+      "rank": 1,
+      "parent": 2,
+      "is_active": true,
+      "remarks": "用户列表",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 4,
+    "fields": {
+      "name": "CMS管理",
+      "code": "cms_management",
+      "icon": "document",
+      "path": "/cms",
+      "component": "layout/CmsManagement",
+      "rank": 3,
+      "parent": null,
+      "is_active": true,
+      "remarks": "内容管理系统",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 5,
+    "fields": {
+      "name": "内容列表",
+      "code": "content_list",
+      "icon": "list",
+      "path": "/cms/content",
+      "component": "views/cms/ContentList",
+      "rank": 1,
+      "parent": 4,
+      "is_active": true,
+      "remarks": "内容列表",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 6,
+    "fields": {
+      "name": "系统设置",
+      "code": "system_settings",
+      "icon": "setting",
+      "path": "/settings",
+      "component": "layout/Settings",
+      "rank": 4,
+      "parent": null,
+      "is_active": true,
+      "remarks": "系统设置",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  }
+] 

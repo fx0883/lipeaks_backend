@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0fdf4;
+        }
+        .container {
+            max-width: 450px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+            margin-top: 40px;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: 700;
+            color: #16a34a;
+            margin-bottom: 16px;
+        }
+        .app-description {
+            font-size: 16px;
+            color: #4b5563;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #4b5563;
+        }
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+            font-size: 16px;
+        }
+        .form-input:focus {
+            border-color: #4ade80;
+        }
+        .register-btn {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .register-btn:active {
+            transform: scale(0.98);
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 24px 0;
+            color: #9ca3af;
+        }
+        .divider::before, .divider::after {
+            content: "";
+            flex: 1;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .divider span {
+            padding: 0 10px;
+        }
+        .social-login {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        .social-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+        }
+        .social-icon {
+            width: 24px;
+            height: 24px;
+        }
+        .bottom-text {
+            text-align: center;
+            margin-top: 24px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .login-link {
+            color: #16a34a;
+            font-weight: 500;
+            text-decoration: none;
+        }
+        .policy-text {
+            font-size: 12px;
+            color: #9ca3af;
+            text-align: center;
+            margin-top: 16px;
+        }
+        .policy-link {
+            color: #16a34a;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">自律打卡</div>
+            <p class="app-description">加入我们，开启自律之旅</p>
+        </div>
+        
+        <form>
+            <div class="form-group">
+                <label class="form-label" for="username">用户名</label>
+                <input type="text" id="username" class="form-input" placeholder="请设置用户名">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="email">邮箱</label>
+                <input type="email" id="email" class="form-input" placeholder="请输入邮箱地址">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="password">密码</label>
+                <input type="password" id="password" class="form-input" placeholder="请设置密码">
+                <p class="text-xs text-gray-500 mt-1">密码需包含字母、数字，长度至少8位</p>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="confirm-password">确认密码</label>
+                <input type="password" id="confirm-password" class="form-input" placeholder="请再次输入密码">
+            </div>
+            
+            <div class="flex items-center mb-4">
+                <input type="checkbox" id="agree-terms" class="mr-2">
+                <label for="agree-terms" class="text-sm text-gray-600">
+                    我已阅读并同意<a href="#" class="text-green-600">服务条款</a>和<a href="#" class="text-green-600">隐私政策</a>
+                </label>
+            </div>
+            
+            <button type="button" class="register-btn" id="register-btn">注册</button>
+        </form>
+        
+        <div class="divider">
+            <span>或使用第三方注册</span>
+        </div>
+        
+        <div class="social-login">
+            <div class="social-btn">
+                <img src="https://cdn.jsdelivr.net/npm/simple-icons@v5/icons/wechat.svg" alt="微信" class="social-icon">
+            </div>
+            <div class="social-btn">
+                <img src="https://cdn.jsdelivr.net/npm/simple-icons@v5/icons/qq.svg" alt="QQ" class="social-icon">
+            </div>
+            <div class="social-btn">
+                <img src="https://cdn.jsdelivr.net/npm/simple-icons@v5/icons/weibo.svg" alt="微博" class="social-icon">
+            </div>
+        </div>
+        
+        <div class="bottom-text">
+            已有账号？<a href="login.html" class="login-link">立即登录</a>
+        </div>
+        
+        <p class="policy-text">
+            注册即表示您同意我们的<a href="#" class="policy-link">使用条款</a>和<a href="#" class="policy-link">隐私政策</a>
+        </p>
+    </div>
+
+    <script>
+        document.getElementById('register-btn').addEventListener('click', function() {
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const agreeTerms = document.getElementById('agree-terms').checked;
+            
+            // 简单的表单验证
+            if (!username || !email || !password || !confirmPassword) {
+                alert('请填写所有必填项');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                alert('两次输入的密码不一致');
+                return;
+            }
+            
+            if (!agreeTerms) {
+                alert('请阅读并同意服务条款和隐私政策');
+                return;
+            }
+            
+            // 记录注册操作（实际环境中会发送到服务器）
+            console.log('注册操作：', {
+                username: username,
+                email: email,
+                password: '******' // 实际项目中不要记录密码
+            });
+            
+            // 模拟注册成功，跳转到登录页面
+            alert('注册成功！请登录您的账号。');
+            window.location.href = 'login.html';
+        });
+    </script>
+</body>
+</html> 

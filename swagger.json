@@ -1,0 +1,4999 @@
+openapi: 3.0.3
+info:
+  title: 多租户用户管理系统 API
+  version: 1.0.0
+  description: 用于管理多租户用户系统的REST API
+paths:
+  /api/v1/auth/login/:
+    post:
+      operationId: api_v1_auth_login_create
+      description: 用户登录接口，验证用户名和密码，返回JWT令牌
+      summary: 用户登录
+      tags:
+      - 认证
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              标准登录:
+                value:
+                  username: admin
+                  password: Passw0rd!
+                summary: 使用用户名和密码登录
+                description: 提供用户名和密码进行登录
+              登录成功:
+                value:
+                  success: true
+                  code: 2000
+                  message: 登录成功
+                  data:
+                    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    user:
+                      id: 1
+                      username: admin
+                      email: admin@example.com
+                      nick_name: 管理员
+                      is_admin: true
+                      is_super_admin: true
+                      avatar: ''
+                summary: 登录成功响应
+                description: 用户登录成功的响应示例
+              登录失败:
+                value:
+                  success: false
+                  code: 4002
+                  message: 用户名或密码错误
+                  data: null
+                summary: 登录失败响应
+                description: 用户名或密码错误的响应示例
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          description: 登录成功
+        '401':
+          description: 登录失败
+  /api/v1/auth/refresh/:
+    post:
+      operationId: api_v1_auth_refresh_create
+      description: 使用刷新令牌获取新的访问令牌和刷新令牌
+      summary: 刷新访问令牌
+      tags:
+      - 认证
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+            examples:
+              刷新令牌:
+                value:
+                  refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                summary: 使用刷新令牌获取新的访问令牌
+                description: 提供刷新令牌获取新的访问令牌
+              刷新成功:
+                value:
+                  success: true
+                  code: 2000
+                  message: 令牌刷新成功
+                  data:
+                    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                summary: 令牌刷新成功响应
+                description: 刷新令牌有效，成功获取新的访问令牌
+              刷新失败:
+                value:
+                  success: false
+                  code: 4001
+                  message: 刷新令牌已过期
+                  data: null
+                summary: 令牌刷新失败响应
+                description: 刷新令牌无效或已过期
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          description: 令牌刷新成功
+        '400':
+          description: 无效的刷新令牌
+        '401':
+          description: 刷新令牌已过期
+  /api/v1/auth/register/:
+    post:
+      operationId: api_v1_auth_register_create
+      description: 新用户注册接口，可选关联到指定租户
+      summary: 用户注册
+      tags:
+      - 认证
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              标准注册:
+                value:
+                  username: newuser
+                  email: user@example.com
+                  phone: '13800138000'
+                  nick_name: 新用户
+                  password: SecurePass123!
+                  password_confirm: SecurePass123!
+                  tenant_id: 1
+                summary: 注册新用户
+                description: 提供用户名、邮箱、密码等信息注册新用户
+              简单注册:
+                value:
+                  username: simpleuser
+                  email: simple@example.com
+                  password: SecurePass123!
+                  password_confirm: SecurePass123!
+                summary: 简化注册
+                description: 仅提供必要信息注册新用户
+              注册成功:
+                value:
+                  success: true
+                  code: 2000
+                  message: 注册成功
+                  data:
+                    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    user:
+                      id: 10
+                      username: newuser
+                      email: user@example.com
+                      nick_name: 新用户
+                      is_admin: false
+                      is_member: true
+                      avatar: ''
+                      tenant_id: 1
+                      tenant_name: 测试租户
+                summary: 注册成功响应
+                description: 用户注册成功的响应示例
+              注册失败:
+                value:
+                  success: false
+                  code: 4000
+                  message: 注册失败
+                  data:
+                    username:
+                    - 该用户名已被使用
+                    email:
+                    - 该邮箱已被注册
+                    password:
+                    - 密码至少需要包含8个字符，并且不能是常见密码
+                summary: 注册失败响应
+                description: 注册数据无效的响应示例
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '201':
+          description: 注册成功
+        '400':
+          description: 注册失败，输入数据无效
+  /api/v1/auth/verify/:
+    get:
+      operationId: api_v1_auth_verify_retrieve
+      description: 验证当前令牌是否有效，返回用户信息
+      summary: 验证访问令牌
+      tags:
+      - 认证
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 令牌验证成功
+  /api/v1/check-system/check-records/:
+    get:
+      operationId: api_v1_check_system_check_records_list
+      description: 获取打卡记录列表，支持分页、过滤和搜索
+      summary: 获取打卡记录列表
+      parameters:
+      - in: query
+        name: check_date
+        schema:
+          type: string
+          format: date
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: task
+        schema:
+          type: integer
+      tags:
+      - 打卡系统-记录管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCheckRecordList'
+          description: ''
+    post:
+      operationId: api_v1_check_system_check_records_create
+      description: 创建新的打卡记录
+      summary: 创建打卡记录
+      tags:
+      - 打卡系统-记录管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckRecordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CheckRecordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CheckRecordRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckRecord'
+          description: ''
+  /api/v1/check-system/check-records/{id}/:
+    get:
+      operationId: api_v1_check_system_check_records_retrieve
+      description: 获取单个打卡记录的详细信息
+      summary: 获取打卡记录详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡记录.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡记录ID
+        required: true
+      tags:
+      - 打卡系统-记录管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckRecord'
+          description: ''
+    put:
+      operationId: api_v1_check_system_check_records_update
+      description: 更新现有的打卡记录
+      summary: 更新打卡记录
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡记录.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡记录ID
+        required: true
+      tags:
+      - 打卡系统-记录管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckRecordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CheckRecordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CheckRecordRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckRecord'
+          description: ''
+    patch:
+      operationId: api_v1_check_system_check_records_partial_update
+      description: 部分更新现有的打卡记录
+      summary: 部分更新打卡记录
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡记录.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡记录ID
+        required: true
+      tags:
+      - 打卡系统-记录管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCheckRecordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCheckRecordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCheckRecordRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckRecord'
+          description: ''
+    delete:
+      operationId: api_v1_check_system_check_records_destroy
+      description: 删除现有的打卡记录
+      summary: 删除打卡记录
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡记录.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡记录ID
+        required: true
+      tags:
+      - 打卡系统-记录管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/check-system/task-categories/:
+    get:
+      operationId: api_v1_check_system_task_categories_list
+      description: 获取打卡类型列表，支持分页、过滤和搜索
+      summary: 获取打卡类型列表
+      parameters:
+      - in: query
+        name: is_system
+        schema:
+          type: boolean
+        description: 是否为系统预设类型
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: 搜索关键词
+      tags:
+      - 打卡系统-类型管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTaskCategoryList'
+              examples:
+                ListCategoriesExample:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - page: 1
+                      page_size: 10
+                      is_system: true
+                      search: 早起
+                  summary: 获取打卡类型列表示例
+                  description: 获取打卡类型列表，支持分页、过滤和搜索
+          description: ''
+    post:
+      operationId: api_v1_check_system_task_categories_create
+      description: 创建新的打卡类型
+      summary: 创建打卡类型
+      tags:
+      - 打卡系统-类型管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCategoryRequest'
+            examples:
+              CustomCategoryExample:
+                value:
+                  name: 早起打卡
+                  description: 每天早上6点前起床打卡
+                  is_system: false
+                  icon: sunrise
+                  translations:
+                    en:
+                      name: Early Rising
+                      description: Check in before 6:00 AM every day
+                    zh-hans:
+                      name: 早起打卡
+                      description: 每天早上6点前起床打卡
+                summary: 自定义打卡类型示例
+                description: 创建一个自定义的打卡类型
+              SystemCategoryExample:
+                value:
+                  name: 健身打卡
+                  description: 记录每天的健身情况
+                  is_system: true
+                  icon: dumbbell
+                  translations:
+                    en:
+                      name: Fitness
+                      description: Record daily workout activities
+                    zh-hans:
+                      name: 健身打卡
+                      description: 记录每天的健身情况
+                summary: 系统预设类型示例
+                description: 创建一个系统预设的打卡类型（仅供超级管理员使用）
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskCategoryRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCategory'
+              examples:
+                CustomCategoryExample:
+                  value:
+                    name: 早起打卡
+                    description: 每天早上6点前起床打卡
+                    is_system: false
+                    icon: sunrise
+                    translations:
+                      en:
+                        name: Early Rising
+                        description: Check in before 6:00 AM every day
+                      zh-hans:
+                        name: 早起打卡
+                        description: 每天早上6点前起床打卡
+                  summary: 自定义打卡类型示例
+                  description: 创建一个自定义的打卡类型
+                SystemCategoryExample:
+                  value:
+                    name: 健身打卡
+                    description: 记录每天的健身情况
+                    is_system: true
+                    icon: dumbbell
+                    translations:
+                      en:
+                        name: Fitness
+                        description: Record daily workout activities
+                      zh-hans:
+                        name: 健身打卡
+                        description: 记录每天的健身情况
+                  summary: 系统预设类型示例
+                  description: 创建一个系统预设的打卡类型（仅供超级管理员使用）
+          description: ''
+  /api/v1/check-system/task-categories/{id}/:
+    get:
+      operationId: api_v1_check_system_task_categories_retrieve
+      description: 获取单个打卡类型的详细信息
+      summary: 获取打卡类型详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡类型.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡类型ID
+        required: true
+      tags:
+      - 打卡系统-类型管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCategory'
+              examples:
+                RetrieveCategoryExample:
+                  value:
+                    id: 1
+                  summary: 获取打卡类型详情示例
+                  description: 获取单个打卡类型的详细信息
+          description: ''
+    put:
+      operationId: api_v1_check_system_task_categories_update
+      description: 更新现有打卡类型的所有字段
+      summary: 更新打卡类型
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡类型.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡类型ID
+        required: true
+      tags:
+      - 打卡系统-类型管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCategoryRequest'
+            examples:
+              UpdateCategoryExample:
+                value:
+                  name: 早起打卡
+                  description: 每天早上6点前起床打卡，养成早起好习惯
+                  is_system: false
+                  icon: sunrise
+                  translations:
+                    en:
+                      name: Early Rising
+                      description: Check in before 6:00 AM every day, develop a habit
+                        of early rising
+                    zh-hans:
+                      name: 早起打卡
+                      description: 每天早上6点前起床打卡，养成早起好习惯
+                summary: 更新打卡类型示例
+                description: 更新现有打卡类型的所有字段
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskCategoryRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCategory'
+              examples:
+                UpdateCategoryExample:
+                  value:
+                    name: 早起打卡
+                    description: 每天早上6点前起床打卡，养成早起好习惯
+                    is_system: false
+                    icon: sunrise
+                    translations:
+                      en:
+                        name: Early Rising
+                        description: Check in before 6:00 AM every day, develop a
+                          habit of early rising
+                      zh-hans:
+                        name: 早起打卡
+                        description: 每天早上6点前起床打卡，养成早起好习惯
+                  summary: 更新打卡类型示例
+                  description: 更新现有打卡类型的所有字段
+          description: ''
+    patch:
+      operationId: api_v1_check_system_task_categories_partial_update
+      description: 更新现有打卡类型的部分字段
+      summary: 部分更新打卡类型
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡类型.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡类型ID
+        required: true
+      tags:
+      - 打卡系统-类型管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskCategoryRequest'
+            examples:
+              PartialUpdateCategoryExample:
+                value:
+                  description: 每天早上6点前起床打卡，养成早起好习惯，提高效率
+                  translations:
+                    en:
+                      description: Check in before 6:00 AM every day, develop a habit
+                        of early rising, improve efficiency
+                    zh-hans:
+                      description: 每天早上6点前起床打卡，养成早起好习惯，提高效率
+                summary: 部分更新打卡类型示例
+                description: 仅更新打卡类型的描述字段
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskCategoryRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCategory'
+              examples:
+                PartialUpdateCategoryExample:
+                  value:
+                    description: 每天早上6点前起床打卡，养成早起好习惯，提高效率
+                    translations:
+                      en:
+                        description: Check in before 6:00 AM every day, develop a
+                          habit of early rising, improve efficiency
+                      zh-hans:
+                        description: 每天早上6点前起床打卡，养成早起好习惯，提高效率
+                  summary: 部分更新打卡类型示例
+                  description: 仅更新打卡类型的描述字段
+          description: ''
+    delete:
+      operationId: api_v1_check_system_task_categories_destroy
+      description: 删除现有打卡类型
+      summary: 删除打卡类型
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡类型.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡类型ID
+        required: true
+      tags:
+      - 打卡系统-类型管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/check-system/task-templates/:
+    get:
+      operationId: api_v1_check_system_task_templates_list
+      description: 获取任务模板列表，支持分页、过滤和搜索
+      summary: 获取任务模板列表
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: integer
+      - in: query
+        name: is_system
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 打卡系统-模板管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTaskTemplateList'
+          description: ''
+    post:
+      operationId: api_v1_check_system_task_templates_create
+      description: 创建新的任务模板
+      summary: 创建任务模板
+      tags:
+      - 打卡系统-模板管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskTemplateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskTemplateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskTemplateRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTemplate'
+          description: ''
+  /api/v1/check-system/task-templates/{id}/:
+    get:
+      operationId: api_v1_check_system_task_templates_retrieve
+      description: 获取单个任务模板的详细信息
+      summary: 获取任务模板详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务模板.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 任务模板ID
+        required: true
+      tags:
+      - 打卡系统-模板管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTemplate'
+          description: ''
+    put:
+      operationId: api_v1_check_system_task_templates_update
+      description: 更新现有任务模板
+      summary: 更新任务模板
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务模板.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 任务模板ID
+        required: true
+      tags:
+      - 打卡系统-模板管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskTemplateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskTemplateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskTemplateRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTemplate'
+          description: ''
+    patch:
+      operationId: api_v1_check_system_task_templates_partial_update
+      description: 部分更新现有任务模板
+      summary: 部分更新任务模板
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务模板.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 任务模板ID
+        required: true
+      tags:
+      - 打卡系统-模板管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskTemplateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskTemplateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskTemplateRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTemplate'
+          description: ''
+    delete:
+      operationId: api_v1_check_system_task_templates_destroy
+      description: 删除现有任务模板
+      summary: 删除任务模板
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务模板.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 任务模板ID
+        required: true
+      tags:
+      - 打卡系统-模板管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/check-system/tasks/:
+    get:
+      operationId: api_v1_check_system_tasks_list
+      description: 获取打卡任务列表，支持分页、过滤和搜索
+      summary: 获取打卡任务列表
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: integer
+        description: 打卡类型ID
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: 搜索关键词
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 任务状态
+      tags:
+      - 打卡系统-任务管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTaskList'
+              examples:
+                ListTasksExample:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - page: 1
+                      page_size: 10
+                      category: 1
+                      status: active
+                      search: 早起
+                  summary: 获取打卡任务列表示例
+                  description: 获取打卡任务列表，支持分页、过滤和搜索
+          description: ''
+    post:
+      operationId: api_v1_check_system_tasks_create
+      description: 创建新的打卡任务
+      summary: 创建打卡任务
+      tags:
+      - 打卡系统-任务管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+            examples:
+              CreateTaskExample:
+                value:
+                  name: 每日早起
+                  description: 每天早上6点前起床，培养良好作息习惯
+                  category: 1
+                  start_date: '2025-05-01'
+                  end_date: '2025-05-31'
+                  status: active
+                  reminder: true
+                  reminder_time: 05:30:00
+                summary: 创建打卡任务示例
+                description: 创建一个新的打卡任务
+              CreateLong-termTaskExample:
+                value:
+                  name: 健身打卡
+                  description: 每天健身30分钟，保持健康体魄
+                  category: 2
+                  start_date: '2025-05-01'
+                  status: active
+                  reminder: false
+                summary: 创建长期打卡任务示例
+                description: 创建一个没有结束日期的长期打卡任务
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+              examples:
+                CreateTaskExample:
+                  value:
+                    name: 每日早起
+                    description: 每天早上6点前起床，培养良好作息习惯
+                    category: 1
+                    start_date: '2025-05-01'
+                    end_date: '2025-05-31'
+                    status: active
+                    reminder: true
+                    reminder_time: 05:30:00
+                  summary: 创建打卡任务示例
+                  description: 创建一个新的打卡任务
+                CreateLong-termTaskExample:
+                  value:
+                    name: 健身打卡
+                    description: 每天健身30分钟，保持健康体魄
+                    category: 2
+                    start_date: '2025-05-01'
+                    status: active
+                    reminder: false
+                  summary: 创建长期打卡任务示例
+                  description: 创建一个没有结束日期的长期打卡任务
+          description: ''
+  /api/v1/check-system/tasks/{id}/:
+    get:
+      operationId: api_v1_check_system_tasks_retrieve
+      description: 获取单个打卡任务的详细信息
+      summary: 获取打卡任务详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡任务.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡任务ID
+        required: true
+      tags:
+      - 打卡系统-任务管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+              examples:
+                RetrieveTaskExample:
+                  value:
+                    id: 1
+                  summary: 获取打卡任务详情示例
+                  description: 获取单个打卡任务的详细信息
+          description: ''
+    put:
+      operationId: api_v1_check_system_tasks_update
+      description: 更新现有打卡任务的所有字段
+      summary: 更新打卡任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡任务.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡任务ID
+        required: true
+      tags:
+      - 打卡系统-任务管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+            examples:
+              UpdateTaskExample:
+                value:
+                  name: 每日早起
+                  description: 每天早上6点前起床，培养良好作息习惯，提高工作效率
+                  category: 1
+                  start_date: '2025-05-01'
+                  end_date: '2025-06-30'
+                  status: active
+                  reminder: true
+                  reminder_time: 05:45:00
+                summary: 更新打卡任务示例
+                description: 更新现有打卡任务的所有字段
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+              examples:
+                UpdateTaskExample:
+                  value:
+                    name: 每日早起
+                    description: 每天早上6点前起床，培养良好作息习惯，提高工作效率
+                    category: 1
+                    start_date: '2025-05-01'
+                    end_date: '2025-06-30'
+                    status: active
+                    reminder: true
+                    reminder_time: 05:45:00
+                  summary: 更新打卡任务示例
+                  description: 更新现有打卡任务的所有字段
+          description: ''
+    patch:
+      operationId: api_v1_check_system_tasks_partial_update
+      description: 更新现有打卡任务的部分字段
+      summary: 部分更新打卡任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡任务.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡任务ID
+        required: true
+      tags:
+      - 打卡系统-任务管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskRequest'
+            examples:
+              ChangeTaskStatusExample:
+                value:
+                  status: paused
+                summary: 更改任务状态示例
+                description: 暂停一个正在进行的打卡任务
+              UpdateReminderExample:
+                value:
+                  reminder: true
+                  reminder_time: 06:00:00
+                summary: 更新提醒设置示例
+                description: 修改任务提醒时间
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+              examples:
+                ChangeTaskStatusExample:
+                  value:
+                    status: paused
+                  summary: 更改任务状态示例
+                  description: 暂停一个正在进行的打卡任务
+                UpdateReminderExample:
+                  value:
+                    reminder: true
+                    reminder_time: 06:00:00
+                  summary: 更新提醒设置示例
+                  description: 修改任务提醒时间
+          description: ''
+    delete:
+      operationId: api_v1_check_system_tasks_destroy
+      description: 删除现有打卡任务
+      summary: 删除打卡任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 打卡任务.
+        required: true
+      - in: query
+        name: id
+        schema:
+          type: integer
+        description: 打卡任务ID
+        required: true
+      tags:
+      - 打卡系统-任务管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/common/api-logs/:
+    get:
+      operationId: api_v1_common_api_logs_list
+      description: |-
+        API日志列表视图
+        超级管理员可查看所有日志，租户管理员只能查看自己租户的日志
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - api
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAPILogList'
+          description: ''
+  /api/v1/common/api-logs/{id}/:
+    get:
+      operationId: api_v1_common_api_logs_retrieve
+      description: API日志详情视图
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APILogDetail'
+          description: ''
+  /api/v1/common/test-auth-error/:
+    get:
+      operationId: api_v1_common_test_auth_error_retrieve
+      description: 测试API认证错误响应的标准格式
+      summary: 测试认证错误响应格式
+      tags:
+      - 测试接口
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestAuthErrorResponse'
+          description: ''
+  /api/v1/common/test-auth-error-class/:
+    get:
+      operationId: api_v1_common_test_auth_error_class_retrieve
+      description: 测试认证失败响应的统一格式
+      summary: 测试认证失败响应
+      tags:
+      - 测试
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestAuthErrorResponse'
+          description: ''
+  /api/v1/common/test-error/:
+    get:
+      operationId: api_v1_common_test_error_retrieve
+      description: 测试API错误响应的标准格式
+      summary: 测试错误响应格式
+      tags:
+      - 测试接口
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestErrorResponse'
+          description: ''
+  /api/v1/common/test-error-class/:
+    get:
+      operationId: api_v1_common_test_error_class_retrieve
+      description: 测试错误响应的统一格式
+      summary: 测试错误响应
+      tags:
+      - 测试
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestErrorResponse'
+          description: ''
+  /api/v1/common/test-format/:
+    get:
+      operationId: api_v1_common_test_format_retrieve
+      description: 测试API成功响应的标准格式
+      summary: 测试标准响应格式
+      tags:
+      - 测试接口
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestStandardResponse'
+          description: ''
+  /api/v1/common/test-format-class/:
+    get:
+      operationId: api_v1_common_test_format_class_retrieve
+      description: 测试统一响应格式的API
+      summary: 测试成功响应
+      tags:
+      - 测试
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestStandardResponse'
+          description: ''
+  /api/v1/common/test-pagination/:
+    get:
+      operationId: api_v1_common_test_pagination_retrieve
+      description: 测试API分页响应的标准格式
+      summary: 测试分页响应格式
+      tags:
+      - 测试接口
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestPaginationResponse'
+          description: ''
+  /api/v1/common/test-pagination-class/:
+    get:
+      operationId: api_v1_common_test_pagination_class_retrieve
+      description: 测试分页响应的统一格式
+      summary: 测试分页响应
+      tags:
+      - 测试
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestPaginationResponse'
+          description: ''
+  /api/v1/docs/:
+    get:
+      operationId: api_v1_docs_retrieve
+      description: 使用Swagger UI展示API文档
+      summary: Swagger UI文档
+      tags:
+      - API文档
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/redoc/:
+    get:
+      operationId: api_v1_redoc_retrieve
+      description: 使用ReDoc展示API文档
+      summary: ReDoc文档
+      tags:
+      - API文档
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/schema/:
+    get:
+      operationId: api_v1_schema_retrieve
+      description: 获取API的OpenAPI 3.0标准模式定义
+      summary: 获取OpenAPI模式
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      tags:
+      - API文档
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/tenants/:
+    get:
+      operationId: api_v1_tenants_list
+      description: 获取所有租户的列表，支持搜索和状态过滤。可以在租户名称、联系人姓名和联系人邮箱中搜索匹配的内容。权限要求：仅超级管理员可访问此API，其他用户（包括租户管理员）无权访问。
+      summary: 获取租户列表
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          default: 1
+        description: 页码（从1开始）
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+          default: 10
+        description: 每页条数
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: 搜索关键词，支持租户名称、联系人姓名和联系人邮箱搜索
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - all
+          - inactive
+        description: 租户状态过滤参数
+      tags:
+      - 租户
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - count
+                - results
+                properties:
+                  count:
+                    type: integer
+                    example: 123
+                  next:
+                    type: string
+                    nullable: true
+                    format: uri
+                    example: http://api.example.org/accounts/?page=4
+                  previous:
+                    type: string
+                    nullable: true
+                    format: uri
+                    example: http://api.example.org/accounts/?page=2
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        success:
+                          type: boolean
+                          example: true
+                        code:
+                          type: integer
+                          example: 2000
+                        message:
+                          type: string
+                          example: 获取成功
+                        data:
+                          type: object
+                          properties:
+                            count:
+                              type: integer
+                              example: 10
+                            next:
+                              type:
+                              - string
+                              - 'null'
+                              example: http://api.example.com/tenants/?page=2
+                            previous:
+                              type:
+                              - string
+                              - 'null'
+                              example: null
+                            results:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: integer
+                                    example: 1
+                                  name:
+                                    type: string
+                                    example: 示例企业
+                                  status:
+                                    type: string
+                                    example: active
+                                  contact_name:
+                                    type: string
+                                    example: 张三
+                                  contact_email:
+                                    type: string
+                                    example: zhangsan@example.com
+                                  contact_phone:
+                                    type: string
+                                    example: '13800138000'
+                                  user_count:
+                                    type: integer
+                                    example: 15
+                                  admin_count:
+                                    type: integer
+                                    example: 2
+                                  created_time:
+                                    type: string
+                                    format: date-time
+                                  updated_time:
+                                    type: string
+                                    format: date-time
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4003
+                  message:
+                    type: string
+                    example: 权限不足
+                  data:
+                    type: 'null'
+          description: ''
+    post:
+      operationId: api_v1_tenants_create
+      description: 创建新的租户，包括租户名称、状态和联系人信息，仅超级管理员可访问
+      summary: 创建新租户
+      tags:
+      - 租户
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreateRequest'
+            examples:
+              创建租户:
+                value:
+                  name: 新租户
+                  status: active
+                  contact_name: 王五
+                  contact_email: wangwu@example.com
+                  contact_phone: '13700137000'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TenantCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TenantCreateRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: integer
+                    example: 2000
+                  message:
+                    type: string
+                    example: 创建租户成功
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      name:
+                        type: string
+                        example: 新创建企业
+                      status:
+                        type: string
+                        example: active
+                      contact_name:
+                        type: string
+                        example: 李四
+                      contact_email:
+                        type: string
+                        example: lisi@example.com
+                      contact_phone:
+                        type: string
+                        example: '13900139000'
+                      created_time:
+                        type: string
+                        format: date-time
+                      updated_time:
+                        type: string
+                        format: date-time
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4000
+                  message:
+                    type: string
+                    example: 参数错误
+                  data:
+                    type: object
+                    example:
+                      name:
+                      - 该租户名称已存在
+                      contact_email:
+                      - 请输入有效的邮箱地址
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4003
+                  message:
+                    type: string
+                    example: 权限不足
+                  data:
+                    type: 'null'
+          description: ''
+  /api/v1/tenants/{id}/:
+    get:
+      operationId: api_v1_tenants_retrieve
+      description: 获取指定租户的详细信息，包括配额和用户统计，仅超级管理员可访问
+      summary: 获取租户详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 租户
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: integer
+                    example: 2000
+                  message:
+                    type: string
+                    example: 获取成功
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      name:
+                        type: string
+                        example: 示例企业
+                      status:
+                        type: string
+                        example: active
+                      contact_name:
+                        type: string
+                        example: 张三
+                      contact_email:
+                        type: string
+                        example: zhangsan@example.com
+                      contact_phone:
+                        type: string
+                        example: '13800138000'
+                      quota:
+                        type: object
+                        properties:
+                          max_user_count:
+                            type: integer
+                            example: 100
+                          max_admin_count:
+                            type: integer
+                            example: 5
+                          max_storage_size:
+                            type: integer
+                            example: 10737418240
+                          max_model_count:
+                            type: integer
+                            example: 50
+                          max_dataset_count:
+                            type: integer
+                            example: 20
+                      usage:
+                        type: object
+                        properties:
+                          user_count:
+                            type: integer
+                            example: 15
+                          admin_count:
+                            type: integer
+                            example: 2
+                          storage_size:
+                            type: integer
+                            example: 1073741824
+                          model_count:
+                            type: integer
+                            example: 5
+                          dataset_count:
+                            type: integer
+                            example: 3
+                      created_time:
+                        type: string
+                        format: date-time
+                      updated_time:
+                        type: string
+                        format: date-time
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4004
+                  message:
+                    type: string
+                    example: 租户不存在
+                  data:
+                    type: 'null'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4003
+                  message:
+                    type: string
+                    example: 权限不足
+                  data:
+                    type: 'null'
+          description: ''
+    put:
+      operationId: api_v1_tenants_update
+      description: 更新指定租户的信息，包括名称、状态和联系人信息，仅超级管理员可访问
+      summary: 更新租户信息
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 租户
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TenantDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TenantDetailRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: integer
+                    example: 2000
+                  message:
+                    type: string
+                    example: 获取成功
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      name:
+                        type: string
+                        example: 示例企业
+                      status:
+                        type: string
+                        example: active
+                      contact_name:
+                        type: string
+                        example: 张三
+                      contact_email:
+                        type: string
+                        example: zhangsan@example.com
+                      contact_phone:
+                        type: string
+                        example: '13800138000'
+                      quota:
+                        type: object
+                        properties:
+                          max_user_count:
+                            type: integer
+                            example: 100
+                          max_admin_count:
+                            type: integer
+                            example: 5
+                          max_storage_size:
+                            type: integer
+                            example: 10737418240
+                          max_model_count:
+                            type: integer
+                            example: 50
+                          max_dataset_count:
+                            type: integer
+                            example: 20
+                      usage:
+                        type: object
+                        properties:
+                          user_count:
+                            type: integer
+                            example: 15
+                          admin_count:
+                            type: integer
+                            example: 2
+                          storage_size:
+                            type: integer
+                            example: 1073741824
+                          model_count:
+                            type: integer
+                            example: 5
+                          dataset_count:
+                            type: integer
+                            example: 3
+                      created_time:
+                        type: string
+                        format: date-time
+                      updated_time:
+                        type: string
+                        format: date-time
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4004
+                  message:
+                    type: string
+                    example: 租户不存在
+                  data:
+                    type: 'null'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4003
+                  message:
+                    type: string
+                    example: 权限不足
+                  data:
+                    type: 'null'
+          description: ''
+    patch:
+      operationId: api_v1_tenants_partial_update
+      description: 部分更新指定租户的信息，仅超级管理员可访问
+      summary: 部分更新租户信息
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 租户
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantDetailRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: integer
+                    example: 2000
+                  message:
+                    type: string
+                    example: 获取成功
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      name:
+                        type: string
+                        example: 示例企业
+                      status:
+                        type: string
+                        example: active
+                      contact_name:
+                        type: string
+                        example: 张三
+                      contact_email:
+                        type: string
+                        example: zhangsan@example.com
+                      contact_phone:
+                        type: string
+                        example: '13800138000'
+                      quota:
+                        type: object
+                        properties:
+                          max_user_count:
+                            type: integer
+                            example: 100
+                          max_admin_count:
+                            type: integer
+                            example: 5
+                          max_storage_size:
+                            type: integer
+                            example: 10737418240
+                          max_model_count:
+                            type: integer
+                            example: 50
+                          max_dataset_count:
+                            type: integer
+                            example: 20
+                      usage:
+                        type: object
+                        properties:
+                          user_count:
+                            type: integer
+                            example: 15
+                          admin_count:
+                            type: integer
+                            example: 2
+                          storage_size:
+                            type: integer
+                            example: 1073741824
+                          model_count:
+                            type: integer
+                            example: 5
+                          dataset_count:
+                            type: integer
+                            example: 3
+                      created_time:
+                        type: string
+                        format: date-time
+                      updated_time:
+                        type: string
+                        format: date-time
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4004
+                  message:
+                    type: string
+                    example: 租户不存在
+                  data:
+                    type: 'null'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4003
+                  message:
+                    type: string
+                    example: 权限不足
+                  data:
+                    type: 'null'
+          description: ''
+    delete:
+      operationId: api_v1_tenants_destroy
+      description: 软删除指定的租户（标记为已删除状态），仅超级管理员可访问
+      summary: 删除租户
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 租户
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/tenants/{id}/activate/:
+    post:
+      operationId: api_v1_tenants_activate_create
+      description: 激活指定的暂停租户，将租户状态更改为活跃状态，仅超级管理员可访问
+      summary: 激活租户
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 租户
+      - 状态管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: integer
+                    example: 2000
+                  message:
+                    type: string
+                    example: 租户已激活
+                  data:
+                    type: 'null'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4004
+                  message:
+                    type: string
+                    example: 租户不存在
+                  data:
+                    type: 'null'
+          description: ''
+  /api/v1/tenants/{id}/quota/:
+    get:
+      operationId: api_v1_tenants_quota_retrieve
+      description: 获取指定租户的配额信息，包括最大用户数、管理员数量和存储空间等，仅超级管理员可访问
+      summary: 获取租户配额
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 租户
+      - 配额
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: integer
+                    example: 2000
+                  message:
+                    type: string
+                    example: 获取成功
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      tenant:
+                        type: integer
+                        example: 1
+                      max_user_count:
+                        type: integer
+                        example: 100
+                      max_admin_count:
+                        type: integer
+                        example: 5
+                      max_storage_size:
+                        type: integer
+                        example: 10737418240
+                      max_model_count:
+                        type: integer
+                        example: 50
+                      max_dataset_count:
+                        type: integer
+                        example: 20
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4004
+                  message:
+                    type: string
+                    example: 租户不存在
+                  data:
+                    type: 'null'
+          description: ''
+    put:
+      operationId: api_v1_tenants_quota_update
+      description: 更新指定租户的配额设置，包括最大用户数、管理员数量和存储空间等，仅超级管理员可访问
+      summary: 更新租户配额
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 租户
+      - 配额
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantQuotaUpdateRequest'
+            examples:
+              更新配额:
+                value:
+                  max_users: 30
+                  max_admins: 8
+                  max_storage_mb: 5120
+                  max_products: 200
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TenantQuotaUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TenantQuotaUpdateRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: integer
+                    example: 2000
+                  message:
+                    type: string
+                    example: 更新配额成功
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      tenant:
+                        type: integer
+                        example: 1
+                      max_user_count:
+                        type: integer
+                        example: 150
+                      max_admin_count:
+                        type: integer
+                        example: 8
+                      max_storage_size:
+                        type: integer
+                        example: 21474836480
+                      max_model_count:
+                        type: integer
+                        example: 80
+                      max_dataset_count:
+                        type: integer
+                        example: 30
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4000
+                  message:
+                    type: string
+                    example: 参数错误
+                  data:
+                    type: object
+                    example:
+                      max_user_count:
+                      - 该值不能小于当前已有用户数
+                      max_storage_size:
+                      - 存储空间必须是整数
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4004
+                  message:
+                    type: string
+                    example: 租户不存在
+                  data:
+                    type: 'null'
+          description: ''
+  /api/v1/tenants/{id}/quota/usage/:
+    get:
+      operationId: api_v1_tenants_quota_usage_retrieve
+      description: 获取指定租户资源配额使用情况，包括用户数量、存储空间等使用百分比，超级管理员可查看任意租户，租户管理员只能查看自己租户
+      summary: 获取租户配额使用情况
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 租户
+      - 配额
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: integer
+                    example: 2000
+                  message:
+                    type: string
+                    example: 获取成功
+                  data:
+                    type: object
+                    properties:
+                      user_count:
+                        type: integer
+                        example: 15
+                      admin_count:
+                        type: integer
+                        example: 2
+                      storage_size:
+                        type: integer
+                        example: 1073741824
+                      storage_size_formatted:
+                        type: string
+                        example: 1.00 GB
+                      model_count:
+                        type: integer
+                        example: 5
+                      dataset_count:
+                        type: integer
+                        example: 3
+                      user_usage_percent:
+                        type: number
+                        example: 15.0
+                      admin_usage_percent:
+                        type: number
+                        example: 40.0
+                      storage_usage_percent:
+                        type: number
+                        example: 10.0
+                      model_usage_percent:
+                        type: number
+                        example: 10.0
+                      dataset_usage_percent:
+                        type: number
+                        example: 15.0
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4004
+                  message:
+                    type: string
+                    example: 租户不存在
+                  data:
+                    type: 'null'
+          description: ''
+  /api/v1/tenants/{id}/suspend/:
+    post:
+      operationId: api_v1_tenants_suspend_create
+      description: 暂停指定租户的服务，将租户状态更改为暂停状态，仅超级管理员可访问
+      summary: 暂停租户
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 租户
+      - 状态管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: integer
+                    example: 2000
+                  message:
+                    type: string
+                    example: 租户已暂停
+                  data:
+                    type: 'null'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  code:
+                    type: integer
+                    example: 4004
+                  message:
+                    type: string
+                    example: 租户不存在
+                  data:
+                    type: 'null'
+          description: ''
+  /api/v1/tenants/{id}/users/:
+    get:
+      operationId: api_v1_tenants_users_list
+      description: 获取租户用户列表视图
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - api
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserListList'
+          description: ''
+  /api/v1/users/:
+    get:
+      operationId: api_v1_users_list
+      description: '获取系统中的用户列表，支持搜索和分页。权限要求: 超级管理员可查看所有用户；租户管理员只能查看自己租户的用户；普通用户只能查看自己。'
+      summary: 获取用户列表
+      parameters:
+      - in: query
+        name: is_admin
+        schema:
+          type: boolean
+        description: 是否为管理员 (true/false)
+      - in: query
+        name: is_sub_account
+        schema:
+          type: boolean
+        description: 是否为子账号 (true/false)
+      - in: query
+        name: page
+        schema:
+          type: integer
+          default: 1
+        description: 页码（从1开始）
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+          default: 10
+        description: 每页条数
+      - in: query
+        name: parent
+        schema:
+          type: integer
+        description: 父账号ID，用于筛选特定父账号下的子账号
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: 搜索关键词，支持用户名、邮箱、昵称和手机号码搜索
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 用户状态筛选
+      - in: query
+        name: tenant_id
+        schema:
+          type: integer
+        description: 租户ID，用于筛选特定租户下的用户
+      tags:
+      - 用户管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 获取用户列表成功
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+    post:
+      operationId: api_v1_users_create
+      description: '创建新用户。权限要求: 超级管理员可创建任意租户下的用户；租户管理员只能创建自己租户的用户，且无法指定其他租户。'
+      summary: 创建新用户
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          description: 用户创建成功
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+  /api/v1/users/{id}/:
+    get:
+      operationId: api_v1_users_retrieve
+      description: 用户详情、更新和删除视图
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    put:
+      operationId: api_v1_users_update
+      description: 用户详情、更新和删除视图
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    patch:
+      operationId: api_v1_users_partial_update
+      description: 用户详情、更新和删除视图
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    delete:
+      operationId: api_v1_users_destroy
+      description: 用户详情、更新和删除视图
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/users/{id}/change-role/:
+    post:
+      operationId: api_v1_users_change_role_create
+      description: 更新指定用户的角色（管理员/普通成员）。超级管理员可以更新任何用户的角色；租户管理员只能更新同一租户内的普通用户角色。
+      summary: 更新用户角色
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRoleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRoleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRoleRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRole'
+          description: 角色更新成功
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: 不能修改超级管理员的角色
+                  is_admin:
+                    type: array
+                    items:
+                      type: string
+          description: 请求参数错误
+        '403':
+          description: 权限不足
+        '404':
+          description: 用户不存在
+  /api/v1/users/{id}/grant-super-admin/:
+    post:
+      operationId: api_v1_users_grant_super_admin_create
+      description: 将指定用户提升为超级管理员。只有现有的超级管理员可以执行此操作。
+      summary: 授予超级管理员权限
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 用户管理
+      - 权限管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimpleResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SimpleResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SimpleResponseRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleResponse'
+          description: 授权成功
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleResponse'
+          description: 操作失败
+        '403':
+          description: 权限不足
+        '404':
+          description: 用户不存在
+  /api/v1/users/{id}/revoke-super-admin/:
+    post:
+      operationId: api_v1_users_revoke_super_admin_create
+      description: 撤销指定用户的超级管理员权限。只有超级管理员可以执行此操作，并且不能撤销自己的权限。
+      summary: 撤销超级管理员权限
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 用户管理
+      - 权限管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimpleResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SimpleResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SimpleResponseRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleResponse'
+          description: 撤销成功
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleResponse'
+          description: 操作失败
+        '403':
+          description: 权限不足
+        '404':
+          description: 用户不存在
+  /api/v1/users/{id}/upload-avatar/:
+    post:
+      operationId: api_v1_users_upload_avatar_create
+      description: 允许租户管理员和超级管理员为特定用户上传头像。租户管理员只能为其所属租户的用户上传头像，超级管理员可以为任何用户上传头像。
+      summary: 为特定用户上传头像
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: 要上传的头像文件，支持JPG、PNG、GIF、WEBP或BMP格式
+              required:
+              - avatar
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: 头像上传成功
+                  avatar:
+                    type: string
+                    example: https://example.com/media/avatars/user-avatar.jpg
+          description: 头像上传成功
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: 未提供头像文件/不支持的文件类型/文件太大
+          description: 请求错误
+        '401':
+          description: 未认证
+        '403':
+          description: 权限不足
+        '404':
+          description: 用户不存在
+        '500':
+          description: 服务器内部错误
+  /api/v1/users/change-password/:
+    put:
+      operationId: api_v1_users_change_password_update
+      description: 修改密码视图
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: api_v1_users_change_password_partial_update
+      description: 修改密码视图
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChangePasswordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChangePasswordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChangePasswordRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/users/me/:
+    get:
+      operationId: api_v1_users_me_retrieve
+      description: 获取当前登录用户的详细信息。需要用户认证。
+      summary: 获取当前用户信息
+      tags:
+      - 用户管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: 成功获取用户信息
+        '401':
+          description: 未认证
+    put:
+      operationId: api_v1_users_me_update
+      description: 更新当前登录用户的基本信息。需要用户认证。
+      summary: 更新当前用户信息
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: 成功更新用户信息
+        '400':
+          description: 请求参数错误
+        '401':
+          description: 未认证
+  /api/v1/users/me/upload-avatar/:
+    post:
+      operationId: api_v1_users_me_upload_avatar_create
+      description: 上传并更新当前登录用户的头像图片
+      summary: 上传当前用户头像
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: 要上传的头像文件，支持JPG、PNG、GIF、WEBP或BMP格式
+              required:
+              - avatar
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: 头像上传成功
+                  avatar:
+                    type: string
+                    example: https://example.com/media/avatars/user-avatar.jpg
+          description: 头像上传成功
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: 未提供头像文件/不支持的文件类型/文件太大
+          description: 请求错误
+        '401':
+          description: 未认证
+        '500':
+          description: 服务器内部错误
+  /api/v1/users/sub-account/create/:
+    post:
+      operationId: api_v1_users_sub_account_create_create
+      description: 创建一个与当前用户关联的子账号，子账号不能登录系统，仅用于数据关联
+      summary: 创建子账号
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubAccountCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubAccountCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubAccountCreateRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          description: 子账号创建成功
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+  /api/v1/users/super-admin/create/:
+    post:
+      operationId: api_v1_users_super_admin_create_create
+      description: 创建超级管理员账号视图
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuperAdminCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SuperAdminCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SuperAdminCreateRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuperAdminCreate'
+          description: ''
+  /api/v1/users/tenant/{tenant_id}/:
+    get:
+      operationId: api_v1_users_tenant_list
+      description: 租户用户列表视图
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: path
+        name: tenant_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserList'
+          description: ''
+components:
+  schemas:
+    APILog:
+      type: object
+      description: API日志列表序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/UserMinimal'
+          readOnly: true
+        tenant_name:
+          type: string
+          description: 获取租户名称
+          readOnly: true
+        request_method:
+          allOf:
+          - $ref: '#/components/schemas/RequestMethodEnum'
+          title: 请求方法
+        request_path:
+          type: string
+          title: 请求路径
+          maxLength: 255
+        status_code:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          title: 状态码
+        response_time:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          title: 响应时间(ms)
+        status_type:
+          allOf:
+          - $ref: '#/components/schemas/StatusTypeEnum'
+          title: 状态类型
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+      required:
+      - created_at
+      - id
+      - request_method
+      - request_path
+      - response_time
+      - status_code
+      - status_type
+      - tenant_name
+      - user
+    APILogDetail:
+      type: object
+      description: API日志详情序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/UserMinimal'
+          readOnly: true
+        tenant_name:
+          type: string
+          description: 获取租户名称
+          readOnly: true
+        ip_address:
+          type: string
+          title: IP地址
+          maxLength: 50
+        request_method:
+          allOf:
+          - $ref: '#/components/schemas/RequestMethodEnum'
+          title: 请求方法
+        request_path:
+          type: string
+          title: 请求路径
+          maxLength: 255
+        query_params:
+          nullable: true
+          title: 查询参数
+        request_body:
+          nullable: true
+          title: 请求体
+        status_code:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          title: 状态码
+        response_time:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          title: 响应时间(ms)
+        status_type:
+          allOf:
+          - $ref: '#/components/schemas/StatusTypeEnum'
+          title: 状态类型
+        error_message:
+          type: string
+          nullable: true
+          title: 错误信息
+        user_agent:
+          type: string
+          nullable: true
+          title: 用户代理
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+      required:
+      - created_at
+      - id
+      - ip_address
+      - request_method
+      - request_path
+      - response_time
+      - status_code
+      - status_type
+      - tenant_name
+      - user
+    ChangePasswordRequest:
+      type: object
+      description: 修改密码序列化器
+      properties:
+        old_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        new_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        new_password_confirm:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - new_password
+      - new_password_confirm
+      - old_password
+    CheckRecord:
+      type: object
+      description: 打卡记录序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        task:
+          type: integer
+          title: 所属任务
+        task_name:
+          type: string
+          description: 获取任务名称
+          readOnly: true
+        user:
+          type: integer
+          title: 所属用户
+        check_date:
+          type: string
+          format: date
+          title: 打卡日期
+        check_time:
+          type: string
+          format: time
+          title: 打卡时间
+        remarks:
+          type: string
+          title: 备注
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+      required:
+      - check_date
+      - check_time
+      - created_at
+      - id
+      - task
+      - task_name
+      - user
+    CheckRecordRequest:
+      type: object
+      description: 打卡记录序列化器
+      properties:
+        task:
+          type: integer
+          title: 所属任务
+        user:
+          type: integer
+          title: 所属用户
+        check_date:
+          type: string
+          format: date
+          title: 打卡日期
+        check_time:
+          type: string
+          format: time
+          title: 打卡时间
+        remarks:
+          type: string
+          title: 备注
+      required:
+      - check_date
+      - check_time
+      - task
+      - user
+    LoginRequest:
+      type: object
+      description: 登录序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+      required:
+      - password
+      - username
+    PaginatedAPILogList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/APILog'
+    PaginatedCheckRecordList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CheckRecord'
+    PaginatedTaskCategoryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskCategory'
+    PaginatedTaskList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+    PaginatedTaskTemplateList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskTemplate'
+    PaginatedUserList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+    PaginatedUserListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserList'
+    PaginationInfo:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: 总数
+        next:
+          type: string
+          nullable: true
+          description: 下一页链接
+        previous:
+          type: string
+          nullable: true
+          description: 上一页链接
+        page_size:
+          type: integer
+          description: 每页大小
+        current_page:
+          type: integer
+          description: 当前页码
+        total_pages:
+          type: integer
+          description: 总页数
+      required:
+      - count
+      - current_page
+      - next
+      - page_size
+      - previous
+      - total_pages
+    PatchedChangePasswordRequest:
+      type: object
+      description: 修改密码序列化器
+      properties:
+        old_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        new_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        new_password_confirm:
+          type: string
+          writeOnly: true
+          minLength: 1
+    PatchedCheckRecordRequest:
+      type: object
+      description: 打卡记录序列化器
+      properties:
+        task:
+          type: integer
+          title: 所属任务
+        user:
+          type: integer
+          title: 所属用户
+        check_date:
+          type: string
+          format: date
+          title: 打卡日期
+        check_time:
+          type: string
+          format: time
+          title: 打卡时间
+        remarks:
+          type: string
+          title: 备注
+    PatchedTaskCategoryRequest:
+      type: object
+      description: 打卡类型序列化器
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 类型名称
+          maxLength: 50
+        description:
+          type: string
+          title: 类型描述
+          maxLength: 200
+        is_system:
+          type: boolean
+          title: 是否系统预设
+        icon:
+          type: string
+          title: 图标
+          maxLength: 50
+        user:
+          type: integer
+          nullable: true
+          title: 创建用户
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+        translations:
+          title: 多语言翻译
+    PatchedTaskRequest:
+      type: object
+      description: 打卡任务序列化器
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 任务名称
+          maxLength: 100
+        description:
+          type: string
+          title: 任务描述
+        category:
+          type: integer
+          nullable: true
+          title: 所属类型
+        user:
+          type: integer
+          title: 所属用户
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+        start_date:
+          type: string
+          format: date
+          title: 开始日期
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          title: 结束日期
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TaskStatusEnum'
+          title: 状态
+        reminder:
+          type: boolean
+          title: 是否启用提醒
+        reminder_time:
+          type: string
+          format: time
+          nullable: true
+          title: 提醒时间
+    PatchedTaskTemplateRequest:
+      type: object
+      description: 任务模板序列化器
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 模板名称
+          maxLength: 100
+        description:
+          type: string
+          title: 模板描述
+        category:
+          type: integer
+          nullable: true
+          title: 所属类型
+        is_system:
+          type: boolean
+          title: 是否系统预设
+        user:
+          type: integer
+          nullable: true
+          title: 创建用户
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+        translations:
+          title: 多语言翻译
+    PatchedTenantDetailRequest:
+      type: object
+      description: 租户详情序列化器，包含完整信息
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 租户名称
+          maxLength: 100
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusA95Enum'
+          title: 状态
+        contact_name:
+          type: string
+          nullable: true
+          title: 联系人姓名
+          maxLength: 50
+        contact_email:
+          type: string
+          format: email
+          nullable: true
+          title: 联系人邮箱
+          maxLength: 254
+        contact_phone:
+          type: string
+          nullable: true
+          title: 联系人电话
+          maxLength: 20
+    PatchedUserRequest:
+      type: object
+      description: 用户序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: 邮箱
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          title: 手机号
+          maxLength: 11
+        nick_name:
+          type: string
+          nullable: true
+          title: 昵称
+          maxLength: 30
+        first_name:
+          type: string
+          title: 名字
+          maxLength: 150
+        last_name:
+          type: string
+          title: 姓氏
+          maxLength: 150
+        is_active:
+          type: boolean
+          title: 有效
+          description: 指明用户是否被认为是活跃的。以反选代替删除帐号。
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+    RegisterRequest:
+      type: object
+      description: 用户注册序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: 邮箱
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          title: 手机号
+          maxLength: 11
+        nick_name:
+          type: string
+          nullable: true
+          title: 昵称
+          maxLength: 30
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          title: 密码
+          maxLength: 128
+        password_confirm:
+          type: string
+          writeOnly: true
+          minLength: 1
+        tenant_id:
+          type: integer
+          writeOnly: true
+      required:
+      - email
+      - password
+      - password_confirm
+      - username
+    RequestMethodEnum:
+      enum:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+      - HEAD
+      type: string
+      description: |-
+        * `GET` - GET
+        * `POST` - POST
+        * `PUT` - PUT
+        * `PATCH` - PATCH
+        * `DELETE` - DELETE
+        * `OPTIONS` - OPTIONS
+        * `HEAD` - HEAD
+    ResultItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 项目ID
+        name:
+          type: string
+          description: 项目名称
+      required:
+      - id
+      - name
+    SimpleResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: 响应消息
+      required:
+      - detail
+    SimpleResponseRequest:
+      type: object
+      properties:
+        detail:
+          type: string
+          minLength: 1
+          description: 响应消息
+      required:
+      - detail
+    StatusA95Enum:
+      enum:
+      - active
+      - suspended
+      - deleted
+      type: string
+      description: |-
+        * `active` - 活跃
+        * `suspended` - 暂停
+        * `deleted` - 已删除
+    StatusTypeEnum:
+      enum:
+      - success
+      - error
+      type: string
+      description: |-
+        * `success` - 成功
+        * `error` - 错误
+    SubAccountCreateRequest:
+      type: object
+      description: 子账号创建序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: 邮箱
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          title: 手机号
+          maxLength: 11
+        nick_name:
+          type: string
+          nullable: true
+          title: 昵称
+          maxLength: 30
+        first_name:
+          type: string
+          title: 名字
+          maxLength: 150
+        last_name:
+          type: string
+          title: 姓氏
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        avatar:
+          type: string
+          title: 头像
+          maxLength: 200
+      required:
+      - email
+      - username
+    SuperAdminCreate:
+      type: object
+      description: 超级管理员创建序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: 邮箱
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          title: 手机号
+          maxLength: 11
+        nick_name:
+          type: string
+          nullable: true
+          title: 昵称
+          maxLength: 30
+        first_name:
+          type: string
+          title: 名字
+          maxLength: 150
+        last_name:
+          type: string
+          title: 姓氏
+          maxLength: 150
+        avatar:
+          type: string
+          title: 头像
+          maxLength: 200
+      required:
+      - email
+      - id
+      - username
+    SuperAdminCreateRequest:
+      type: object
+      description: 超级管理员创建序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: 邮箱
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          title: 手机号
+          maxLength: 11
+        nick_name:
+          type: string
+          nullable: true
+          title: 昵称
+          maxLength: 30
+        first_name:
+          type: string
+          title: 名字
+          maxLength: 150
+        last_name:
+          type: string
+          title: 姓氏
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          title: 密码
+          maxLength: 128
+        password_confirm:
+          type: string
+          writeOnly: true
+          minLength: 1
+        avatar:
+          type: string
+          title: 头像
+          maxLength: 200
+      required:
+      - email
+      - password
+      - password_confirm
+      - username
+    Task:
+      type: object
+      description: 打卡任务序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: 任务名称
+          maxLength: 100
+        description:
+          type: string
+          title: 任务描述
+        category:
+          type: integer
+          nullable: true
+          title: 所属类型
+        category_name:
+          type: string
+          description: 获取类型名称
+          readOnly: true
+        user:
+          type: integer
+          title: 所属用户
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+        start_date:
+          type: string
+          format: date
+          title: 开始日期
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          title: 结束日期
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TaskStatusEnum'
+          title: 状态
+        reminder:
+          type: boolean
+          title: 是否启用提醒
+        reminder_time:
+          type: string
+          format: time
+          nullable: true
+          title: 提醒时间
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+      required:
+      - category_name
+      - created_at
+      - id
+      - name
+      - start_date
+      - updated_at
+      - user
+    TaskCategory:
+      type: object
+      description: 打卡类型序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: 类型名称
+          maxLength: 50
+        description:
+          type: string
+          title: 类型描述
+          maxLength: 200
+        is_system:
+          type: boolean
+          title: 是否系统预设
+        icon:
+          type: string
+          title: 图标
+          maxLength: 50
+        user:
+          type: integer
+          nullable: true
+          title: 创建用户
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+        translations:
+          title: 多语言翻译
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        translated_name:
+          type: string
+          description: 获取当前语言的名称
+          readOnly: true
+        translated_description:
+          type: string
+          description: 获取当前语言的描述
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - translated_description
+      - translated_name
+      - updated_at
+    TaskCategoryRequest:
+      type: object
+      description: 打卡类型序列化器
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 类型名称
+          maxLength: 50
+        description:
+          type: string
+          title: 类型描述
+          maxLength: 200
+        is_system:
+          type: boolean
+          title: 是否系统预设
+        icon:
+          type: string
+          title: 图标
+          maxLength: 50
+        user:
+          type: integer
+          nullable: true
+          title: 创建用户
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+        translations:
+          title: 多语言翻译
+      required:
+      - name
+    TaskRequest:
+      type: object
+      description: 打卡任务序列化器
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 任务名称
+          maxLength: 100
+        description:
+          type: string
+          title: 任务描述
+        category:
+          type: integer
+          nullable: true
+          title: 所属类型
+        user:
+          type: integer
+          title: 所属用户
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+        start_date:
+          type: string
+          format: date
+          title: 开始日期
+        end_date:
+          type: string
+          format: date
+          nullable: true
+          title: 结束日期
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TaskStatusEnum'
+          title: 状态
+        reminder:
+          type: boolean
+          title: 是否启用提醒
+        reminder_time:
+          type: string
+          format: time
+          nullable: true
+          title: 提醒时间
+      required:
+      - name
+      - start_date
+      - user
+    TaskStatusEnum:
+      enum:
+      - active
+      - completed
+      - paused
+      - archived
+      type: string
+      description: |-
+        * `active` - 进行中
+        * `completed` - 已完成
+        * `paused` - 已暂停
+        * `archived` - 已归档
+    TaskTemplate:
+      type: object
+      description: 任务模板序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: 模板名称
+          maxLength: 100
+        description:
+          type: string
+          title: 模板描述
+        category:
+          type: integer
+          nullable: true
+          title: 所属类型
+        category_name:
+          type: string
+          description: 获取类型名称
+          readOnly: true
+        is_system:
+          type: boolean
+          title: 是否系统预设
+        user:
+          type: integer
+          nullable: true
+          title: 创建用户
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+        translations:
+          title: 多语言翻译
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        translated_name:
+          type: string
+          description: 获取当前语言的名称
+          readOnly: true
+        translated_description:
+          type: string
+          description: 获取当前语言的描述
+          readOnly: true
+      required:
+      - category_name
+      - created_at
+      - id
+      - name
+      - translated_description
+      - translated_name
+      - updated_at
+    TaskTemplateRequest:
+      type: object
+      description: 任务模板序列化器
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 模板名称
+          maxLength: 100
+        description:
+          type: string
+          title: 模板描述
+        category:
+          type: integer
+          nullable: true
+          title: 所属类型
+        is_system:
+          type: boolean
+          title: 是否系统预设
+        user:
+          type: integer
+          nullable: true
+          title: 创建用户
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+        translations:
+          title: 多语言翻译
+      required:
+      - name
+    TenantCreateRequest:
+      type: object
+      description: 租户创建序列化器
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 租户名称
+          maxLength: 100
+        contact_name:
+          type: string
+          nullable: true
+          title: 联系人姓名
+          maxLength: 50
+        contact_email:
+          type: string
+          format: email
+          nullable: true
+          title: 联系人邮箱
+          maxLength: 254
+        contact_phone:
+          type: string
+          nullable: true
+          title: 联系人电话
+          maxLength: 20
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusA95Enum'
+          title: 状态
+      required:
+      - name
+    TenantDetailRequest:
+      type: object
+      description: 租户详情序列化器，包含完整信息
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 租户名称
+          maxLength: 100
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusA95Enum'
+          title: 状态
+        contact_name:
+          type: string
+          nullable: true
+          title: 联系人姓名
+          maxLength: 50
+        contact_email:
+          type: string
+          format: email
+          nullable: true
+          title: 联系人邮箱
+          maxLength: 254
+        contact_phone:
+          type: string
+          nullable: true
+          title: 联系人电话
+          maxLength: 20
+      required:
+      - name
+    TenantQuotaUpdateRequest:
+      type: object
+      description: 租户配额更新序列化器
+      properties:
+        max_users:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          title: 最大用户数
+        max_admins:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          title: 最大管理员数
+        max_storage_mb:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          title: 最大存储空间(MB)
+        max_products:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          title: 最大产品数
+    TestAuthErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: 认证错误详情
+      required:
+      - detail
+    TestErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: 错误详情
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+          description: 字段错误信息
+      required:
+      - detail
+      - fields
+    TestPaginationResponse:
+      type: object
+      properties:
+        pagination:
+          allOf:
+          - $ref: '#/components/schemas/PaginationInfo'
+          description: 分页信息
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResultItem'
+          description: 结果列表
+      required:
+      - pagination
+      - results
+    TestStandardResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: 测试消息
+        test_field:
+          type: string
+          description: 测试字段
+        items:
+          type: array
+          items:
+            type: integer
+          description: 测试列表
+      required:
+      - items
+      - message
+      - test_field
+    TokenRefreshRequest:
+      type: object
+      description: Token刷新序列化器
+      properties:
+        refresh_token:
+          type: string
+          minLength: 1
+      required:
+      - refresh_token
+    User:
+      type: object
+      description: 用户序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: 邮箱
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          title: 手机号
+          maxLength: 11
+        nick_name:
+          type: string
+          nullable: true
+          title: 昵称
+          maxLength: 30
+        first_name:
+          type: string
+          title: 名字
+          maxLength: 150
+        last_name:
+          type: string
+          title: 姓氏
+          maxLength: 150
+        is_active:
+          type: boolean
+          title: 有效
+          description: 指明用户是否被认为是活跃的。以反选代替删除帐号。
+        avatar:
+          type: string
+          description: 获取完整的头像URL
+          readOnly: true
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+        tenant_name:
+          type: string
+          description: 获取租户名称
+          readOnly: true
+        is_admin:
+          type: boolean
+          readOnly: true
+          title: 是否管理员
+        is_member:
+          type: boolean
+          readOnly: true
+          title: 是否普通成员
+        is_super_admin:
+          type: boolean
+          readOnly: true
+          title: 是否超级管理员
+        role:
+          type: string
+          description: 获取用户角色
+          readOnly: true
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 加入日期
+      required:
+      - avatar
+      - date_joined
+      - email
+      - id
+      - is_admin
+      - is_member
+      - is_super_admin
+      - role
+      - tenant_name
+      - username
+    UserCreateRequest:
+      type: object
+      description: 用户创建序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: 邮箱
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          title: 手机号
+          maxLength: 11
+        nick_name:
+          type: string
+          nullable: true
+          title: 昵称
+          maxLength: 30
+        first_name:
+          type: string
+          title: 名字
+          maxLength: 150
+        last_name:
+          type: string
+          title: 姓氏
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          title: 密码
+          maxLength: 128
+        password_confirm:
+          type: string
+          writeOnly: true
+          minLength: 1
+        tenant_id:
+          type: integer
+          writeOnly: true
+        is_admin:
+          type: boolean
+          title: 是否管理员
+        is_member:
+          type: boolean
+          title: 是否普通成员
+        avatar:
+          type: string
+          title: 头像
+          maxLength: 200
+      required:
+      - email
+      - password
+      - password_confirm
+      - username
+    UserList:
+      type: object
+      description: 用户列表序列化器，用于租户用户列表显示
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+        nick_name:
+          type: string
+          readOnly: true
+          nullable: true
+          title: 昵称
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: 邮箱
+        phone:
+          type: string
+          readOnly: true
+          nullable: true
+          title: 手机号
+        is_active:
+          type: boolean
+          readOnly: true
+          title: 有效
+          description: 指明用户是否被认为是活跃的。以反选代替删除帐号。
+        avatar:
+          type: string
+          description: 获取完整的头像URL
+          readOnly: true
+        tenant:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: 所属租户
+        tenant_name:
+          type: string
+          description: 获取租户名称
+          readOnly: true
+        is_admin:
+          type: boolean
+          readOnly: true
+          title: 是否管理员
+        is_member:
+          type: boolean
+          readOnly: true
+          title: 是否普通成员
+        role:
+          type: string
+          description: 获取用户角色
+          readOnly: true
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 加入日期
+      required:
+      - avatar
+      - date_joined
+      - email
+      - id
+      - is_active
+      - is_admin
+      - is_member
+      - nick_name
+      - phone
+      - role
+      - tenant
+      - tenant_name
+      - username
+    UserMinimal:
+      type: object
+      description: 用户最小化序列化器，用于嵌套在其他序列化器中
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+        display_name:
+          type: string
+          readOnly: true
+        avatar:
+          type: string
+          description: 获取完整的头像URL
+          readOnly: true
+      required:
+      - avatar
+      - display_name
+      - id
+      - username
+    UserRequest:
+      type: object
+      description: 用户序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: 邮箱
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          title: 手机号
+          maxLength: 11
+        nick_name:
+          type: string
+          nullable: true
+          title: 昵称
+          maxLength: 30
+        first_name:
+          type: string
+          title: 名字
+          maxLength: 150
+        last_name:
+          type: string
+          title: 姓氏
+          maxLength: 150
+        is_active:
+          type: boolean
+          title: 有效
+          description: 指明用户是否被认为是活跃的。以反选代替删除帐号。
+        tenant:
+          type: integer
+          nullable: true
+          title: 所属租户
+      required:
+      - email
+      - username
+    UserRole:
+      type: object
+      description: 用户角色序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        is_admin:
+          type: boolean
+          title: 是否管理员
+        is_member:
+          type: boolean
+          title: 是否普通成员
+      required:
+      - id
+    UserRoleRequest:
+      type: object
+      description: 用户角色序列化器
+      properties:
+        is_admin:
+          type: boolean
+          title: 是否管理员
+        is_member:
+          type: boolean
+          title: 是否普通成员
+  securitySchemes:
+    Bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: '输入JWT令牌: Bearer [token]'

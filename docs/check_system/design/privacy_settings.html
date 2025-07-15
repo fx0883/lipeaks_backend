@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>隐私设置 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .settings-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .settings-group {
+            margin-bottom: 24px;
+        }
+        .setting-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            padding-left: 4px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #e2e8f0;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #22c55e;
+        }
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        .select-option {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            background-color: #f9fafb;
+            font-size: 14px;
+            outline: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 16px;
+            padding-right: 30px;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        .tip-box {
+            background-color: #ecfdf5;
+            border-left: 4px solid #10b981;
+            padding: 12px;
+            border-radius: 0 8px 8px 0;
+            margin-top: 16px;
+        }
+        /* 返回按钮颜色 */
+        .back-button {
+            color: #22c55e;
+        }
+        /* 设置组标题颜色 */
+        .settings-group-title {
+            color: #16a34a;
+        }
+        /* 激活的单选按钮边框和背景 */
+        input[type="radio"]:checked + .radio-custom {
+            border-color: #22c55e;
+        }
+        input[type="radio"]:checked + .radio-custom::after {
+            background-color: #22c55e;
+        }
+        /* 保存按钮 */
+        .save-btn {
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+        }
+        /* 隐私政策链接 */
+        .privacy-link {
+            color: #22c55e;
+        }
+        /* 底部导航栏边框 */
+        .tab-bar {
+            border-top: 1px solid #dcfce7;
+        }
+        /* 激活的导航项颜色 */
+        .tab-item.active {
+            color: #22c55e;
+        }
+        /* 圆形加号按钮 */
+        .add-button {
+            background-color: #22c55e;
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="p-5 pb-24 overflow-y-auto" style="height: calc(100% - 44px);">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-6">
+            <a href="profile.html" class="text-green-500">
+                <i class="fas fa-arrow-left text-xl"></i>
+            </a>
+            <h1 class="text-2xl font-bold">隐私设置</h1>
+            <div class="w-6"></div> <!-- 占位元素保持布局平衡 -->
+        </div>
+        
+        <!-- 个人数据设置 -->
+        <div class="settings-group">
+            <div class="section-title">个人数据</div>
+            <div class="settings-card">
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">个人信息可见性</h3>
+                        <p class="text-xs text-gray-500">设置谁可以查看您的个人信息</p>
+                    </div>
+                    <select class="select-option" id="profile-visibility">
+                        <option value="public">所有人</option>
+                        <option value="friends">仅好友</option>
+                        <option value="private" selected>仅自己</option>
+                    </select>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">打卡记录可见性</h3>
+                        <p class="text-xs text-gray-500">设置谁可以查看您的打卡记录</p>
+                    </div>
+                    <select class="select-option" id="checkin-visibility">
+                        <option value="public">所有人</option>
+                        <option value="friends" selected>仅好友</option>
+                        <option value="private">仅自己</option>
+                    </select>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">统计数据可见性</h3>
+                        <p class="text-xs text-gray-500">设置谁可以查看您的统计分析</p>
+                    </div>
+                    <select class="select-option" id="stats-visibility">
+                        <option value="public">所有人</option>
+                        <option value="friends">仅好友</option>
+                        <option value="private" selected>仅自己</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 社交互动设置 -->
+        <div class="settings-group">
+            <div class="section-title">社交互动</div>
+            <div class="settings-card">
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">允许评论</h3>
+                        <p class="text-xs text-gray-500">他人是否可以评论您的打卡记录</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="allow-comments">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">允许点赞</h3>
+                        <p class="text-xs text-gray-500">他人是否可以点赞您的打卡记录</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="allow-likes">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">允许分享</h3>
+                        <p class="text-xs text-gray-500">他人是否可以分享您的打卡记录</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="allow-sharing">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">好友申请</h3>
+                        <p class="text-xs text-gray-500">设置谁可以向您发送好友申请</p>
+                    </div>
+                    <select class="select-option" id="friend-request">
+                        <option value="anyone">所有人</option>
+                        <option value="friends-of-friends" selected>好友的好友</option>
+                        <option value="none">不接受申请</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 定位和相机设置 -->
+        <div class="settings-group">
+            <div class="section-title">设备权限</div>
+            <div class="settings-card">
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">位置信息</h3>
+                        <p class="text-xs text-gray-500">允许应用使用您的位置信息</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="location-permission">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">相机权限</h3>
+                        <p class="text-xs text-gray-500">允许应用使用您的相机</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="camera-permission">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">相册权限</h3>
+                        <p class="text-xs text-gray-500">允许应用访问您的相册</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="photos-permission">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 数据共享设置 -->
+        <div class="settings-group">
+            <div class="section-title">数据共享</div>
+            <div class="settings-card">
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">使用分析</h3>
+                        <p class="text-xs text-gray-500">共享匿名使用数据以改进应用</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="usage-analytics">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">个性化推荐</h3>
+                        <p class="text-xs text-gray-500">使用您的数据提供个性化内容</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="personalized-recommendations">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">第三方共享</h3>
+                        <p class="text-xs text-gray-500">与第三方合作伙伴共享数据</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="third-party-sharing">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="tip-box mt-4">
+                <p class="text-sm text-green-800">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    我们重视您的隐私。您可以在任何时候查看和下载您的数据，或删除您的账户和所有相关数据。
+                </p>
+            </div>
+        </div>
+        
+        <!-- 数据管理 -->
+        <div class="settings-group">
+            <div class="section-title">数据管理</div>
+            <div class="settings-card">
+                <div class="setting-item" id="export-data">
+                    <div>
+                        <h3 class="font-medium">导出我的数据</h3>
+                        <p class="text-xs text-gray-500">下载您的个人数据和记录</p>
+                    </div>
+                    <i class="fas fa-download text-green-600"></i>
+                </div>
+                
+                <div class="setting-item" id="clear-data">
+                    <div>
+                        <h3 class="font-medium">清除缓存数据</h3>
+                        <p class="text-xs text-gray-500">清除应用缓存和暂时数据</p>
+                    </div>
+                    <i class="fas fa-broom text-green-600"></i>
+                </div>
+                
+                <div class="setting-item text-red-500" id="delete-account">
+                    <div>
+                        <h3 class="font-medium">删除我的账户</h3>
+                        <p class="text-xs text-red-400">永久删除您的账户和所有数据</p>
+                    </div>
+                    <i class="fas fa-trash-alt text-red-500"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 监听选择框变化
+        document.querySelectorAll('select').forEach(select => {
+            select.addEventListener('change', function() {
+                console.log(`${this.id} 设置变更为:`, this.value);
+                
+                // 显示更改提示
+                alert(`${this.previousElementSibling.querySelector('h3').textContent}已更新`);
+            });
+        });
+        
+        // 监听开关变化
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                console.log(`${this.id} 设置变更为: ${this.checked ? '开启' : '关闭'}`);
+                
+                // 显示更改提示
+                const settingName = this.closest('.setting-item').querySelector('h3').textContent;
+                alert(`${settingName}已${this.checked ? '开启' : '关闭'}`);
+            });
+        });
+        
+        // 导出数据
+        document.getElementById('export-data').addEventListener('click', function() {
+            console.log('点击导出数据');
+            alert('您的数据正在准备中，准备完成后将发送到您的邮箱');
+        });
+        
+        // 清除缓存
+        document.getElementById('clear-data').addEventListener('click', function() {
+            console.log('点击清除缓存');
+            const confirmClear = confirm('确定要清除缓存数据吗？这不会影响您的打卡记录和账户信息。');
+            if (confirmClear) {
+                console.log('确认清除缓存');
+                alert('缓存数据已清除');
+            }
+        });
+        
+        // 删除账户
+        document.getElementById('delete-account').addEventListener('click', function() {
+            console.log('点击删除账户');
+            const confirmDelete = confirm('警告：这将永久删除您的账户和所有相关数据，此操作无法撤销！确定要继续吗？');
+            if (confirmDelete) {
+                console.log('确认删除账户');
+                alert('账户删除请求已提交，我们将向您的邮箱发送确认链接');
+            }
+        });
+    </script>
+</body>
+</html> 

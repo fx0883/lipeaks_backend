@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}多租户系统文档{% endblock %}</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 添加本地备用Bootstrap CSS -->
+    <link rel="stylesheet" href="/static/css/bootstrap.min.css" id="bootstrap-fallback-css" disabled>
+    
+    <!-- Highlight.js CSS - 使用本地资源 -->
+    <link rel="stylesheet" href="/static/css/hljs-default.css">
+    <!-- 备用样式表 -->
+    <link rel="stylesheet" href="/static/css/github.min.css" id="hljs-fallback-css" disabled>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 添加本地备用图标样式表 -->
+    <link rel="stylesheet" href="/static/css/fallback-icons.css" id="icons-fallback-css" disabled>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .main-content {
+            flex: 1;
+        }
+        
+        .nav-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            padding: 10px 0;
+        }
+        
+        .footer {
+            background-color: #f8f9fa;
+            padding: 10px 0;
+            border-top: 1px solid #dee2e6;
+            text-align: center;
+        }
+        
+        pre {
+            background-color: #f6f8fa;
+            border-radius: 4px;
+            padding: 16px;
+            overflow: auto;
+        }
+        
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            color: #24292e;
+        }
+        
+        /* 响应式布局相关样式 */
+        @media (max-width: 768px) {
+            .sidebar {
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <header class="nav-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h4 m-0">
+                    <a href="/" class="text-decoration-none text-dark">多租户系统文档</a>
+                </h1>
+                <div>
+                    <a href="/doclist/" class="btn btn-sm btn-outline-primary">文档列表</a>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="main-content">
+        <div class="container py-4">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    
+    <footer class="footer">
+        <div class="container">
+            <p class="m-0">© {% now "Y" %} 多租户系统文档 | 由Django提供支持</p>
+        </div>
+    </footer>
+    
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Highlight.js 主脚本 - 尝试多种可能的路径 -->
+    <script>
+        // 定义加载脚本的函数
+        function loadScript(src, callback) {
+            var script = document.createElement('script');
+            script.src = src;
+            script.onload = callback;
+            script.onerror = function() {
+                console.warn('无法加载脚本:', src);
+                if (callback) callback(new Error('脚本加载失败'));
+            };
+            document.head.appendChild(script);
+        }
+        
+        // 按顺序尝试加载不同路径的highlight.js
+        var scriptPaths = [
+
+        ];
+        
+        var scriptIndex = 0;
+        
+        function tryLoadScript() {
+            if (scriptIndex >= scriptPaths.length) {
+                console.warn('所有highlight.js路径尝试失败，加载备用脚本');
+                loadScript('/static/js/hljs-loader.js');
+                return;
+            }
+            
+            var path = scriptPaths[scriptIndex++];
+            console.log('尝试加载:', path);
+            
+            loadScript(path, function(err) {
+                if (err) {
+                    // 尝试下一个路径
+                    tryLoadScript();
+                } else {
+                    console.log('成功加载highlight.js:', path);
+                    // 成功加载后，加载语言包
+                    var languages = ['python', 'javascript', 'bash', 'json', 'xml', 'css', 'sql'];
+                    languages.forEach(function(lang) {
+                        loadScript('/static/highlight.js/languages/' + lang + '.js', function() {
+                            console.log('已加载语言包:', lang);
+                        });
+                    });
+                    
+                    // 加载加载器脚本来处理初始化
+                    loadScript('/static/js/hljs-loader.js');
+                }
+            });
+        }
+        
+        // 开始尝试加载
+        tryLoadScript();
+    </script>
+
+    <!-- 检查资源加载状态 -->
+    <script>
+        // 初始化highlight.js
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查CSS资源是否加载成功
+            const cssLinks = document.querySelectorAll('link[rel="stylesheet"]');
+            let fontAwesomeLoaded = false;
+            let bootstrapCssLoaded = false;
+            
+            cssLinks.forEach(function(link) {
+                // 检查是否有效
+                if (link.sheet) {
+                    const href = link.getAttribute('href');
+                    if (href && href.includes('font-awesome')) {
+                        fontAwesomeLoaded = true;
+                    }
+                    if (href && href.includes('bootstrap') && !href.includes('fallback')) {
+                        bootstrapCssLoaded = true;
+                    }
+                }
+            });
+            
+            // 激活备用CSS样式表
+            if (!fontAwesomeLoaded) {
+                console.warn('Font Awesome未能加载，使用本地图标');
+                document.getElementById('icons-fallback-css').disabled = false;
+            }
+            
+            if (!bootstrapCssLoaded) {
+                console.warn('Bootstrap CSS未能加载，使用本地样式');
+                document.getElementById('bootstrap-fallback-css').disabled = false;
+            }
+            
+            // 检查Bootstrap JS
+            if (typeof bootstrap === 'undefined') {
+                console.warn('Bootstrap JS未能加载，使用本地版本');
+                var bsScript = document.createElement('script');
+                bsScript.src = '/static/js/bootstrap.bundle.min.js';
+                document.body.appendChild(bsScript);
+            }
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html> 

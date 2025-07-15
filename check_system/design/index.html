@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自律智能打卡App原型</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f9fafb;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+        }
+        .phone-frame {
+            width: 375px;
+            height: 812px;
+            border: 10px solid #000;
+            border-radius: 40px;
+            overflow: hidden;
+            position: relative;
+            margin: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        .page-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        /* 自定义滚动条 */
+        .container::-webkit-scrollbar {
+            display: none;
+        }
+        .splash-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+            text-align: center;
+            transition: transform 0.5s ease-in-out;
+        }
+        .splash-logo {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .splash-text {
+            font-size: 1.2rem;
+            max-width: 80%;
+            margin-bottom: 3rem;
+            opacity: 0.9;
+        }
+        .splash-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+        .btn {
+            padding: 0.8rem 2rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background-color: white;
+            color: #16a34a;
+            border: none;
+        }
+        .btn-secondary {
+            background-color: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+        .onboarding-container {
+            position: absolute;
+            top: 0;
+            left: 100%;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.5s ease-in-out;
+            background-color: #f0fdf4;
+        }
+        .onboarding-header {
+            padding: 2rem;
+            text-align: center;
+        }
+        .onboarding-logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #16a34a;
+        }
+        .onboarding-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 2rem;
+        }
+        .slide {
+            width: 100%;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .slide.active {
+            display: flex;
+        }
+        .slide-image {
+            width: 70%;
+            max-width: 300px;
+            height: auto;
+            margin-bottom: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .slide-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #111827;
+        }
+        .slide-text {
+            font-size: 1rem;
+            color: #4b5563;
+            max-width: 80%;
+            margin-bottom: 2rem;
+        }
+        .onboarding-footer {
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .dots {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #d1d5db;
+        }
+        .dot.active {
+            background-color: #22c55e;
+            width: 16px;
+            border-radius: 4px;
+        }
+        .onboarding-btn {
+            padding: 0.8rem 1.5rem;
+            border-radius: 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            background-color: #22c55e;
+            color: white;
+            border: none;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen">
+    <h1 class="text-3xl font-bold text-gray-800 mb-8">自律智能打卡App原型</h1>
+    
+    <div class="flex flex-wrap justify-center">
+        <!-- 首页 -->
+        <div class="flex flex-col items-center">
+            <div class="page-title">首页</div>
+            <div class="phone-frame">
+                <iframe src="home.html" frameborder="0" width="100%" height="100%"></iframe>
+            </div>
+        </div>
+        
+        <!-- 任务列表 -->
+        <div class="flex flex-col items-center">
+            <div class="page-title">任务列表</div>
+            <div class="phone-frame">
+                <iframe src="tasks.html" frameborder="0" width="100%" height="100%"></iframe>
+            </div>
+        </div>
+        
+        <!-- 创建任务 -->
+        <div class="flex flex-col items-center">
+            <div class="page-title">创建任务</div>
+            <div class="phone-frame">
+                <iframe src="create_task.html" frameborder="0" width="100%" height="100%"></iframe>
+            </div>
+        </div>
+        
+        <!-- 打卡类型 -->
+        <div class="flex flex-col items-center">
+            <div class="page-title">打卡类型</div>
+            <div class="phone-frame">
+                <iframe src="categories.html" frameborder="0" width="100%" height="100%"></iframe>
+            </div>
+        </div>
+        
+        <!-- 创建类型 -->
+        <div class="flex flex-col items-center">
+            <div class="page-title">创建类型</div>
+            <div class="phone-frame">
+                <iframe src="create_category.html" frameborder="0" width="100%" height="100%"></iframe>
+            </div>
+        </div>
+        
+        <!-- 数据统计 -->
+        <div class="flex flex-col items-center">
+            <div class="page-title">数据统计</div>
+            <div class="phone-frame">
+                <iframe src="statistics.html" frameborder="0" width="100%" height="100%"></iframe>
+            </div>
+        </div>
+        
+        <!-- 个人中心 -->
+        <div class="flex flex-col items-center">
+            <div class="page-title">个人中心</div>
+            <div class="phone-frame">
+                <iframe src="profile.html" frameborder="0" width="100%" height="100%"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <div class="splash-container">
+        <h1 class="splash-logo">Logo</h1>
+        <p class="splash-text">Welcome to our app! Start your journey with us.</p>
+        <div class="splash-buttons">
+            <button class="btn btn-primary">Get Started</button>
+            <button class="btn btn-secondary">Learn More</button>
+        </div>
+    </div>
+
+    <div class="onboarding-container">
+        <div class="onboarding-header">
+            <h2 class="onboarding-logo">Logo</h2>
+        </div>
+        <div class="onboarding-content">
+            <div class="slide active">
+                <img src="slide1.jpg" alt="Slide 1" class="slide-image">
+                <h3 class="slide-title">Slide 1 Title</h3>
+                <p class="slide-text">This is the description for slide 1.</p>
+            </div>
+            <div class="slide">
+                <img src="slide2.jpg" alt="Slide 2" class="slide-image">
+                <h3 class="slide-title">Slide 2 Title</h3>
+                <p class="slide-text">This is the description for slide 2.</p>
+            </div>
+            <div class="slide">
+                <img src="slide3.jpg" alt="Slide 3" class="slide-image">
+                <h3 class="slide-title">Slide 3 Title</h3>
+                <p class="slide-text">This is the description for slide 3.</p>
+            </div>
+        </div>
+        <div class="onboarding-footer">
+            <div class="dots">
+                <span class="dot active"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+            </div>
+            <button class="onboarding-btn">Next</button>
+        </div>
+    </div>
+
+    <script>
+        function startOnboarding() {
+            document.querySelector('.splash-container').style.transform = 'translateX(-100%)';
+            document.querySelector('.onboarding-container').style.transform = 'translateX(-100%)';
+        }
+    </script>
+</body>
+</html> 

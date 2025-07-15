@@ -1,0 +1,39 @@
+/**
+ * 备用图标样式，用于CDN无法访问时提供基本图标
+ */
+
+/* 基础图标样式 */
+.fas, .far, .fab, .fa {
+  font-family: monospace;
+  font-weight: normal;
+  font-style: normal;
+  display: inline-block;
+  text-rendering: auto;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 文件夹图标 */
+.fa-folder:before {
+  content: "📁";
+}
+
+.fa-folder-open:before {
+  content: "📂";
+}
+
+/* 文件图标 */
+.fa-file-alt:before {
+  content: "📄";
+}
+
+/* 菜单图标 */
+.fa-bars:before {
+  content: "☰";
+}
+
+/* 间距样式 */
+.me-2 {
+  margin-right: 0.5rem !important;
+} 

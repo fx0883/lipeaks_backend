@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}错误 - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="alert alert-danger" role="alert">
+            <h4 class="alert-heading">发生错误</h4>
+            <p>加载文档时发生了错误。</p>
+            <hr>
+            <p class="mb-0">{{ error }}</p>
+        </div>
+        
+        <div class="text-center mt-4">
+            <a href="/doclist/" class="btn btn-primary">返回文档列表</a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

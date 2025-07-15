@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+
+{% block title %}文档列表 - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 树状结构样式 */
+    .docs-tree {
+        padding-left: 0;
+        list-style-type: none;
+    }
+    
+    .docs-tree ul {
+        padding-left: 20px;
+        list-style-type: none;
+    }
+    
+    .docs-tree li {
+        margin: 5px 0;
+    }
+    
+    .tree-toggle {
+        cursor: pointer;
+        user-select: none;
+    }
+    
+    .tree-toggle .fa-folder {
+        color: #ffc107;
+    }
+    
+    .tree-toggle .fa-folder-open {
+        color: #ffc107;
+    }
+    
+    .tree-toggle .fa-file-alt {
+        color: #6c757d;
+    }
+    
+    .doc-item {
+        color: #495057;
+        text-decoration: none;
+        display: block;
+        padding: 5px 0;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+    
+    .doc-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .doc-item.active {
+        background-color: #e9ecef;
+        font-weight: bold;
+    }
+    
+    .doc-content {
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 4px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    }
+    
+    /* 响应式布局样式 */
+    @media (max-width: 768px) {
+        .docs-sidebar {
+            margin-bottom: 20px;
+        }
+        
+        .mobile-toggle {
+            display: block;
+            margin-bottom: 15px;
+        }
+    }
+    
+    @media (min-width: 769px) {
+        .mobile-toggle {
+            display: none;
+        }
+        
+        .docs-tree-container {
+            display: block !important;
+        }
+    }
+    
+    /* 本地备用样式 */
+    .fallback-alert {
+        margin-top: 20px;
+        padding: 10px;
+        border-radius: 4px;
+        background-color: #fff3cd;
+        border: 1px solid #ffeeba;
+        color: #856404;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- 移动端文档树切换按钮 -->
+    <div class="col-12 mobile-toggle">
+        <button class="btn btn-outline-primary w-100" type="button" data-bs-toggle="collapse" 
+                data-bs-target="#docs-tree-container" aria-expanded="false">
+            <i class="fas fa-bars me-2"></i>文档目录
+        </button>
+    </div>
+    
+    <!-- 左侧文档树 -->
+    <div class="col-md-3 docs-sidebar">
+        <div id="docs-tree-container" class="collapse docs-tree-container">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">文档目录</h5>
+                </div>
+                <div class="card-body">
+                    <div id="loading-indicator" class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2">加载文档树...</p>
+                    </div>
+                    <ul id="docs-tree" class="docs-tree" style="display: none;"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 右侧文档内容 -->
+    <div class="col-md-9">
+        <div id="doc-content" class="doc-content">
+            <div id="initial-message">
+                <h2>欢迎查看文档</h2>
+                <p>请从左侧选择文档以查看其内容。</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CDN无法访问时的提示 -->
+<div id="cdn-error-alert" class="fallback-alert" style="display: none;">
+    <strong>注意:</strong> 无法从CDN加载资源，已切换到本地备用资源。如果页面显示异常，请检查网络连接或与管理员联系。
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const docsTree = document.getElementById('docs-tree');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const docContent = document.getElementById('doc-content');
+    const initialMessage = document.getElementById('initial-message');
+    const cdnErrorAlert = document.getElementById('cdn-error-alert');
+    
+    // 检查Bootstrap和其他资源是否加载成功
+    if (typeof bootstrap === 'undefined') {
+        console.warn('Bootstrap未能加载，尝试加载本地版本');
+        cdnErrorAlert.style.display = 'block';
+        
+        // 加载本地Bootstrap JS
+        var bsScript = document.createElement('script');
+        bsScript.src = '/static/js/bootstrap.bundle.min.js';
+        document.body.appendChild(bsScript);
+    }
+    
+    // 应用代码高亮
+    function applyHighlighting() {
+        try {
+            if (typeof hljs !== 'undefined') {
+                if (typeof hljs.highlightAll === 'function') {
+                    // 使用highlightAll方法（完整版本的highlight.js）
+                    hljs.highlightAll();
+                    console.log('使用highlightAll方法应用代码高亮');
+                } else {
+                    // 使用highlightElement方法（备用版本）
+                    document.querySelectorAll('pre code').forEach(function(block) {
+                        hljs.highlightElement(block);
+                    });
+                    console.log('使用highlightElement方法应用代码高亮');
+                }
+            } else {
+                console.error('highlight.js未定义，无法应用代码高亮');
+                cdnErrorAlert.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('应用代码高亮时出错：', error);
+            cdnErrorAlert.style.display = 'block';
+        }
+    }
+    
+    // 加载文档树
+    function loadDocsTree() {
+        fetch('/docs/api/docs/')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data && data.data.tree) {
+                renderTree(data.data.tree, docsTree);
+                docsTree.style.display = 'block';
+                loadingIndicator.style.display = 'none';
+                
+                // 从URL参数加载默认文档
+                const urlParams = new URLSearchParams(window.location.search);
+                const docPath = urlParams.get('doc');
+                if (docPath) {
+                    loadDocument(docPath);
+                    
+                    // 高亮显示当前文档
+                    const docLinks = document.querySelectorAll('.doc-link');
+                    docLinks.forEach(link => {
+                        if (link.dataset.path === docPath) {
+                            link.classList.add('active');
+                            // 展开所有父文件夹
+                            let parent = link.closest('li').parentElement;
+                            while (parent && parent.classList.contains('collapse')) {
+                                parent.classList.add('show');
+                                const toggler = parent.previousElementSibling.querySelector('.tree-toggle');
+                                if (toggler) {
+                                    toggler.setAttribute('aria-expanded', 'true');
+                                    toggler.classList.remove('collapsed');
+                                    const folderIcon = toggler.querySelector('.fa-folder');
+                                    if (folderIcon) {
+                                        folderIcon.classList.remove('fa-folder');
+                                        folderIcon.classList.add('fa-folder-open');
+                                    }
+                                }
+                                parent = parent.parentElement.parentElement;
+                            }
+                        }
+                    });
+                    }
+                } else {
+                    throw new Error('获取文档树失败: ' + (data.message || '未知错误'));
+                }
+            })
+            .catch(error => {
+                console.error('Error loading docs tree:', error);
+                loadingIndicator.innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                        加载文档树失败。错误: ${error.message}
+                    </div>
+                `;
+            });
+    }
+    
+    // 递归渲染树结构
+    function renderTree(items, parentElement) {
+        items.forEach((item, index) => {
+            const li = document.createElement('li');
+            
+            if (item.type === 'directory') {
+                // 文件夹节点
+                const folderId = `folder-${Date.now()}-${index}`;
+                const childrenId = `children-${Date.now()}-${index}`;
+                
+                li.innerHTML = `
+                    <div class="tree-toggle collapsed" data-bs-toggle="collapse" data-bs-target="#${childrenId}" 
+                         aria-expanded="false" aria-controls="${childrenId}">
+                        <i class="fas fa-folder me-2"></i>
+                        <span>${item.name}</span>
+                    </div>
+                    <ul id="${childrenId}" class="collapse" aria-labelledby="${folderId}"></ul>
+                `;
+                
+                parentElement.appendChild(li);
+                
+                // 添加事件监听器以切换文件夹图标
+                const toggle = li.querySelector('.tree-toggle');
+                toggle.addEventListener('click', function() {
+                    const folderIcon = this.querySelector('i');
+                    if (folderIcon.classList.contains('fa-folder')) {
+                        folderIcon.classList.remove('fa-folder');
+                        folderIcon.classList.add('fa-folder-open');
+                    } else {
+                        folderIcon.classList.remove('fa-folder-open');
+                        folderIcon.classList.add('fa-folder');
+                    }
+                });
+                
+                // 渲染子项
+                const childrenContainer = li.querySelector(`#${childrenId}`);
+                renderTree(item.children, childrenContainer);
+            } else {
+                // 文件节点
+                li.innerHTML = `
+                    <a href="#" class="doc-item doc-link" data-path="${item.path}">
+                        <i class="fas fa-file-alt me-2"></i>
+                        <span>${item.name}</span>
+                    </a>
+                `;
+                
+                parentElement.appendChild(li);
+                
+                // 添加点击事件
+                const link = li.querySelector('.doc-link');
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // 移除所有活动状态
+                    document.querySelectorAll('.doc-link').forEach(el => {
+                        el.classList.remove('active');
+                    });
+                    
+                    // 设置当前项为活动状态
+                    this.classList.add('active');
+                    
+                    // 在小屏幕上自动关闭文档树
+                    if (window.innerWidth < 769) {
+                        const treeContainer = document.getElementById('docs-tree-container');
+                        if (treeContainer.classList.contains('show')) {
+                            // 检查bootstrap对象是否可用
+                            if (typeof bootstrap !== 'undefined') {
+                                const bsCollapse = new bootstrap.Collapse(treeContainer);
+                                bsCollapse.hide();
+                            } else {
+                                // 备用方案：手动切换类
+                                treeContainer.classList.remove('show');
+                            }
+                        }
+                    }
+                    
+                    // 加载文档内容
+                    loadDocument(item.path);
+                    
+                    // 更新URL，但不刷新页面
+                    const url = new URL(window.location);
+                    url.searchParams.set('doc', item.path);
+                    window.history.pushState({}, '', url);
+                });
+            }
+        });
+    }
+    
+    // 加载文档内容
+    function loadDocument(path) {
+        // 显示加载中指示器
+        docContent.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-3">加载文档内容...</p>
+            </div>
+        `;
+        
+        fetch(`/docs/api/doc/${path}/`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP错误 ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && data.data) {
+                    const title = data.data.title;
+                    const content = data.data.content;
+                    
+                docContent.innerHTML = `
+                    <h2 class="mb-4">${title}</h2>
+                    <div class="markdown-content">${content}</div>
+                `;
+                
+                // 应用代码高亮
+                applyHighlighting();
+                
+                // 处理文档内部链接
+                docContent.querySelectorAll('.markdown-content a').forEach(link => {
+                    const href = link.getAttribute('href');
+                    if (href && href.startsWith('/doc/')) {
+                        link.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            const docPath = href.substring(5); // 移除'/doc/'前缀
+                            
+                            // 查找并点击对应的文档链接
+                            const docLinks = document.querySelectorAll('.doc-link');
+                            let found = false;
+                            docLinks.forEach(docLink => {
+                                if (docLink.dataset.path === docPath) {
+                                    docLink.click();
+                                    found = true;
+                                }
+                            });
+                            
+                            if (!found) {
+                                // 如果在树中找不到对应项，直接加载文档
+                                loadDocument(docPath);
+                                
+                                // 更新URL
+                                const url = new URL(window.location);
+                                url.searchParams.set('doc', docPath);
+                                window.history.pushState({}, '', url);
+                            }
+                        });
+                    }
+                });
+                } else {
+                    throw new Error('获取文档内容失败: ' + (data.message || '未知错误'));
+                }
+            })
+            .catch(error => {
+                console.error('Error loading document:', error);
+                docContent.innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                        <h4 class="alert-heading">加载文档失败</h4>
+                        <p>无法加载请求的文档。</p>
+                        <hr>
+                        <p class="mb-0">错误: ${error.message}</p>
+                    </div>
+                `;
+            });
+    }
+    
+    // 初始化加载文档树
+    loadDocsTree();
+    
+    // 监听highlight.js准备就绪事件
+    document.addEventListener('highlightjsReady', function() {
+        console.log('收到highlight.js准备就绪事件');
+    });
+});
+</script>
+{% endblock %} 

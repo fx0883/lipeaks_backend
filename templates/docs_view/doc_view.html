@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - 文档{% endblock %}
+
+{% block extra_css %}
+<style>
+    .fallback-alert {
+        margin-top: 20px;
+        padding: 10px;
+        border-radius: 4px;
+        background-color: #fff3cd;
+        border: 1px solid #ffeeba;
+        color: #856404;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/doclist/">文档列表</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+            </ol>
+        </nav>
+        
+        <div class="markdown-content card">
+            <div class="card-body">
+                <h1 class="card-title">{{ title }}</h1>
+                <hr>
+                <div class="card-text">
+                    {{ content }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CDN无法访问时的提示 -->
+<div id="cdn-error-alert" class="fallback-alert" style="display: none;">
+    <strong>注意:</strong> 无法从CDN加载资源，已切换到本地备用资源。如果页面显示异常，请检查网络连接或与管理员联系。
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const cdnErrorAlert = document.getElementById('cdn-error-alert');
+        
+        // 应用代码高亮
+        function applyHighlighting() {
+            try {
+                if (typeof hljs !== 'undefined') {
+                    if (typeof hljs.highlightAll === 'function') {
+                        // 使用highlightAll方法（完整版本的highlight.js）
+                        hljs.highlightAll();
+                        console.log('使用highlightAll方法应用代码高亮');
+                    } else {
+                        // 使用highlightElement方法（备用版本）
+                        document.querySelectorAll('pre code').forEach(function(block) {
+                            hljs.highlightElement(block);
+                        });
+                        console.log('使用highlightElement方法应用代码高亮');
+                    }
+                } else {
+                    console.error('highlight.js未定义，无法应用代码高亮');
+                    cdnErrorAlert.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('应用代码高亮时出错：', error);
+                cdnErrorAlert.style.display = 'block';
+            }
+        }
+        
+        // 处理内部链接
+        document.querySelectorAll('.markdown-content a').forEach(link => {
+            const href = link.getAttribute('href');
+            if (href && href.startsWith('/doc/')) {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    window.location.href = href;
+                });
+            }
+        });
+        
+        // 应用代码高亮
+        applyHighlighting();
+        
+        // 监听highlight.js准备就绪事件
+        document.addEventListener('highlightjsReady', function() {
+            console.log('收到highlight.js准备就绪事件，重新应用代码高亮');
+            applyHighlighting();
+        });
+    });
+</script>
+{% endblock %} 

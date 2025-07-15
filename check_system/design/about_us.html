@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>关于我们 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .content-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .app-version {
+            border-radius: 20px;
+            background-color: #ecfdf5;
+            color: #065f46;
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+        }
+        .timeline-item {
+            position: relative;
+            padding-left: 28px;
+            padding-bottom: 24px;
+        }
+        .timeline-item:before {
+            content: "";
+            position: absolute;
+            left: 8px;
+            top: 8px;
+            height: 100%;
+            width: 2px;
+            background-color: #e5e7eb;
+        }
+        .timeline-item:last-child:before {
+            display: none;
+        }
+        .timeline-dot {
+            position: absolute;
+            left: 0;
+            top: 8px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background-color: #22c55e;
+            border: 3px solid #ecfdf5;
+            z-index: 1;
+        }
+        .team-member {
+            border-radius: 12px;
+            background-color: white;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+        .team-member:active {
+            transform: scale(0.98);
+        }
+        .social-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 16px;
+            margin-right: 8px;
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        /* 返回按钮颜色 */
+        .back-button {
+            color: #22c55e;
+        }
+        /* 标题颜色 */
+        .section-title {
+            color: #22c55e;
+            border-bottom: 1px solid #dcfce7;
+        }
+        /* 链接颜色 */
+        .feature-item i, .contact-item i {
+            color: #22c55e;
+        }
+        /* 版本信息中的版本号颜色 */
+        .version-number {
+            color: #22c55e;
+        }
+        /* 团队成员卡片边框 */
+        .team-card {
+            border: 1px solid #dcfce7;
+        }
+        /* 底部导航栏边框 */
+        .tab-bar {
+            border-top: 1px solid #dcfce7;
+        }
+        /* 激活的导航项颜色 */
+        .tab-item.active {
+            color: #22c55e;
+        }
+        /* 圆形加号按钮 */
+        .add-button {
+            background-color: #22c55e;
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="p-5 pb-24 overflow-y-auto" style="height: calc(100% - 44px);">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-6">
+            <a href="profile.html" class="text-green-500">
+                <i class="fas fa-arrow-left text-xl"></i>
+            </a>
+            <h1 class="text-2xl font-bold">关于我们</h1>
+            <div class="w-6"></div> <!-- 占位元素保持布局平衡 -->
+        </div>
+        
+        <!-- 应用信息 -->
+        <div class="content-card p-5 mb-8">
+            <div class="flex items-center mb-5">
+                <div class="mr-4 w-16 h-16 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+                    <i class="fas fa-check-double text-white text-2xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold mb-1">自律打卡</h2>
+                    <div class="flex items-center">
+                        <span class="app-version mr-2">v2.5.1</span>
+                        <span class="text-xs text-gray-500">2023年07月15日更新</span>
+                    </div>
+                </div>
+            </div>
+            
+            <p class="text-gray-600 mb-4">
+                自律打卡是一款专注于培养良好习惯和提升自我管理能力的应用。通过简洁高效的打卡记录和数据分析，帮助用户持续追踪自己的目标完成情况，提高自律能力。
+            </p>
+            
+            <div class="flex justify-center space-x-4">
+                <a href="#" class="text-green-500 flex items-center">
+                    <i class="fas fa-star mr-1"></i>
+                    <span>给我们评分</span>
+                </a>
+                <a href="#" class="text-green-500 flex items-center">
+                    <i class="fas fa-share-alt mr-1"></i>
+                    <span>分享应用</span>
+                </a>
+            </div>
+        </div>
+        
+        <!-- 应用特色 -->
+        <div class="mb-8">
+            <h2 class="text-lg font-semibold mb-4">应用特色</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="content-card p-4 flex flex-col items-center text-center">
+                    <div class="feature-icon">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    <h3 class="font-medium mb-1">自定义打卡任务</h3>
+                    <p class="text-sm text-gray-600">创建个性化打卡任务，满足不同需求</p>
+                </div>
+                
+                <div class="content-card p-4 flex flex-col items-center text-center">
+                    <div class="feature-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3 class="font-medium mb-1">数据统计分析</h3>
+                    <p class="text-sm text-gray-600">直观展示完成情况，掌握进步轨迹</p>
+                </div>
+                
+                <div class="content-card p-4 flex flex-col items-center text-center">
+                    <div class="feature-icon">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <h3 class="font-medium mb-1">贴心提醒</h3>
+                    <p class="text-sm text-gray-600">智能提醒，不错过每一次打卡</p>
+                </div>
+                
+                <div class="content-card p-4 flex flex-col items-center text-center">
+                    <div class="feature-icon">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <h3 class="font-medium mb-1">成就系统</h3>
+                    <p class="text-sm text-gray-600">解锁成就，增强打卡动力</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 团队介绍 -->
+        <div class="mb-8">
+            <h2 class="text-lg font-semibold mb-4">团队介绍</h2>
+            <div class="content-card p-4 mb-4">
+                <p class="text-gray-600 mb-5">
+                    我们是一支热爱科技并致力于帮助人们提升自我效能的团队。团队由经验丰富的产品设计师、开发工程师和用户体验专家组成，共同打造令人满意的高品质应用。
+                </p>
+                
+                <div class="overflow-x-auto -mx-4 px-4">
+                    <div class="flex space-x-4 pb-2">
+                        <div class="team-member" style="min-width: 140px;">
+                            <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=300&h=300&q=80" alt="张明 - 创始人" class="w-full h-36 object-cover">
+                            <div class="p-3">
+                                <h3 class="font-medium">张明</h3>
+                                <p class="text-xs text-gray-500">联合创始人 & CEO</p>
+                            </div>
+                        </div>
+                        
+                        <div class="team-member" style="min-width: 140px;">
+                            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=300&h=300&q=80" alt="李彤 - 产品设计" class="w-full h-36 object-cover">
+                            <div class="p-3">
+                                <h3 class="font-medium">李彤</h3>
+                                <p class="text-xs text-gray-500">产品设计师</p>
+                            </div>
+                        </div>
+                        
+                        <div class="team-member" style="min-width: 140px;">
+                            <img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=300&h=300&q=80" alt="王杰 - 首席开发" class="w-full h-36 object-cover">
+                            <div class="p-3">
+                                <h3 class="font-medium">王杰</h3>
+                                <p class="text-xs text-gray-500">首席开发工程师</p>
+                            </div>
+                        </div>
+                        
+                        <div class="team-member" style="min-width: 140px;">
+                            <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=300&h=300&q=80" alt="林小雨 - UX专家" class="w-full h-36 object-cover">
+                            <div class="p-3">
+                                <h3 class="font-medium">林小雨</h3>
+                                <p class="text-xs text-gray-500">UX专家</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 发展历程 -->
+        <div class="mb-8">
+            <h2 class="text-lg font-semibold mb-4">发展历程</h2>
+            <div class="content-card p-4">
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="mb-1 font-medium">2023年7月</div>
+                    <div class="text-sm text-gray-600 mb-1">v2.5.1 版本发布</div>
+                    <p class="text-xs text-gray-500">增加社交分享功能，优化用户体验，修复已知问题</p>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="mb-1 font-medium">2023年3月</div>
+                    <div class="text-sm text-gray-600 mb-1">v2.0.0 版本发布</div>
+                    <p class="text-xs text-gray-500">全新UI设计，增加数据分析功能，支持多设备同步</p>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="mb-1 font-medium">2022年9月</div>
+                    <div class="text-sm text-gray-600 mb-1">v1.5.0 版本发布</div>
+                    <p class="text-xs text-gray-500">增加成就系统，优化提醒功能，提升应用性能</p>
+                </div>
+                
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="mb-1 font-medium">2022年1月</div>
+                    <div class="text-sm text-gray-600 mb-1">v1.0.0 版本发布</div>
+                    <p class="text-xs text-gray-500">自律打卡应用正式上线，提供基础打卡和记录功能</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 联系方式 -->
+        <div class="mb-8">
+            <h2 class="text-lg font-semibold mb-4">联系我们</h2>
+            <div class="content-card p-4">
+                <div class="grid grid-cols-1 gap-3">
+                    <div class="flex items-center">
+                        <i class="fas fa-envelope text-green-500 mr-3"></i>
+                        <div>
+                            <h3 class="font-medium">电子邮件</h3>
+                            <p class="text-sm text-gray-500">contact@ziluda.com</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <i class="fas fa-map-marker-alt text-green-500 mr-3"></i>
+                        <div>
+                            <h3 class="font-medium">公司地址</h3>
+                            <p class="text-sm text-gray-500">北京市朝阳区科技园A座2201室</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <i class="fas fa-globe text-green-500 mr-3"></i>
+                        <div>
+                            <h3 class="font-medium">官方网站</h3>
+                            <p class="text-sm text-gray-500">www.ziluda.com</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-5">
+                    <div class="font-medium mb-3">关注我们</div>
+                    <div class="flex">
+                        <div class="social-icon bg-blue-500">
+                            <i class="fab fa-facebook-f"></i>
+                        </div>
+                        <div class="social-icon bg-blue-400">
+                            <i class="fab fa-twitter"></i>
+                        </div>
+                        <div class="social-icon bg-pink-500">
+                            <i class="fab fa-instagram"></i>
+                        </div>
+                        <div class="social-icon bg-green-500">
+                            <i class="fab fa-weixin"></i>
+                        </div>
+                        <div class="social-icon bg-red-500">
+                            <i class="fab fa-weibo"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 版权信息 -->
+        <div class="text-center text-gray-500 text-xs">
+            <p>© 2023 自律打卡应用 保留所有权利</p>
+            <div class="mt-2 mb-5">
+                <a href="#" class="text-gray-500 mx-2">用户协议</a>
+                <a href="#" class="text-gray-500 mx-2">隐私政策</a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 社交媒体点击
+        document.querySelectorAll('.social-icon').forEach(icon => {
+            icon.addEventListener('click', function() {
+                const platform = this.querySelector('i').className;
+                console.log('点击社交媒体图标:', platform);
+                alert('即将跳转到相应社交媒体平台');
+            });
+        });
+        
+        // 评分和分享
+        document.querySelectorAll('.content-card a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const action = this.textContent.trim();
+                console.log('点击操作:', action);
+                
+                if (action.includes('评分')) {
+                    alert('即将跳转到应用商店评分页面');
+                } else if (action.includes('分享')) {
+                    alert('打开系统分享菜单');
+                }
+            });
+        });
+        
+        // 团队成员点击
+        document.querySelectorAll('.team-member').forEach(member => {
+            member.addEventListener('click', function() {
+                const name = this.querySelector('h3').textContent;
+                const role = this.querySelector('p').textContent;
+                console.log('点击团队成员:', name, role);
+                alert(`${name} - ${role}\n\n查看详细介绍（实际实现中会显示详细信息）`);
+            });
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据统计 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 引入Chart.js统计图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .tab-bar {
+            height: 83px;
+            border-top: 1px solid #dcfce7;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #94a3b8;
+            transition: color 0.2s;
+        }
+        .tab-item.active {
+            color: #22c55e;
+        }
+        .stats-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .time-filter {
+            background-color: #f8fafc;
+            border-radius: 10px;
+            padding: 2px;
+            display: flex;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-bottom: 16px;
+        }
+        .time-filter-item {
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+            white-space: nowrap;
+            color: #64748b;
+        }
+        .time-filter-item.active {
+            background-color: #22c55e;
+            color: white;
+        }
+        .progress-ring {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: conic-gradient(#22c55e 0% 85%, #f3f4f6 85% 100%);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .progress-ring::before {
+            content: "";
+            position: absolute;
+            width: 80%;
+            height: 80%;
+            background-color: white;
+            border-radius: 50%;
+        }
+        .progress-ring-content {
+            position: relative;
+            z-index: 1;
+        }
+        .stats-tab {
+            border-bottom: 1px solid #e5e7eb;
+            position: relative;
+            transition: all 0.2s;
+        }
+        .stats-tab.active {
+            color: #22c55e;
+            border-bottom: 2px solid #22c55e;
+        }
+        .gradient-card {
+            background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+            border-radius: 16px;
+            color: white;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 250px;
+        }
+        .calendar-day {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 0.8rem;
+            position: relative;
+        }
+        .day-text {
+            position: relative;
+            z-index: 2;
+        }
+        .calendar-day.has-record::after {
+            content: '';
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #e0e7ff;
+            z-index: 1;
+        }
+        .calendar-day.perfect-record::after {
+            background-color: #818cf8;
+        }
+        .calendar-day.perfect-record .day-text {
+            color: white;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        .category-bar {
+            border-radius: 6px;
+            height: 12px;
+            background-color: #e0e7ff;
+            overflow: hidden;
+        }
+        .category-progress {
+            height: 100%;
+            border-radius: 6px;
+        }
+        .blue-bg {
+            background-color: #3b82f6;
+        }
+        .pink-bg {
+            background-color: #ec4899;
+        }
+        .green-bg {
+            background-color: #10b981;
+        }
+        .yellow-bg {
+            background-color: #f59e0b;
+        }
+        .purple-bg {
+            background-color: #8b5cf6;
+        }
+        .red-bg {
+            background-color: #ef4444;
+        }
+        .overview-card {
+            border-radius: 16px;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            padding: 16px;
+            color: white;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+        }
+        .stats-section {
+            margin-bottom: 16px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #334155;
+        }
+        .chart-container {
+            background-color: white;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="p-5 pb-24 overflow-y-auto" style="height: calc(100% - 127px);">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">数据统计</h1>
+            <button class="text-green-500">
+                <i class="fas fa-share-alt text-xl"></i>
+            </button>
+        </div>
+        
+        <!-- 时间筛选条 -->
+        <div class="time-filter">
+            <div class="time-filter-item active">本周</div>
+            <div class="time-filter-item">本月</div>
+            <div class="time-filter-item">季度</div>
+            <div class="time-filter-item">今年</div>
+            <div class="time-filter-item">全部时间</div>
+            <div class="time-filter-item">自定义</div>
+        </div>
+        
+        <!-- 总体概览 -->
+        <div class="overview-card">
+            <h2 class="text-lg font-semibold mb-4">完成概览</h2>
+            <div class="flex justify-between">
+                <div class="text-center">
+                    <p class="text-3xl font-bold">5/6</p>
+                    <p class="text-sm opacity-80">今日完成</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-3xl font-bold">12</p>
+                    <p class="text-sm opacity-80">连续打卡</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-3xl font-bold">85%</p>
+                    <p class="text-sm opacity-80">完成率</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 打卡趋势 -->
+        <div class="stats-section">
+            <h3 class="section-title">打卡趋势</h3>
+            <div class="chart-container">
+                <canvas id="trend-chart" height="200"></canvas>
+            </div>
+        </div>
+        
+        <!-- 类型分布 -->
+        <div class="stats-section">
+            <h3 class="section-title">任务分布</h3>
+            <div class="chart-container">
+                <canvas id="category-chart" height="220"></canvas>
+            </div>
+        </div>
+        
+        <!-- 打卡日历 -->
+        <div class="stats-section">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="section-title mb-0">打卡日历</h3>
+                <div class="text-sm text-green-500">2023年10月</div>
+            </div>
+            <div class="bg-white rounded-xl p-4">
+                <!-- 星期头部 -->
+                <div class="grid grid-cols-7 mb-2">
+                    <div class="text-center text-gray-500 text-xs">日</div>
+                    <div class="text-center text-gray-500 text-xs">一</div>
+                    <div class="text-center text-gray-500 text-xs">二</div>
+                    <div class="text-center text-gray-500 text-xs">三</div>
+                    <div class="text-center text-gray-500 text-xs">四</div>
+                    <div class="text-center text-gray-500 text-xs">五</div>
+                    <div class="text-center text-gray-500 text-xs">六</div>
+                </div>
+                
+                <!-- 日历网格 -->
+                <div class="grid grid-cols-7 gap-1">
+                    <!-- 第一行 -->
+                    <div class="calendar-day">
+                        <span class="day-text">1</span>
+                    </div>
+                    <div class="calendar-day has-record">
+                        <span class="day-text">2</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">3</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">4</span>
+                    </div>
+                    <div class="calendar-day has-record">
+                        <span class="day-text">5</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">6</span>
+                    </div>
+                    <div class="calendar-day">
+                        <span class="day-text">7</span>
+                    </div>
+                    
+                    <!-- 第二行 -->
+                    <div class="calendar-day has-record">
+                        <span class="day-text">8</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">9</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">10</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">11</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">12</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">13</span>
+                    </div>
+                    <div class="calendar-day has-record">
+                        <span class="day-text">14</span>
+                    </div>
+                    
+                    <!-- 第三行 -->
+                    <div class="calendar-day has-record">
+                        <span class="day-text">15</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">16</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">17</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">18</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">19</span>
+                    </div>
+                    <div class="calendar-day has-record">
+                        <span class="day-text">20</span>
+                    </div>
+                    <div class="calendar-day">
+                        <span class="day-text">21</span>
+                    </div>
+                    
+                    <!-- 第四行 -->
+                    <div class="calendar-day">
+                        <span class="day-text">22</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">23</span>
+                    </div>
+                    <div class="calendar-day has-record">
+                        <span class="day-text">24</span>
+                    </div>
+                    <div class="calendar-day has-record">
+                        <span class="day-text">25</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">26</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">27</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">28</span>
+                    </div>
+                    
+                    <!-- 第五行 -->
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">29</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">30</span>
+                    </div>
+                    <div class="calendar-day perfect-record">
+                        <span class="day-text">31</span>
+                    </div>
+                    <div class="calendar-day" style="color: #cbd5e1;">
+                        <span class="day-text">1</span>
+                    </div>
+                    <div class="calendar-day" style="color: #cbd5e1;">
+                        <span class="day-text">2</span>
+                    </div>
+                    <div class="calendar-day" style="color: #cbd5e1;">
+                        <span class="day-text">3</span>
+                    </div>
+                    <div class="calendar-day" style="color: #cbd5e1;">
+                        <span class="day-text">4</span>
+                    </div>
+                </div>
+                
+                <!-- 图例 -->
+                <div class="flex justify-center mt-4 space-x-4">
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-22c55e mr-1"></div>
+                        <span class="text-xs text-gray-500">全部完成</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-e0e7ff mr-1"></div>
+                        <span class="text-xs text-gray-500">部分完成</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 底部导航栏 -->
+    <div class="tab-bar fixed bottom-0 left-0 right-0 flex justify-around">
+        <div class="tab-item">
+            <i class="fas fa-home text-xl"></i>
+            <span class="text-xs mt-1">首页</span>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-tasks text-xl"></i>
+            <span class="text-xs mt-1">任务</span>
+        </div>
+        <div class="tab-item">
+            <div class="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white">
+                <i class="fas fa-plus"></i>
+            </div>
+        </div>
+        <div class="tab-item active">
+            <i class="fas fa-chart-bar text-xl"></i>
+            <span class="text-xs mt-1">统计</span>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-user text-xl"></i>
+            <span class="text-xs mt-1">我的</span>
+        </div>
+    </div>
+    
+    <script>
+        // 打卡趋势图表
+        const trendChart = new Chart(
+            document.getElementById('trend-chart'),
+            {
+                type: 'bar',
+                data: {
+                    labels: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+                    datasets: [{
+                        label: '完成任务数',
+                        data: [5, 6, 4, 6, 5, 3, 0],
+                        backgroundColor: [
+                            '#4ade80', '#4ade80', '#4ade80', '#4ade80', '#4ade80', '#4ade80', '#e2e8f0'
+                        ],
+                        borderRadius: 6,
+                        barThickness: 12,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                display: true,
+                                color: '#f1f5f9'
+                            },
+                            ticks: {
+                                stepSize: 2
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            }
+        );
+        
+        // 任务类型分布图表
+        const categoryChart = new Chart(
+            document.getElementById('category-chart'),
+            {
+                type: 'doughnut',
+                data: {
+                    labels: ['习惯养成', '学习提升', '健康运动', '工作事务', '其他'],
+                    datasets: [{
+                        data: [35, 25, 20, 15, 5],
+                        backgroundColor: [
+                            '#3b82f6', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6'
+                        ],
+                        borderWidth: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            }
+        );
+        
+        // 模拟时间筛选交互
+        document.querySelectorAll('.time-filter-item').forEach(item => {
+            item.addEventListener('click', function() {
+                // 移除所有激活状态
+                document.querySelectorAll('.time-filter-item').forEach(i => {
+                    i.classList.remove('active');
+                });
+                
+                // 添加当前选中状态
+                this.classList.add('active');
+                
+                // 记录日志
+                console.log('选择时间筛选: ' + this.textContent.trim());
+                
+                // 模拟数据更新
+                alert('切换到：' + this.textContent.trim() + ' 的数据（实际应用中会重新加载数据）');
+            });
+        });
+    </script>
+</body>
+</html> 

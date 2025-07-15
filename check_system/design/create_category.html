@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>创建打卡类型 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #333;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #dcfce7;
+            background-color: #f0fdf4;
+            position: sticky;
+            top: 44px;
+            z-index: 10;
+        }
+        .header-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #111827;
+            flex-grow: 1;
+            text-align: center;
+        }
+        .back-button {
+            width: 40px;
+            color: #22c55e;
+            font-size: 20px;
+        }
+        .save-button {
+            width: 40px;
+            color: #22c55e;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .form-card {
+            margin: 16px auto;
+            background-color: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            max-width: 600px;
+        }
+        .form-group {
+            margin-bottom: 28px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #374151;
+            font-size: 16px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            outline: none;
+            transition: all 0.3s ease;
+            font-size: 16px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+        .form-input:focus {
+            border-color: #4ade80;
+            box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2);
+        }
+        .form-textarea {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            outline: none;
+            transition: all 0.3s ease;
+            font-size: 16px;
+            min-height: 100px;
+            resize: vertical;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+        .form-textarea:focus {
+            border-color: #4ade80;
+            box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2);
+        }
+        .icon-options {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .icon-option {
+            width: 64px;
+            height: 64px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin: 0 auto;
+        }
+        .icon-option i {
+            font-size: 26px;
+            color: white;
+        }
+        .icon-option:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.12);
+        }
+        .icon-option:active {
+            transform: scale(0.95);
+        }
+        .icon-option.selected {
+            border: 2px solid #22c55e;
+            position: relative;
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+        }
+        .icon-option.selected::before {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            right: 2px;
+            bottom: 2px;
+            background-color: white;
+            border-radius: 12px;
+            z-index: 1;
+        }
+        .icon-option.selected i {
+            position: relative;
+            z-index: 2;
+            color: #22c55e;
+        }
+        .section-title {
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 16px;
+            font-size: 18px;
+            border-bottom: 1px solid #dcfce7;
+            padding-bottom: 8px;
+        }
+        /* 颜色选择器容器和选项 */
+        .color-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .color-option {
+            width: 64px;
+            height: 64px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin: 0 auto;
+        }
+        .color-option i {
+            font-size: 26px;
+            color: white;
+        }
+        .color-option:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.12);
+        }
+        .color-option:active {
+            transform: scale(0.95);
+        }
+        .color-option.selected {
+            border: 2px solid #22c55e;
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            border-radius: 14px;
+            border: none;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+            font-weight: 600;
+            font-size: 18px;
+            margin-top: 32px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(34, 197, 94, 0.3);
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(34, 197, 94, 0.4);
+        }
+        .submit-btn:active {
+            transform: scale(0.98);
+        }
+        .tab-bar {
+            height: 83px;
+            border-top: 1px solid #dcfce7;
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #94a3b8;
+            transition: color 0.3s ease;
+        }
+        .tab-item.active {
+            color: #22c55e;
+        }
+        /* 渐变背景颜色选项 */
+        .blue-gradient {
+            background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+        }
+        .pink-gradient {
+            background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+        }
+        .green-gradient {
+            background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+        }
+        .yellow-gradient {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        }
+        .purple-gradient {
+            background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+        }
+        .red-gradient {
+            background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        .character-count {
+            text-align: right;
+            color: #9ca3af;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="pb-24 overflow-y-auto" style="height: calc(100% - 127px);">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center p-5 bg-green-50 border-b border-green-100">
+            <a href="categories.html" class="text-green-500 flex items-center">
+                <i class="fas fa-arrow-left text-xl mr-2"></i>
+                <span>返回</span>
+            </a>
+            <h1 class="text-xl font-bold text-gray-800" id="page-title">创建打卡类型</h1>
+            <div class="w-20"></div> <!-- 占位元素保持布局平衡 -->
+        </div>
+        
+        <!-- 表单 -->
+        <div class="form-card mx-4">
+            <h2 class="section-title">基本信息</h2>
+            
+            <div class="form-group">
+                <label class="form-label" for="category-name">类型名称</label>
+                <input type="text" id="category-name" class="form-input" placeholder="例如：晨间冥想" maxlength="20">
+                <div class="flex justify-between mt-2">
+                    <p class="text-sm text-gray-500">简洁明了的名称更容易记忆</p>
+                    <p class="text-sm text-gray-500 character-count"><span id="name-count">0</span>/20</p>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="category-desc">类型描述</label>
+                <textarea id="category-desc" class="form-textarea" placeholder="描述该打卡类型的用途和特点..." maxlength="100"></textarea>
+                <div class="flex justify-between mt-2">
+                    <p class="text-sm text-gray-500">描述清晰可以增加完成动力</p>
+                    <p class="text-sm text-gray-500 character-count"><span id="desc-count">0</span>/100</p>
+                </div>
+            </div>
+            
+            <h2 class="section-title mt-8">外观设置</h2>
+            
+            <div class="form-group">
+                <label class="form-label">选择图标</label>
+                <p class="text-sm text-gray-500 mb-3">选择一个能代表该类型活动的图标</p>
+                <div class="icon-options">
+                    <div class="icon-option blue-gradient selected" data-icon="fa-leaf">
+                        <i class="fas fa-leaf"></i>
+                    </div>
+                    <div class="icon-option pink-gradient" data-icon="fa-book-reader">
+                        <i class="fas fa-book-reader"></i>
+                    </div>
+                    <div class="icon-option green-gradient" data-icon="fa-dumbbell">
+                        <i class="fas fa-dumbbell"></i>
+                    </div>
+                    <div class="icon-option yellow-gradient" data-icon="fa-laptop-code">
+                        <i class="fas fa-laptop-code"></i>
+                    </div>
+                    <div class="icon-option purple-gradient" data-icon="fa-mediation">
+                        <i class="fas fa-mediation"></i>
+                    </div>
+                    <div class="icon-option red-gradient" data-icon="fa-project-diagram">
+                        <i class="fas fa-project-diagram"></i>
+                    </div>
+                    <div class="icon-option blue-gradient" data-icon="fa-brain">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <div class="icon-option green-gradient" data-icon="fa-apple-alt">
+                        <i class="fas fa-apple-alt"></i>
+                    </div>
+                    <div class="icon-option purple-gradient" data-icon="fa-headphones">
+                        <i class="fas fa-headphones"></i>
+                    </div>
+                    <div class="icon-option pink-gradient" data-icon="fa-heart">
+                        <i class="fas fa-heart"></i>
+                    </div>
+                    <div class="icon-option yellow-gradient" data-icon="fa-bicycle">
+                        <i class="fas fa-bicycle"></i>
+                    </div>
+                    <div class="icon-option red-gradient" data-icon="fa-palette">
+                        <i class="fas fa-palette"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">选择颜色</label>
+                <p class="text-sm text-gray-500 mb-3">选择一个醒目的颜色提高打卡积极性</p>
+                <div class="color-container">
+                    <div class="color-option blue-gradient selected" data-color="blue-gradient">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <div class="color-option pink-gradient" data-color="pink-gradient">
+                        <i class="fas fa-check opacity-0"></i>
+                    </div>
+                    <div class="color-option green-gradient" data-color="green-gradient">
+                        <i class="fas fa-check opacity-0"></i>
+                    </div>
+                    <div class="color-option yellow-gradient" data-color="yellow-gradient">
+                        <i class="fas fa-check opacity-0"></i>
+                    </div>
+                    <div class="color-option purple-gradient" data-color="purple-gradient">
+                        <i class="fas fa-check opacity-0"></i>
+                    </div>
+                    <div class="color-option red-gradient" data-color="red-gradient">
+                        <i class="fas fa-check opacity-0"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="submit-btn" id="save-category-btn">
+                保存打卡类型
+            </button>
+        </div>
+    </div>
+    
+    <!-- 底部导航栏 -->
+    <div class="tab-bar flex justify-around">
+        <a href="home.html" class="tab-item w-1/5">
+            <i class="fas fa-home text-xl"></i>
+            <span class="text-xs mt-1">首页</span>
+        </a>
+        <a href="tasks.html" class="tab-item w-1/5 active">
+            <i class="fas fa-tasks text-xl"></i>
+            <span class="text-xs mt-1">任务</span>
+        </a>
+        <a href="create_task.html" class="tab-item w-1/5">
+            <div class="w-14 h-14 rounded-full bg-gradient-to-r from-green-400 to-green-600 flex items-center justify-center text-white shadow-lg">
+                <i class="fas fa-plus text-lg"></i>
+            </div>
+        </a>
+        <a href="statistics.html" class="tab-item w-1/5">
+            <i class="fas fa-chart-bar text-xl"></i>
+            <span class="text-xs mt-1">统计</span>
+        </a>
+        <a href="profile.html" class="tab-item w-1/5">
+            <i class="fas fa-user text-xl"></i>
+            <span class="text-xs mt-1">我的</span>
+        </a>
+    </div>
+    
+    <script>
+        // 检查是否是编辑模式
+        const urlParams = new URLSearchParams(window.location.search);
+        const editId = urlParams.get('edit');
+        
+        // 字符计数功能
+        const nameInput = document.getElementById('category-name');
+        const descInput = document.getElementById('category-desc');
+        const nameCount = document.getElementById('name-count');
+        const descCount = document.getElementById('desc-count');
+        
+        nameInput.addEventListener('input', function() {
+            nameCount.textContent = this.value.length;
+            // 接近限制时改变颜色提醒用户
+            if (this.value.length > 15) {
+                nameCount.classList.add('text-yellow-500');
+            } else {
+                nameCount.classList.remove('text-yellow-500');
+            }
+            
+            // 记录日志
+            console.log('名称输入: 当前长度 = ' + this.value.length);
+        });
+        
+        descInput.addEventListener('input', function() {
+            descCount.textContent = this.value.length;
+            // 接近限制时改变颜色提醒用户
+            if (this.value.length > 80) {
+                descCount.classList.add('text-yellow-500');
+            } else {
+                descCount.classList.remove('text-yellow-500');
+            }
+            
+            // 记录日志
+            console.log('描述输入: 当前长度 = ' + this.value.length);
+        });
+        
+        // 如果是编辑模式，则更新UI和表单
+        if (editId) {
+            document.getElementById('page-title').textContent = '编辑打卡类型';
+            
+            // 模拟加载数据
+            if (editId === 'category-1') {
+                const name = '晨间冥想';
+                const desc = '培养专注力和平静心态';
+                
+                nameInput.value = name;
+                descInput.value = desc;
+                nameCount.textContent = name.length;
+                descCount.textContent = desc.length;
+                
+                // 选择对应的图标和颜色
+                selectIcon('fa-mediation');
+                selectColor('purple-gradient');
+            } else if (editId === 'category-2') {
+                const name = '项目跟进';
+                const desc = '跟踪项目进度和重要事项';
+                
+                nameInput.value = name;
+                descInput.value = desc;
+                nameCount.textContent = name.length;
+                descCount.textContent = desc.length;
+                
+                // 选择对应的图标和颜色
+                selectIcon('fa-project-diagram');
+                selectColor('red-gradient');
+            }
+            
+            // 记录日志
+            console.log('进入编辑模式: ' + editId);
+        }
+        
+        // 图标选择功能
+        document.querySelectorAll('.icon-option[data-icon]').forEach(option => {
+            option.addEventListener('click', function() {
+                selectIcon(this.dataset.icon);
+            });
+        });
+        
+        // 颜色选择功能
+        document.querySelectorAll('.color-option[data-color]').forEach(option => {
+            option.addEventListener('click', function() {
+                selectColor(this.dataset.color);
+            });
+        });
+        
+        // 选择图标的函数
+        function selectIcon(iconName) {
+            document.querySelectorAll('.icon-option[data-icon]').forEach(option => {
+                if (option.dataset.icon === iconName) {
+                    option.classList.add('selected');
+                } else {
+                    option.classList.remove('selected');
+                }
+            });
+            
+            // 记录日志
+            console.log('选择图标: ' + iconName);
+        }
+        
+        // 选择颜色的函数
+        function selectColor(colorClass) {
+            document.querySelectorAll('.color-option[data-color]').forEach(option => {
+                if (option.dataset.color === colorClass) {
+                    option.classList.add('selected');
+                    option.querySelector('i').classList.remove('opacity-0');
+                } else {
+                    option.classList.remove('selected');
+                    option.querySelector('i').classList.add('opacity-0');
+                }
+            });
+            
+            // 记录日志
+            console.log('选择颜色: ' + colorClass);
+        }
+        
+        // 保存类型
+        document.getElementById('save-category-btn').addEventListener('click', function() {
+            const categoryName = document.getElementById('category-name').value;
+            const categoryDesc = document.getElementById('category-desc').value;
+            const selectedIcon = document.querySelector('.icon-option[data-icon].selected').dataset.icon;
+            const selectedColor = document.querySelector('.color-option[data-color].selected').dataset.color;
+            
+            // 表单验证
+            if (!categoryName) {
+                alert('请输入类型名称');
+                return;
+            }
+            
+            // 记录日志
+            console.log('保存类型:', {
+                name: categoryName,
+                description: categoryDesc || '无描述',
+                icon: selectedIcon,
+                color: selectedColor,
+                isEdit: editId ? true : false,
+                editId: editId
+            });
+            
+            // 模拟保存成功，跳转回类型列表
+            alert('保存成功！');
+            window.location.href = 'categories.html';
+        });
+    </script>
+</body>
+</html> 
