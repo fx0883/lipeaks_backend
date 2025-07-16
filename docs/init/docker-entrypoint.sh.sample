@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# 等待数据库准备就绪
+echo "等待数据库..."
+while ! nc -z db 3306; do
+  sleep 1
+done
+echo "数据库已准备就绪!"
+
+# 创建迁移文件
+python manage.py makemigrations common tenants users rbac menus cms check_system charts customers orders
+
+# 应用迁移
+python manage.py migrate
+
+# 收集静态文件
+python manage.py collectstatic --noinput
+
+# 启动Gunicorn服务器
+gunicorn core.wsgi:application --bind 0.0.0.0:8000 
