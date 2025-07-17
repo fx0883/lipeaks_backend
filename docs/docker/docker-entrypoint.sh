@@ -38,64 +38,6 @@ python manage.py migrate admin
 python manage.py migrate sessions
 python manage.py migrate contenttypes
 
-# 单独确认应用迁移 - 特别是可能包含user_menu表的应用
-echo "确认menus应用迁移..."
-python manage.py migrate menus --fake-initial
-
-echo "确认users应用迁移..."
-python manage.py migrate users --fake-initial
-
-echo "确认rbac应用迁移..."
-python manage.py migrate rbac --fake-initial
-
-# 检查user_menu表是否存在
-echo "检查user_menu表是否存在..."
-python -c "
-import os
-import django
-import pymysql
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings_docker')
-django.setup()
-from django.conf import settings
-
-# 连接数据库
-conn = pymysql.connect(
-    host=settings.DATABASES['default']['HOST'],
-    user=settings.DATABASES['default']['USER'],
-    password=settings.DATABASES['default']['PASSWORD'],
-    db=settings.DATABASES['default']['NAME']
-)
-
-try:
-    with conn.cursor() as cursor:
-        cursor.execute(\"\"\"
-            SELECT COUNT(*) 
-            FROM information_schema.tables 
-            WHERE table_schema = '%s' 
-            AND table_name = 'user_menu'
-        \"\"\" % settings.DATABASES['default']['NAME'])
-        if cursor.fetchone()[0] == 0:
-            print('警告: user_menu 表不存在!')
-            print('尝试手动创建user_menu表...')
-            cursor.execute(\"\"\"
-                CREATE TABLE IF NOT EXISTS `user_menu` (
-                  `id` bigint NOT NULL AUTO_INCREMENT,
-                  `user_id` bigint NOT NULL,
-                  `menu_id` bigint NOT NULL,
-                  PRIMARY KEY (`id`),
-                  UNIQUE KEY `user_menu_user_id_menu_id_d8c3a1e1_uniq` (`user_id`,`menu_id`),
-                  KEY `user_menu_menu_id_75a7e331_fk_menu_id` (`menu_id`),
-                  CONSTRAINT `user_menu_menu_id_75a7e331_fk_menu_id` FOREIGN KEY (`menu_id`) REFERENCES `menu` (`id`),
-                  CONSTRAINT `user_menu_user_id_7718ce7f_fk_user_id` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-            \"\"\")
-            print('user_menu表已手动创建')
-        else:
-            print('√ user_menu 表已存在')
-finally:
-    conn.close()
-"
-
 # 收集静态文件
 echo "收集静态文件..."
 python manage.py collectstatic --noinput --clear
@@ -134,10 +76,6 @@ else:
     print('超级管理员账号已存在，跳过创建')
 "
 fi
-
-# 执行SQL配置脚本
-echo "执行common_config.sql脚本..."
-python manage.py run_config_sql
 
 # 启动Gunicorn服务器
 echo "启动Web服务器..."

@@ -1596,3 +1596,10 @@ Yolo模式：[YOLO_MODE]
 ### 语言要求
 
  *  总是使用中文回答问题，中文沟通。
+
+
+
+
+  "http.proxy": "http://127.0.0.1:7897",
+  "https.proxy": "https://127.0.0.1:7897",
+  "http.proxyStrictSSL": false

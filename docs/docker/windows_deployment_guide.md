@@ -28,6 +28,7 @@ docker-compose --version
    - `docker-compose.yml`（项目根目录）
    - `docker-entrypoint.sh`（项目根目录）
    - `.env`文件（根据`.env.example`创建）
+   - `docs/init_sql/common_config.sql`（数据库初始化SQL）
 
 2. 创建或更新 `docker-entrypoint.sh` 文件并设置执行权限：
 
@@ -96,7 +97,7 @@ docker login
 # 输入您的 Docker Hub 用户名和密码
 ```
 
-2. 为镜像添加标签（替换 `your_username` 为您的 Docker Hub 用户名）：
+2. 为后端镜像添加标签（替换 `your_username` 为您的 Docker Hub 用户名）：
 
 ```powershell
 docker tag lipeaks_backend:latest your_username/lipeaks_backend:latest
@@ -110,14 +111,23 @@ docker push your_username/lipeaks_backend:latest
 
 4. 验证推送结果：访问 `https://hub.docker.com/r/your_username/lipeaks_backend`
 
+> **注意**：我们不需要推送MySQL镜像，因为我们使用的是官方MySQL镜像。在部署时，docker-compose会自动从Docker Hub拉取官方MySQL镜像。
+
 ## 6. 使用 Docker Hub 镜像部署
 
-1. 在任何安装了 Docker 的环境中，创建 `.env` 文件和 `docker-compose.yml` 文件。
+1. 在任何安装了 Docker 的环境中，创建以下文件：
+   - `docker-compose.yml`文件
+   - `.env`文件
+   - `docs/init_sql/common_config.sql`文件（确保目录结构相同）
 
 2. 修改 `docker-compose.yml` 文件中的镜像名称：
 
 ```yaml
 services:
+  db:
+    image: mysql:8.0
+    # MySQL配置保持不变...
+    
   web:
     image: your_username/lipeaks_backend:latest
     # 其他配置...
@@ -127,6 +137,37 @@ services:
 
 ```bash
 docker-compose up -d
+```
+
+## 7. 数据库初始化和迁移
+
+在首次部署时，需要确保数据库正确初始化：
+
+1. 确保`common_config.sql`文件挂载正确：
+```yaml
+volumes:
+  - ./docs/init_sql/common_config.sql:/docker-entrypoint-initdb.d/common_config.sql
+```
+
+2. 如果遇到表缺失问题，可以手动执行迁移：
+```bash
+# 进入web容器
+docker-compose exec web bash
+
+# 执行迁移
+python manage.py migrate
+
+# 如果特定表缺失，可以单独迁移应用
+python manage.py migrate [app_name]
+```
+
+3. 检查数据库是否正确初始化：
+```bash
+# 连接到MySQL容器
+docker-compose exec db mysql -u django -pdjango_password multi_tenant_db_dev
+
+# 在MySQL中查看表
+show tables;
 ```
 
 ## 常见问题和故障排除
@@ -155,6 +196,17 @@ docker-compose up -d
 1. 检查 `.env` 文件中的数据库配置
 2. 确认 MySQL 容器是否正常运行：`docker-compose ps`
 3. 查看 MySQL 容器日志：`docker-compose logs db`
+
+### 数据库表缺失问题
+
+如果遇到"Table doesn't exist"错误：
+
+1. 检查SQL初始化文件是否正确挂载
+2. 确认数据库名称是否正确（默认为`multi_tenant_db_dev`）
+3. 手动执行迁移命令：
+```bash
+docker-compose exec web python manage.py migrate
+```
 
 ### 文件权限问题
 
