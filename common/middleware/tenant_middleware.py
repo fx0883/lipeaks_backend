@@ -41,6 +41,11 @@ class TenantMiddleware(MiddlewareMixin):
         # 清除之前的租户上下文
         clear_current_tenant()
         
+        # 跳过静态文件和媒体文件的租户验证
+        if request.path.startswith(('/static/', '/media/')):
+            logger.info(f"[租户中间件] 静态/媒体资源路径，跳过租户验证: {request.path}")
+            return None
+            
         # 检查请求路径是否包含"cms"，如果不包含，则不需要进行租户验证
         # if "/cms/" not in request.path:
         #     logger.debug(f"非CMS路径，跳过租户验证: {request.path}")

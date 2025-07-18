@@ -28,6 +28,11 @@ class APIAuthMiddleware(MiddlewareMixin):
             logger.debug(f"非API路径，跳过JWT认证中间件: {request.path}")
             return None
             
+        # 跳过静态文件和媒体文件的JWT认证
+        if request.path.startswith(('/static/', '/media/')):
+            logger.info(f"[API认证中间件] 静态/媒体资源路径，跳过JWT认证: {request.path}")
+            return None
+            
         logger.info(f"[API认证中间件] 处理API请求: {request.path}")
             
         # 从请求头获取令牌
