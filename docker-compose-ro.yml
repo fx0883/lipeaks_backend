@@ -22,7 +22,6 @@ services:
       - ./staticfiles:/app/staticfiles
       - ./media:/app/media
       - ./logs:/app/logs
-      - ./docs/init_sql:/app/docs/init_sql
     ports:
       - "8000:8000"
     environment:
