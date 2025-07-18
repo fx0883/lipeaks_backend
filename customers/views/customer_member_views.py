@@ -91,7 +91,7 @@ class CustomerMemberRelationViewSet(viewsets.ModelViewSet):
         创建关系时设置租户
         """
         # 从请求上下文获取当前租户
-        tenant = self.request.tenant
+        tenant = self.request.user.tenant
         serializer.save(tenant=tenant)
     
     @extend_schema(

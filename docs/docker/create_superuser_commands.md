@@ -10,7 +10,7 @@ environment:
   - CREATE_SUPERUSER=true
   - SUPERUSER_USERNAME=admin
   - SUPERUSER_EMAIL=admin@example.com
-  - SUPERUSER_PASSWORD=admin123456
+  - SUPERUSER_PASSWORD=admin_main
 ```
 
 当 `CREATE_SUPERUSER=true` 时，容器启动过程中会自动创建超级用户。
@@ -34,7 +34,7 @@ docker-compose exec web python manage.py createsuperuser
 
 ```powershell
 # 一行命令创建超级用户
-docker-compose exec -T web python -c "import django; django.setup(); from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', 'admin@example.com', 'admin123456') if not User.objects.filter(username='admin').exists() else print('用户已存在')"
+docker-compose exec -T web python -c "import django; django.setup(); from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', 'admin@example.com', 'admin_main') if not User.objects.filter(username='admin').exists() else print('用户已存在')"
 ```
 
 ## 修改超级用户密码

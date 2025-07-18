@@ -42,9 +42,9 @@ class TenantMiddleware(MiddlewareMixin):
         clear_current_tenant()
         
         # 检查请求路径是否包含"cms"，如果不包含，则不需要进行租户验证
-        if "/cms/" not in request.path:
-            logger.debug(f"非CMS路径，跳过租户验证: {request.path}")
-            return None
+        # if "/cms/" not in request.path:
+        #     logger.debug(f"非CMS路径，跳过租户验证: {request.path}")
+        #     return None
         
         logger.info(f"[租户中间件] 开始处理路径: {request.path}, 方法: {request.method}")
         

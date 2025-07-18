@@ -69,7 +69,7 @@ if not User.objects.filter(username='${SUPERUSER_USERNAME:-admin}').exists():
     User.objects.create_superuser(
         '${SUPERUSER_USERNAME:-admin}',
         '${SUPERUSER_EMAIL:-admin@example.com}',
-        '${SUPERUSER_PASSWORD:-admin123456}'
+        '${SUPERUSER_PASSWORD:-admin_main}'
     )
     print('超级管理员账号创建成功')
 else:

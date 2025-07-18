@@ -99,7 +99,7 @@ class CustomerTenantRelationViewSet(viewsets.ModelViewSet):
         创建关系时记录创建者和设置租户
         """
         # 从请求上下文获取当前租户
-        tenant = self.request.tenant
+        tenant = self.request.user.tenant
         serializer.save(created_by=self.request.user.username, tenant=tenant)
     
     def perform_update(self, serializer):
