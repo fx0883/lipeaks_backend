@@ -189,6 +189,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # 自定义用户模型
 AUTH_USER_MODEL = 'users.User'
 
+# 租户验证设置
+# 只有URL路径中包含这些关键字的请求才会被租户中间件处理
+TENANT_REQUIRED_PATHS = [
+    '/cms/',  # CMS相关API
+    '/customers/',  # cuAPI
+    '/orders/',  # 订单相关API 
+    
+    # 可以添加其他需要租户验证的关键字...
+]
+
 # REST Framework 设置
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

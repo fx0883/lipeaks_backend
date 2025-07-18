@@ -32,6 +32,11 @@ class APIAuthMiddleware(MiddlewareMixin):
         if request.path.startswith(('/static/', '/media/')):
             logger.info(f"[API认证中间件] 静态/媒体资源路径，跳过JWT认证: {request.path}")
             return None
+        
+        # 跳过API文档的JWT认证
+        if request.path.startswith(('/api/v1/schema/', '/api/v1/docs/', '/api/v1/redoc/')):
+            logger.info(f"[API认证中间件] API文档路径，跳过JWT认证: {request.path}")
+            return None
             
         logger.info(f"[API认证中间件] 处理API请求: {request.path}")
             

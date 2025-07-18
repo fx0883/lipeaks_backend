@@ -46,12 +46,28 @@ class TenantMiddleware(MiddlewareMixin):
             logger.info(f"[租户中间件] 静态/媒体资源路径，跳过租户验证: {request.path}")
             return None
             
-        # 检查请求路径是否包含"cms"，如果不包含，则不需要进行租户验证
-        # if "/cms/" not in request.path:
-        #     logger.debug(f"非CMS路径，跳过租户验证: {request.path}")
-        #     return None
+        # 跳过API文档的租户验证
+        if request.path.startswith(('/api/v1/schema/', '/api/v1/docs/', '/api/v1/redoc/')):
+            logger.info(f"[租户中间件] API文档路径，跳过租户验证: {request.path}")
+            return None
         
-        logger.info(f"[租户中间件] 开始处理路径: {request.path}, 方法: {request.method}")
+        # 从settings获取需要租户验证的路径关键字
+        from django.conf import settings
+        tenant_required_paths = getattr(settings, 'TENANT_REQUIRED_PATHS', ['cms'])
+        
+        # 检查当前路径是否需要租户验证
+        path_requires_tenant = False
+        for path_keyword in tenant_required_paths:
+            if path_keyword in request.path:
+                path_requires_tenant = True
+                break
+                
+        # 如果路径不需要租户验证，则直接返回
+        if not path_requires_tenant:
+            logger.debug(f"[租户中间件] 路径不需要租户验证，跳过: {request.path}")
+            return None
+        
+        logger.info(f"[租户中间件] 开始处理需要租户验证的路径: {request.path}, 方法: {request.method}")
         
         # 记录当前用户认证类型，帮助调试
         auth_type = getattr(request, 'auth_type', 'unknown')

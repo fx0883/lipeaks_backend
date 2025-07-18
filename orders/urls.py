@@ -4,7 +4,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from orders.views import OrderViewSet, OrderHistoryViewSet, CustomerOrderViewSet, ContactOrderViewSet
+from orders.views import OrderViewSet, OrderHistoryViewSet, CustomerOrderViewSet, ContactOrderViewSet, MemberOrderViewSet
 
 # 应用名称，用于URL命名空间
 app_name = 'orders'
@@ -16,6 +16,7 @@ router = DefaultRouter()
 # 先注册特定路径的视图集
 router.register(r'contacts/(?P<contact_id>\d+)/orders', ContactOrderViewSet, basename='contact-order')
 router.register(r'customers/(?P<customer_id>\d+)/orders', CustomerOrderViewSet, basename='customer-order')
+router.register(r'members/(?P<member_id>\d+)/orders', MemberOrderViewSet, basename='member-order')
 router.register(r'(?P<order_id>\d+)/history', OrderHistoryViewSet, basename='order-history')
 # 最后注册通用路径的视图集
 router.register(r'', OrderViewSet, basename='order')
