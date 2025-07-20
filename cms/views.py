@@ -688,47 +688,28 @@ class ArticleViewSet(TenantModelViewSet):
     
     @extend_schema(
         summary="记录文章阅读",
-        description="记录文章的阅读行为，更新阅读统计",
+        description="记录文章的阅读行为，更新阅读统计。不需要认证，每次调用将增加文章阅读数1次。",
         tags=["CMS-文章管理"],
         parameters=[
             OpenApiParameter(name="id", description="文章ID", required=True, type=OpenApiTypes.INT, location=OpenApiParameter.PATH),
             OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=False, type=str, location=OpenApiParameter.HEADER),
         ],
-        request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'session_id': {'type': 'string', 'description': '会话ID，用于跟踪唯一访客'},
-                    'reading_time': {'type': 'integer', 'description': '阅读时长(秒)'},
-                    'referrer': {'type': 'string', 'description': '来源URL'}
-                }
-            }
-        },
         responses={
             200: OpenApiResponse(description="记录成功"),
-            403: OpenApiResponse(description="权限不足"),
             404: OpenApiResponse(description="文章不存在"),
         }
     )
-    @action(detail=True, methods=['post'], url_path='view')
+    @action(detail=True, methods=['post'], url_path='view', permission_classes=[])
     def record_view(self, request, pk=None):
         """记录文章阅读行为"""
         article = self.get_object()
-        user = request.user if request.user.is_authenticated else None
-        session_id = request.data.get('session_id')
-        reading_time = request.data.get('reading_time')
-        referrer = request.data.get('referrer')
         
         # 创建访问日志
         access_log = AccessLog.objects.create(
             article=article,
-            user=user,
             tenant=article.tenant,
-            session_id=session_id,
             ip_address=request.META.get('REMOTE_ADDR'),
-            user_agent=request.META.get('HTTP_USER_AGENT'),
-            referer=referrer,
-            reading_time=reading_time
+            user_agent=request.META.get('HTTP_USER_AGENT')
         )
         
         # 更新文章统计
@@ -740,19 +721,6 @@ class ArticleViewSet(TenantModelViewSet):
             
             # 更新阅读次数
             stats.views_count += 1
-            
-            # 如果提供了阅读时间，更新平均阅读时间
-            if reading_time:
-                try:
-                    reading_time = int(reading_time)
-                    # 使用加权平均算法更新平均阅读时间
-                    if stats.avg_reading_time > 0:
-                        stats.avg_reading_time = (stats.avg_reading_time * (stats.views_count - 1) + reading_time) / stats.views_count
-                    else:
-                        stats.avg_reading_time = reading_time
-                except (ValueError, TypeError):
-                    logger.warning(f"无效的阅读时间格式: {reading_time}")
-            
             stats.save()
             
         except Exception as e:

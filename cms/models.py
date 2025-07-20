@@ -661,7 +661,7 @@ class AccessLog(models.Model):
         null=True
     )
     session_id = models.CharField(_("会话ID"), max_length=100, blank=True, null=True)
-    ip_address = models.GenericIPAddressField(_("IP地址"))
+    ip_address = models.GenericIPAddressField(_("IP地址"), blank=True, null=True)
     user_agent = models.CharField(_("用户代理"), max_length=255, blank=True, null=True)
     referer = models.URLField(_("来源URL"), blank=True, null=True)
     created_at = models.DateTimeField(_("访问时间"), auto_now_add=True)
