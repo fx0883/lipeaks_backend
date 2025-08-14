@@ -111,6 +111,9 @@ python manage.py migrate
 
 # 创建超级管理员用户
 python manage.py createsuperuser
+
+
+
 ```
 
 ## 7. 运行开发服务器

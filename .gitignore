@@ -65,6 +65,11 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+/staticfiles
+staticfiles/
+/staticfiles/drf-yasg
+staticfiles/drf-yasg/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
@@ -116,3 +121,9 @@ Thumbs.db
 
 # 缓存
 *.cache/ 
+staticfiles
+staticfiles/
+staticfiles/drf-yasg/
+staticfiles/drf-yasg
+staticfiles/drf-yasg/
+staticfiles/drf-yasg/
