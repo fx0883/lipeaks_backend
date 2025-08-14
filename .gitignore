@@ -92,7 +92,7 @@ env.bak/
 venv.bak/
 
 # 数据库备份文件
-*.sql
+#*.sql
 *.sqlite3-*
 *.bak
 
