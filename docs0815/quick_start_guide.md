@@ -62,6 +62,424 @@ docker-compose up -d
 docker-compose logs -f web
 ```
 
+## 🚀 Docker 更新操作指南
+
+### 更新策略概览
+
+在 Docker 环境中更新应用有多种方式，根据您的需求选择合适的策略：
+
+| 更新类型 | 适用场景 | 影响范围 | 操作复杂度 |
+|----------|----------|----------|------------|
+| **代码更新** | 修复 Bug、功能增强 | 应用代码 | 低 |
+| **镜像更新** | 系统依赖、安全补丁 | 整个容器 | 中 |
+| **数据库更新** | 数据结构变更 | 数据库 | 高 |
+| **完整重建** | 重大版本升级 | 所有组件 | 高 |
+
+### 🔄 代码更新（推荐日常使用）
+
+#### 方法 1: 热更新（无需重启）
+```bash
+# 1. 停止 web 服务
+docker-compose stop web
+
+# 2. 重新构建并启动
+docker-compose up -d --build web
+
+# 3. 查看更新日志
+docker-compose logs -f web
+```
+
+#### 方法 2: 完整重建
+```bash
+# 1. 停止所有服务
+docker-compose down
+
+# 2. 重新构建并启动
+docker-compose up -d --build
+
+# 3. 查看启动日志
+docker-compose logs -f web
+```
+
+### 🐳 镜像更新
+
+#### 更新 Docker 镜像
+```bash
+# 1. 拉取最新镜像
+docker-compose pull
+
+# 2. 重新构建本地镜像
+docker-compose build --no-cache
+
+# 3. 重启服务
+docker-compose up -d
+
+# 4. 验证更新
+docker-compose ps
+```
+
+#### 强制重新构建
+```bash
+# 1. 清理所有镜像和容器
+docker-compose down --rmi all --volumes --remove-orphans
+
+# 2. 重新构建所有镜像
+docker-compose build --no-cache
+
+# 3. 启动服务
+docker-compose up -d
+```
+
+### 🗄️ 数据库更新
+
+#### 安全更新（推荐生产环境）
+```bash
+# 1. 备份当前数据库
+docker-compose exec db mysqldump -u django -pdjango_password multi_tenant_db_dev > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 2. 停止 web 服务
+docker-compose stop web
+
+# 3. 应用数据库迁移
+docker-compose run --rm web python manage.py migrate
+
+# 4. 重启 web 服务
+docker-compose up -d web
+
+# 5. 验证数据库状态
+docker-compose exec web python manage.py showmigrations
+```
+
+#### 快速更新（开发环境）
+```bash
+# 1. 应用所有迁移
+docker-compose exec web python manage.py migrate
+
+# 2. 检查迁移状态
+docker-compose exec web python manage.py showmigrations
+
+# 3. 验证应用状态
+docker-compose exec web python manage.py check
+```
+
+### 🔧 环境变量更新
+
+#### 更新 .env 文件
+```bash
+# 1. 编辑 .env 文件
+# 修改相关环境变量
+
+# 2. 重启服务以应用新配置
+docker-compose restart web
+
+# 3. 验证环境变量
+docker-compose exec web env | grep IMPORT_DB_SNAPSHOT
+```
+
+#### 更新 docker-compose.yml
+```bash
+# 1. 修改 docker-compose.yml 文件
+# 更新 environment 部分
+
+# 2. 重新构建并启动
+docker-compose up -d --build
+
+# 3. 验证配置
+docker-compose config
+```
+
+### 📦 依赖更新
+
+#### 更新 Python 依赖
+```bash
+# 1. 更新 requirements.txt 文件
+# 修改版本号或添加新依赖
+
+# 2. 重新构建镜像
+docker-compose build --no-cache web
+
+# 3. 重启服务
+docker-compose up -d web
+
+# 4. 验证依赖
+docker-compose exec web pip list
+```
+
+#### 更新系统依赖
+```bash
+# 1. 修改 Dockerfile
+# 更新系统包或添加新工具
+
+# 2. 重新构建镜像
+docker-compose build --no-cache web
+
+# 3. 重启服务
+docker-compose up -d web
+```
+
+### 🚨 紧急回滚
+
+#### 快速回滚到上一个版本
+```bash
+# 1. 查看可用镜像
+docker images lipeaks_backend
+
+# 2. 回滚到指定版本
+docker-compose down
+docker tag lipeaks_backend:previous_version lipeaks_backend:latest
+docker-compose up -d
+
+# 3. 验证回滚
+docker-compose logs web
+```
+
+#### 数据库回滚
+```bash
+# 1. 停止 web 服务
+docker-compose stop web
+
+# 2. 恢复数据库备份
+docker-compose exec -T db mysql -u django -pdjango_password multi_tenant_db_dev < backup_file.sql
+
+# 3. 重启 web 服务
+docker-compose up -d web
+```
+
+### ✅ 更新后验证
+
+#### 基础功能验证
+
+##### Linux/macOS 用户
+```bash
+# 1. 检查服务状态
+docker-compose ps
+
+# 2. 检查应用日志
+docker-compose logs web | tail -20
+
+# 3. 测试 API 端点
+curl -I http://localhost:8000/api/schema/swagger-ui/
+
+# 4. 验证管理后台
+curl -I http://localhost:8000/admin/
+```
+
+##### Windows 用户
+```powershell
+# 1. 检查服务状态
+docker-compose ps
+
+# 2. 检查应用日志
+docker-compose logs web | Select-Object -Last 20
+
+# 3. 测试 API 端点
+Invoke-WebRequest -Uri "http://localhost:8000/api/schema/swagger-ui/" -Method Head
+
+# 4. 验证管理后台
+Invoke-WebRequest -Uri "http://localhost:8000/admin/" -Method Head
+```
+
+#### 数据库验证
+
+##### Linux/macOS 用户
+```bash
+# 1. 检查数据库连接
+docker-compose exec web python -c "
+import pymysql
+conn = pymysql.connect(host='db', user='django', password='django_password', db='multi_tenant_db_dev')
+print('数据库连接成功')
+conn.close()
+"
+
+# 2. 检查迁移状态
+docker-compose exec web python manage.py showmigrations
+
+# 3. 验证数据完整性
+docker-compose exec db mysql -u django -pdjango_password multi_tenant_db_dev -e "SELECT COUNT(*) FROM user;"
+```
+
+##### Windows 用户
+```powershell
+# 1. 检查数据库连接
+docker-compose exec web python -c "
+import pymysql
+conn = pymysql.connect(host='db', user='django', password='django_password', db='multi_tenant_db_dev')
+print('数据库连接成功')
+conn.close()
+"
+
+# 2. 检查迁移状态
+docker-compose exec web python manage.py showmigrations
+
+# 3. 验证数据完整性
+docker-compose exec db mysql -u django -pdjango_password multi_tenant_db_dev -e "SELECT COUNT(*) FROM user;"
+```
+
+### 📋 更新检查清单
+
+#### 更新前检查
+- [ ] 备份重要数据
+- [ ] 记录当前版本信息
+- [ ] 确认更新内容
+- [ ] 准备回滚方案
+
+#### 更新中检查
+- [ ] 监控构建过程
+- [ ] 检查错误日志
+- [ ] 验证服务启动
+- [ ] 确认功能正常
+
+#### 更新后检查
+- [ ] 验证所有功能
+- [ ] 检查性能指标
+- [ ] 更新文档
+- [ ] 通知相关人员
+
+### 🎯 常见更新场景
+
+#### 日常开发更新
+
+##### Linux/macOS 用户
+```bash
+# 快速代码更新
+git pull origin main
+docker-compose up -d --build web
+```
+
+##### Windows 用户
+```powershell
+# 快速代码更新
+git pull origin main
+docker-compose up -d --build web
+```
+
+#### 版本发布更新
+
+##### Linux/macOS 用户
+```bash
+# 完整版本更新
+git checkout v1.2.0
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+##### Windows 用户
+```powershell
+# 完整版本更新
+git checkout v1.2.0
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+#### 安全补丁更新
+
+##### Linux/macOS 用户
+```bash
+# 紧急安全更新
+docker-compose pull
+docker-compose up -d --build
+docker-compose exec web python manage.py check --deploy
+```
+
+##### Windows 用户
+```powershell
+# 紧急安全更新
+docker-compose pull
+docker-compose up -d --build
+docker-compose exec web python manage.py check --deploy
+```
+
+### 🔧 高级更新技巧
+
+#### 零停机更新
+```bash
+# 1. 构建新镜像
+docker-compose build web
+
+# 2. 启动新容器（不同端口）
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d web
+
+# 3. 健康检查通过后，切换流量
+# 4. 停止旧容器
+docker-compose stop web
+```
+
+#### 蓝绿部署
+```bash
+# 1. 创建生产环境副本
+cp docker-compose.yml docker-compose.prod.yml
+
+# 2. 在副本中部署新版本
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# 3. 验证新版本
+# 4. 切换生产流量
+# 5. 清理旧版本
+```
+
+#### 滚动更新
+```bash
+# 1. 逐个更新服务实例
+docker-compose up -d --no-deps --build web
+
+# 2. 等待服务就绪
+docker-compose exec web python manage.py check
+
+# 3. 更新下一个实例
+# 4. 重复直到所有实例更新完成
+```
+
+### 🚨 故障排除
+
+#### 更新失败处理
+```bash
+# 1. 查看详细错误日志
+docker-compose logs web --tail=100
+
+# 2. 检查容器状态
+docker-compose ps -a
+
+# 3. 进入容器调试
+docker-compose exec web bash
+
+# 4. 手动执行命令
+docker-compose exec web python manage.py check
+```
+
+#### 回滚操作
+```bash
+# 1. 停止当前服务
+docker-compose down
+
+# 2. 恢复到上一个版本
+git checkout HEAD~1
+
+# 3. 重新构建并启动
+docker-compose up -d --build
+
+# 4. 验证回滚成功
+docker-compose logs web
+```
+
+#### 数据恢复
+```bash
+# 1. 停止所有服务
+docker-compose down
+
+# 2. 恢复数据库备份
+docker-compose run --rm db mysql -u django -pdjango_password multi_tenant_db_dev < backup.sql
+
+# 3. 重新启动服务
+docker-compose up -d
+
+# 4. 验证数据完整性
+docker-compose exec web python manage.py check
+```
+
+---
+
 ## 环境变量配置
 
 ### 🔧 IMPORT_DB_SNAPSHOT 详解
@@ -506,3 +924,72 @@ docker-compose ps
 ---
 
 **更多详细信息请参考**: [完整部署指南](./docker_deployment_guide.md)
+
+## 📚 Docker 更新命令快速参考
+
+### 🔄 常用更新命令
+
+| 操作 | Linux/macOS | Windows PowerShell | 说明 |
+|------|-------------|-------------------|------|
+| **代码更新** | `docker-compose up -d --build web` | `docker-compose up -d --build web` | 重新构建并启动 web 服务 |
+| **完整重建** | `docker-compose up -d --build` | `docker-compose up -d --build` | 重新构建所有服务 |
+| **强制重建** | `docker-compose build --no-cache` | `docker-compose build --no-cache` | 不使用缓存重新构建 |
+| **重启服务** | `docker-compose restart web` | `docker-compose restart web` | 重启指定服务 |
+| **停止服务** | `docker-compose stop web` | `docker-compose stop web` | 停止指定服务 |
+| **启动服务** | `docker-compose start web` | `docker-compose start web` | 启动指定服务 |
+| **查看日志** | `docker-compose logs -f web` | `docker-compose logs -f web` | 实时查看服务日志 |
+| **检查状态** | `docker-compose ps` | `docker-compose ps` | 查看所有服务状态 |
+
+### 🗄️ 数据库操作命令
+
+| 操作 | 命令 | 说明 |
+|------|------|------|
+| **应用迁移** | `docker-compose exec web python manage.py migrate` | 应用数据库迁移 |
+| **检查迁移** | `docker-compose exec web python manage.py showmigrations` | 查看迁移状态 |
+| **创建迁移** | `docker-compose exec web python manage.py makemigrations` | 创建新的迁移文件 |
+| **备份数据库** | `docker-compose exec db mysqldump -u django -pdjango_password multi_tenant_db_dev > backup.sql` | 备份数据库 |
+| **恢复数据库** | `docker-compose exec -T db mysql -u django -pdjango_password multi_tenant_db_dev < backup.sql` | 恢复数据库 |
+
+### 🔧 环境变量和配置
+
+| 操作 | 命令 | 说明 |
+|------|------|------|
+| **查看环境变量** | `docker-compose exec web env` | 查看容器内的环境变量 |
+| **验证配置** | `docker-compose config` | 验证 docker-compose.yml 配置 |
+| **拉取镜像** | `docker-compose pull` | 拉取最新的镜像 |
+| **清理资源** | `docker-compose down --rmi all --volumes` | 清理所有镜像和卷 |
+
+### 🚨 故障排除命令
+
+| 问题 | 命令 | 说明 |
+|------|------|------|
+| **查看错误日志** | `docker-compose logs web --tail=100` | 查看最近的错误日志 |
+| **进入容器** | `docker-compose exec web bash` | 进入 web 容器进行调试 |
+| **检查应用状态** | `docker-compose exec web python manage.py check` | 检查 Django 应用状态 |
+| **查看容器资源** | `docker stats` | 查看容器资源使用情况 |
+
+### 📋 更新流程检查清单
+
+#### 更新前准备
+- [ ] 备份数据库
+- [ ] 记录当前版本
+- [ ] 确认更新内容
+- [ ] 准备回滚方案
+
+#### 更新执行
+- [ ] 停止相关服务
+- [ ] 备份重要数据
+- [ ] 执行更新操作
+- [ ] 启动服务
+- [ ] 验证功能
+
+#### 更新后验证
+- [ ] 检查服务状态
+- [ ] 验证核心功能
+- [ ] 测试关键 API
+- [ ] 检查日志
+- [ ] 更新文档
+
+---
+
+**💡 提示**: 在生产环境中执行更新操作前，请务必进行充分的测试和备份！
