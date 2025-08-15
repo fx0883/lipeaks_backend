@@ -32,7 +32,7 @@ X-Tenant-ID: {tenant_id}
 | 参数名         | 类型    | 必填 | 描述                                               |
 |----------------|---------|------|---------------------------------------------------|
 | page           | integer | 否   | 页码，默认为1                                      |
-| per_page       | integer | 否   | 每页数量，默认为10                                 |
+
 | status         | string  | 否   | 按状态过滤，可选值: pending, approved, spam, trash |
 | sort           | string  | 否   | 排序字段，可选值: created_at, likes_count          |
 | sort_direction | string  | 否   | 排序方向，可选值: asc, desc，默认为asc             |

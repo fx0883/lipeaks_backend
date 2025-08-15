@@ -2507,11 +2507,7 @@ paths:
         description: Number of results to return per page.
         schema:
           type: integer
-      - in: query
-        name: per_page
-        schema:
-          type: integer
-        description: 每页数量，默认10，最大50
+
       - in: query
         name: search
         schema:
@@ -2579,7 +2575,6 @@ paths:
                     previous: http://api.example.org/accounts/?page=2
                     results:
                     - page: 1
-                      per_page: 10
                       status: published
                       category_id: 3
                       search: 示例文章

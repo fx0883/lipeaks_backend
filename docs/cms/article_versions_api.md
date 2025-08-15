@@ -29,7 +29,7 @@ GET /api/v1/cms/articles/{id}/versions/
 | 参数名 | 类型 | 必填 | 描述 |
 |--------|------|------|------|
 | page | integer | 否 | 页码，默认1 |
-| per_page | integer | 否 | 每页数量，默认10 |
+
 
 ## 响应
 

@@ -26,7 +26,7 @@ X-Tenant-ID: {tenant_id}
 | 参数名         | 类型    | 必填 | 描述                                                |
 |----------------|---------|------|-----------------------------------------------------|
 | page           | integer | 否   | 页码，默认为1                                       |
-| per_page       | integer | 否   | 每页数量，默认为10                                  |
+
 | article        | integer | 否   | 按文章ID过滤                                        |
 | parent         | integer | 否   | 按父评论ID过滤，为空字符串或"null"时获取顶级评论    |
 | user           | integer | 否   | 按用户ID过滤                                        |

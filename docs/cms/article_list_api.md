@@ -23,7 +23,7 @@ GET /api/v1/cms/articles/
 | 参数名 | 类型 | 必填 | 描述 |
 |--------|------|------|------|
 | page | integer | 否 | 页码，默认1 |
-| per_page | integer | 否 | 每页数量，默认10，最大50 |
+
 | status | string | 否 | 文章状态过滤(draft/pending/published/archived) |
 | category_id | integer | 否 | 按分类ID过滤 |
 | tag_id | integer | 否 | 按标签ID过滤 |
@@ -202,7 +202,7 @@ GET /api/v1/cms/articles/
 
 ```bash
 curl -X 'GET' \
-  'http://localhost:8000/api/v1/cms/articles/?page=1&per_page=10&status=published&category_id=3&search=示例文章' \
+  'http://localhost:8000/api/v1/cms/articles/?page=1&status=published&category_id=3&search=示例文章' \
   -H 'accept: application/json' \
   -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
 ```
@@ -219,7 +219,7 @@ headers = {
 }
 params = {
     'page': 1,
-    'per_page': 10,
+
     'status': 'published',
     'category_id': 3,
     'search': '示例文章'

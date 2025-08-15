@@ -47,7 +47,6 @@ logger = logging.getLogger(__name__)
         tags=["CMS-文章管理"],
         parameters=[
             OpenApiParameter(name="page", description="页码，默认1", required=False, type=int),
-            OpenApiParameter(name="per_page", description="每页数量，默认10，最大50", required=False, type=int),
             OpenApiParameter(name="status", description="文章状态过滤", required=False, type=str, enum=["draft", "pending", "published", "archived"]),
             OpenApiParameter(name="category_id", description="按分类ID过滤", required=False, type=int),
             OpenApiParameter(name="tag_id", description="按标签ID过滤", required=False, type=int),
@@ -70,7 +69,6 @@ logger = logging.getLogger(__name__)
                 description='获取文章列表，支持分页、过滤和搜索',
                 value={
                     'page': 1,
-                    'per_page': 10,
                     'status': 'published',
                     'category_id': 3,
                     'search': '示例文章'
