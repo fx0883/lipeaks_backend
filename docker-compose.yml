@@ -41,6 +41,8 @@ services:
       - SUPERUSER_USERNAME=admin
       - SUPERUSER_EMAIL=admin@example.com
       - SUPERUSER_PASSWORD=admin_main
+      # 数据库快照导入设置
+      - IMPORT_DB_SNAPSHOT=true
       
     depends_on:
       - db

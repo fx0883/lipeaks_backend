@@ -25,8 +25,34 @@ class TenantMiddleware(MiddlewareMixin):
     - GET请求允许匿名访问，但需要租户ID（从X-Tenant-ID或用户token获取）
     - 非GET请求需要认证，并且用户必须关联租户
     - 超级管理员可以通过X-Tenant-ID请求头指定租户进行操作
-    - 只有URL路径中包含"cms"的API才需要进行租户ID验证
+    - 只有真正的API路径才需要进行租户ID验证，Admin路径不需要
     """
+    
+    def requires_tenant_verification(self, path):
+        """
+        判断路径是否需要租户验证
+        
+        Args:
+            path: 请求路径
+            
+        Returns:
+            bool: 是否需要租户验证
+        """
+        # Admin路径不需要租户验证（由Django Admin自己处理）
+        if path.startswith('/admin/'):
+            return False
+        
+        # 静态资源不需要租户验证
+        if path.startswith(('/static/', '/media/')):
+            return False
+        
+        # API文档不需要租户验证
+        if path.startswith(('/api/v1/schema/', '/api/v1/docs/', '/api/v1/redoc/')):
+            return False
+        
+        # 只对真正的API路径进行租户验证
+        api_prefixes = ['/api/', '/cms/', '/customers/', '/orders/']
+        return any(path.startswith(prefix) for prefix in api_prefixes)
     
     def process_request(self, request):
         """
@@ -51,16 +77,8 @@ class TenantMiddleware(MiddlewareMixin):
             logger.info(f"[租户中间件] API文档路径，跳过租户验证: {request.path}")
             return None
         
-        # 从settings获取需要租户验证的路径关键字
-        from django.conf import settings
-        tenant_required_paths = getattr(settings, 'TENANT_REQUIRED_PATHS', ['cms'])
-        
-        # 检查当前路径是否需要租户验证
-        path_requires_tenant = False
-        for path_keyword in tenant_required_paths:
-            if path_keyword in request.path:
-                path_requires_tenant = True
-                break
+        # 使用新的精确路径判断逻辑
+        path_requires_tenant = self.requires_tenant_verification(request.path)
                 
         # 如果路径不需要租户验证，则直接返回
         if not path_requires_tenant:

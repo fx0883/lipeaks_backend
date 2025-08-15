@@ -993,3 +993,103 @@ docker-compose ps
 ---
 
 **💡 提示**: 在生产环境中执行更新操作前，请务必进行充分的测试和备份！
+
+## 🔧 租户中间件修改说明
+
+### 🚨 问题描述
+
+在原始版本中，访问 `http://localhost:8000/admin/cms/category/` 会出现以下错误：
+
+```json
+{
+    "success": false,
+    "code": 4001,
+    "message": "未提供租户ID，无法访问CMS资源",
+    "data": null
+}
+```
+
+这是因为租户中间件错误地将Admin路径当作需要租户验证的API路径处理。
+
+### ✅ 解决方案
+
+已修改 `common/middleware/tenant_middleware.py`，实现了精确的路径判断逻辑：
+
+#### 修改前（问题代码）
+```python
+# 从settings获取需要租户验证的路径关键字
+tenant_required_paths = getattr(settings, 'TENANT_REQUIRED_PATHS', ['cms'])
+
+# 检查当前路径是否需要租户验证
+path_requires_tenant = False
+for path_keyword in tenant_required_paths:
+    if path_keyword in request.path:  # 过于宽泛的匹配
+        path_requires_tenant = True
+        break
+```
+
+#### 修改后（解决方案）
+```python
+def requires_tenant_verification(self, path):
+    """判断路径是否需要租户验证"""
+    # Admin路径不需要租户验证（由Django Admin自己处理）
+    if path.startswith('/admin/'):
+        return False
+    
+    # 静态资源不需要租户验证
+    if path.startswith(('/static/', '/media/')):
+        return False
+    
+    # API文档不需要租户验证
+    if path.startswith(('/api/v1/schema/', '/api/v1/docs/', '/api/v1/redoc/')):
+        return False
+    
+    # 只对真正的API路径进行租户验证
+    api_prefixes = ['/api/', '/cms/', '/customers/', '/orders/']
+    return any(path.startswith(prefix) for prefix in api_prefixes)
+```
+
+### 🎯 修改效果
+
+#### ✅ 现在可以正常访问
+- **Admin主页面**: `http://localhost:8000/admin/`
+- **CMS管理**: `http://localhost:8000/admin/cms/category/`
+- **菜单管理**: `http://localhost:8000/admin/menus/menu/`
+- **客户管理**: `http://localhost:8000/admin/customers/customer/`
+
+#### 🔒 仍然需要租户验证
+- **CMS API**: `http://localhost:8000/api/v1/cms/categories/`
+- **客户API**: `http://localhost:8000/api/v1/customers/customers/`
+- **订单API**: `http://localhost:8000/api/v1/orders/orders/`
+
+#### 🌐 不需要租户验证
+- **API文档**: `http://localhost:8000/api/v1/docs/`
+- **静态资源**: `/static/`, `/media/`
+- **Admin界面**: 所有 `/admin/` 路径
+
+### 🔍 技术原理
+
+#### 路径分类处理
+1. **Admin路径** (`/admin/*`): 由Django Admin自己处理认证和权限
+2. **API路径** (`/api/*`, `/cms/*`, `/customers/*`, `/orders/*`): 需要租户验证
+3. **静态资源** (`/static/*`, `/media/*`): 直接访问，无需验证
+4. **文档路径** (`/api/v1/docs/*`): 公开访问，无需验证
+
+#### 中间件执行顺序
+```
+请求 → 租户中间件 → 路径判断 → 跳过/验证 → Django Admin/API视图
+```
+
+### 🚀 使用建议
+
+1. **Admin管理**: 直接通过浏览器访问 `/admin/` 路径
+2. **API调用**: 需要提供 `X-Tenant-ID` 请求头
+3. **超级管理员**: 可以通过 `X-Tenant-ID` 指定操作租户
+4. **开发调试**: 使用 `/api/v1/docs/` 查看API文档
+
+### 📝 注意事项
+
+- 修改不影响现有的API租户验证逻辑
+- 所有Admin功能现在都可以正常使用
+- 菜单管理等公共功能不受租户限制
+- 保持了系统的安全性和多租户隔离

@@ -23,11 +23,17 @@ class CMSBasePermission(permissions.BasePermission):
     
     def has_permission(self, request, view):
         """
-        检查用户是否有权限访问该视图
+        检查用户是否有权限访问视图
         
-        所有GET请求允许匿名访问（但需要租户ID，这在中间件中已验证）
-        创建/更新/删除操作需要检查角色和参数
+        - 允许所有GET请求访问（租户ID验证已在中间件中完成）
+        - 非安全方法需要认证和租户关联
+        - 超级管理员可以通过X-Tenant-ID请求头指定租户进行操作
         """
+        # 检查请求路径是否为Admin路径，如果是则跳过租户验证
+        if request.path.startswith('/admin/'):
+            logger.debug(f"Admin路径，跳过租户验证: {request.path}")
+            return True
+            
         # 检查请求路径是否包含"cms"，如果不包含，则跳过租户验证
         if "/cms/" not in request.path:
             logger.debug(f"非CMS路径，跳过租户验证: {request.path}")
@@ -87,6 +93,11 @@ class CMSBasePermission(permissions.BasePermission):
         - 租户管理员可以操作其租户内的所有资源
         - 普通用户只能操作自己的资源
         """
+        # 检查请求路径是否为Admin路径，如果是则跳过租户验证
+        if request.path.startswith('/admin/'):
+            logger.debug(f"Admin路径，跳过租户验证: {request.path}")
+            return True
+            
         # 检查请求路径是否包含"cms"，如果不包含，则跳过租户验证
         if "/cms/" not in request.path:
             logger.debug(f"非CMS路径，跳过租户验证: {request.path}")

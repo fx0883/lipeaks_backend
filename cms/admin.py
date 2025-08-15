@@ -72,7 +72,40 @@ class ArticleAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.select_related('author', 'tenant')
+        # 如果是超级管理员，显示所有租户的数据
+        if request.user.is_superuser:
+            return qs.select_related('author', 'tenant')
+        # 如果是普通用户，只显示其关联租户的数据
+        elif hasattr(request.user, 'tenant') and request.user.tenant:
+            return qs.filter(tenant=request.user.tenant).select_related('author', 'tenant')
+        # 如果用户没有关联租户，返回空查询集
+        else:
+            return qs.none()
+    
+    def has_add_permission(self, request):
+        # 超级管理员可以添加任何租户的文章
+        if request.user.is_superuser:
+            return True
+        # 普通用户需要有租户关联
+        return hasattr(request.user, 'tenant') and request.user.tenant is not None
+    
+    def has_change_permission(self, request, obj=None):
+        # 超级管理员可以修改任何租户的文章
+        if request.user.is_superuser:
+            return True
+        # 普通用户只能修改其租户的文章
+        if obj and hasattr(request.user, 'tenant') and request.user.tenant:
+            return obj.tenant == request.user.tenant
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        # 超级管理员可以删除任何租户的文章
+        if request.user.is_superuser:
+            return True
+        # 普通用户只能删除其租户的文章
+        if obj and hasattr(request.user, 'tenant') and request.user.tenant:
+            return obj.tenant == request.user.tenant
+        return False
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -90,7 +123,40 @@ class CategoryAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.select_related('parent', 'tenant')
+        # 如果是超级管理员，显示所有租户的数据
+        if request.user.is_superuser:
+            return qs.select_related('parent', 'tenant')
+        # 如果是普通用户，只显示其关联租户的数据
+        elif hasattr(request.user, 'tenant') and request.user.tenant:
+            return qs.filter(tenant=request.user.tenant).select_related('parent', 'tenant')
+        # 如果用户没有关联租户，返回空查询集
+        else:
+            return qs.none()
+    
+    def has_add_permission(self, request):
+        # 超级管理员可以添加任何租户的类别
+        if request.user.is_superuser:
+            return True
+        # 普通用户需要有租户关联
+        return hasattr(request.user, 'tenant') and request.user.tenant is not None
+    
+    def has_change_permission(self, request, obj=None):
+        # 超级管理员可以修改任何租户的类别
+        if request.user.is_superuser:
+            return True
+        # 普通用户只能修改其租户的类别
+        if obj and hasattr(request.user, 'tenant') and request.user.tenant:
+            return obj.tenant == request.user.tenant
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        # 超级管理员可以删除任何租户的类别
+        if request.user.is_superuser:
+            return True
+        # 普通用户只能删除其租户的类别
+        if obj and hasattr(request.user, 'tenant') and request.user.tenant:
+            return obj.tenant == request.user.tenant
+        return False
 
 @admin.register(TagGroup)
 class TagGroupAdmin(admin.ModelAdmin):
