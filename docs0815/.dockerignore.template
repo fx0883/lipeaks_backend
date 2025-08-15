@@ -1,0 +1,102 @@
+# .dockerignore 文件模板
+# 复制此文件到项目根目录并重命名为 .dockerignore
+
+# Git 相关
+.git
+.gitignore
+.gitattributes
+
+# 文档和说明
+README.md
+*.md
+docs/
+docs0815/
+
+# 环境配置
+.env
+.env.*
+*.env
+
+# 日志文件
+*.log
+logs/
+
+# Python 相关
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 测试相关
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# IDE 相关
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统相关
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+temp/
+tmp/
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 备份文件
+*.bak
+*.backup
+backup/
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+
+# 其他
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
