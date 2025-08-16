@@ -23,6 +23,25 @@ pymysql.install_as_MySQLdb()
 # 加载.env文件
 load_dotenv()
 
+
+def get_required_env(key, default=None):
+    """获取必需的环境变量"""
+    value = os.getenv(key, default)
+    if value is None:
+        raise ValueError(f"Required environment variable {key} is not set")
+    return value
+
+
+def get_env_with_validation(key, validator, default=None):
+    """获取并验证环境变量"""
+    value = os.getenv(key, default)
+    if value is not None:
+        try:
+            return validator(value)
+        except Exception as e:
+            raise ValueError(f"Invalid value for environment variable {key}: {e}")
+    return value
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -31,10 +50,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-w7&3bzjc1s*bty@)%c3w&#fro!wu5@(9jxac46lqm^klo9^1df')
+SECRET_KEY = get_required_env('SECRET_KEY', 'django-insecure-w7&3bzjc1s*bty@)%c3w&#fro!wu5@(9jxac46lqm^klo9^1df')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+DEBUG = get_env_with_validation('DEBUG', lambda x: x.lower() == 'true', 'True')
 
 # 从环境变量读取日志输出方式，默认跟随DEBUG设置
 LOG_TO_CONSOLE = os.getenv('LOG_TO_CONSOLE', str(DEBUG)).lower() == 'true'
