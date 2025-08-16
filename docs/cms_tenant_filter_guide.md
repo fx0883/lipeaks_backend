@@ -141,8 +141,7 @@ def get_queryset(self, request):
 3. 验证URL参数格式
 4. 测试数据库查询
 5. 运行租户名称测试脚本：
-   - CMS: `python cms/test_tenant_display.py`
-   - Check_System: `python check_system/test_tenant_filter.py`
+   - 使用Django内置的测试框架进行功能测试
 6. 检查租户数据完整性
 7. 验证CSS样式和字体设置
 8. 确认Admin Mixin正确应用
