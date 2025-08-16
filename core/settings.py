@@ -95,6 +95,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # 静态文件优化
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -152,6 +153,7 @@ DATABASES = {
             'init_command': "SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_ci'",
             'autocommit': True,
         },
+        'CONN_MAX_AGE': 600,  # 10分钟连接池
     }
 }
 
@@ -352,15 +354,19 @@ LOGGING = {
         },
         'file': {
             'level': 'INFO',
-            'class': 'logging.handlers.WatchedFileHandler',  # 使用WatchedFileHandler
+            'class': 'logging.handlers.RotatingFileHandler',  # 使用轮转日志
             'filename': get_log_filename('debug'),  # 使用带日期的文件名
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 5,  # 保留5个备份文件
             'formatter': 'verbose',
             'encoding': 'utf-8',
         },
         'error_file': {
             'level': 'ERROR',
-            'class': 'logging.handlers.WatchedFileHandler',  # 使用WatchedFileHandler
+            'class': 'logging.handlers.RotatingFileHandler',  # 使用轮转日志
             'filename': get_log_filename('error'),  # 使用带日期的文件名
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 5,  # 保留5个备份文件
             'formatter': 'verbose',
             'encoding': 'utf-8',
         },
@@ -392,3 +398,8 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')  # 发件人邮箱
 
 # 前端URL（用于构建密码重置链接）
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
+# WhiteNoise配置
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+WHITENOISE_USE_FINDERS = True
+WHITENENOISE_AUTOREFRESH = DEBUG

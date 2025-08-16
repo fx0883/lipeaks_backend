@@ -25,7 +25,7 @@ class BaseTenantFilterMixin:
         if user.is_superuser:
             # 超级管理员可以看到所有租户
             from tenants.models import Tenant
-            available_tenants = Tenant.objects.filter(is_deleted=False).order_by('name')
+            available_tenants = Tenant.objects.filter(is_deleted=False).select_related().order_by('name')
         else:
             # 普通用户只能看到自己关联的租户
             if hasattr(user, 'tenant') and user.tenant:

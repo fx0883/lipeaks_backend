@@ -29,9 +29,9 @@ class BaseModel(models.Model):
         db_index=True,
         null=True
     )
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True, null=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True, null=True)
-    is_deleted = models.BooleanField(_("是否删除"), default=False)
+    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True, null=True, db_index=True)
+    updated_at = models.DateTimeField(_("更新时间"), auto_now=True, null=True, db_index=True)
+    is_deleted = models.BooleanField(_("是否删除"), default=False, db_index=True)
     
     # 默认管理器 - 按租户过滤
     objects = TenantManager()
