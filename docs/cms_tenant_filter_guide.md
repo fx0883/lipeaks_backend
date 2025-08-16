@@ -37,12 +37,19 @@ CMS租户过滤器是一个为多租户CMS系统设计的直观过滤工具，�
 
 ## 支持的页面
 
-目前支持租户过滤的CMS页面包括：
+目前支持租户过滤的页面包括：
 
+### CMS系统
 - **分类管理** (`/admin/cms/category/`)
 - **文章管理** (`/admin/cms/article/`)
 - **标签管理** (`/admin/cms/tag/`)
 - **评论管理** (`/admin/cms/comment/`)
+
+### 打卡系统 (Check_System)
+- **打卡类型管理** (`/admin/check_system/taskcategory/`)
+- **打卡任务管理** (`/admin/check_system/task/`)
+- **任务模板管理** (`/admin/check_system/tasktemplate/`)
+- **打卡记录管理** (`/admin/check_system/checkrecord/`)
 
 ## 技术实现
 
@@ -52,9 +59,13 @@ CMS租户过滤器是一个为多租户CMS系统设计的直观过滤工具，�
 - 支持URL参数传递租户ID
 
 ### 核心组件
-1. **自定义模板**: `templates/admin/cms/change_list.html`
-2. **Mixin类**: `cms.admin_mixins.CMSAdminMixin`
-3. **Admin配置**: 各CMS模型的Admin类继承Mixin
+1. **自定义模板**: 
+   - CMS: `templates/admin/cms/change_list.html`
+   - Check_System: `templates/admin/check_system/change_list.html`
+2. **Mixin类**: 
+   - CMS: `cms.admin_mixins.CMSAdminMixin`
+   - Check_System: `check_system.admin_mixins.CheckSystemAdminMixin`
+3. **Admin配置**: 各模型的Admin类继承对应的Mixin
 
 ### 权限控制
 - 超级管理员：可以查看和切换所有租户
@@ -64,8 +75,9 @@ CMS租户过滤器是一个为多租户CMS系统设计的直观过滤工具，�
 ## 配置说明
 
 ### 添加新页面支持
-要为新的CMS页面添加租户过滤支持：
+要为新的页面添加租户过滤支持：
 
+#### CMS系统
 1. 在对应的Admin类中继承`CMSAdminMixin`：
 ```python
 @admin.register(YourModel)
@@ -73,6 +85,15 @@ class YourModelAdmin(CMSAdminMixin, admin.ModelAdmin):
     # 配置...
 ```
 
+#### Check_System
+1. 在对应的Admin类中继承`CheckSystemAdminMixin`：
+```python
+@admin.register(YourModel)
+class YourModelAdmin(CheckSystemAdminMixin, admin.ModelAdmin):
+    # 配置...
+```
+
+#### 通用要求
 2. 确保模型有`tenant`字段
 
 3. 在`list_filter`中包含`tenant`字段
@@ -100,6 +121,7 @@ def get_queryset(self, request):
    - 检查URL参数是否正确
    - 确认模型有`tenant`字段
    - 验证数据库中的租户数据
+   - 确认Admin类继承了正确的Mixin
 
 3. **权限错误**
    - 检查用户是否为超级管理员
@@ -118,9 +140,12 @@ def get_queryset(self, request):
 2. 查看Django日志
 3. 验证URL参数格式
 4. 测试数据库查询
-5. 运行租户名称测试脚本：`python cms/test_tenant_display.py`
+5. 运行租户名称测试脚本：
+   - CMS: `python cms/test_tenant_display.py`
+   - Check_System: `python check_system/test_tenant_filter.py`
 6. 检查租户数据完整性
 7. 验证CSS样式和字体设置
+8. 确认Admin Mixin正确应用
 
 ## 最佳实践
 
@@ -145,6 +170,11 @@ def get_queryset(self, request):
 - 初始版本发布
 - 支持基本的租户过滤功能
 - 包含分类、文章、标签、评论管理页面
+
+### v1.1.0 (2025-01-14)
+- 新增Check_System租户过滤支持
+- 支持打卡类型、任务、模板、记录管理页面
+- 统一租户过滤UI和功能
 
 ### 计划功能
 - 支持更多CMS页面
