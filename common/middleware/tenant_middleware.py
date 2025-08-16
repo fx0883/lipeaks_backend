@@ -50,8 +50,12 @@ class TenantMiddleware(MiddlewareMixin):
         if path.startswith(('/api/v1/schema/', '/api/v1/docs/', '/api/v1/redoc/')):
             return False
         
-        # 只对真正的API路径进行租户验证
-        api_prefixes = ['/api/', '/cms/', '/customers/', '/orders/']
+        # 系统级API不需要租户验证（菜单、系统配置等）
+        if path.startswith('/api/v1/menus/'):
+            return False
+        
+        # 只对真正的业务API路径进行租户验证
+        api_prefixes = ['/api/v1/cms/', '/api/v1/customers/', '/api/v1/orders/']
         return any(path.startswith(prefix) for prefix in api_prefixes)
     
     def process_request(self, request):
@@ -102,11 +106,26 @@ class TenantMiddleware(MiddlewareMixin):
         else:
             logger.info("[租户中间件] 用户未认证")
         
-        # 从请求头获取租户ID并验证
+        # 从查询参数获取租户ID
+        query_tenant_id = request.GET.get('tenant_id')
+        logger.info(f"[租户中间件] 从查询参数获取的tenant_id: {query_tenant_id}")
+        
+        # 从请求头获取租户ID
         header_tenant_id = request.headers.get('X-Tenant-ID')
         logger.info(f"[租户中间件] 从请求头获取的X-Tenant-ID: {header_tenant_id}")
         
-        # 验证租户ID是否为有效整数
+        # 验证查询参数租户ID是否为有效整数
+        if query_tenant_id:
+            try:
+                query_tenant_id = int(query_tenant_id)
+                # 转换为字符串以便后续比较
+                query_tenant_id = str(query_tenant_id)
+                logger.info(f"[租户中间件] 从查询参数获取到有效租户ID: {query_tenant_id}")
+            except (ValueError, TypeError):
+                logger.warning(f"[租户中间件] 无效的查询参数租户ID格式: {query_tenant_id}")
+                raise ValidationError({"detail": f"无效的查询参数租户ID格式: {query_tenant_id}，租户ID必须是整数"})
+        
+        # 验证请求头租户ID是否为有效整数
         if header_tenant_id:
             try:
                 header_tenant_id = int(header_tenant_id)
@@ -114,8 +133,8 @@ class TenantMiddleware(MiddlewareMixin):
                 header_tenant_id = str(header_tenant_id)
                 logger.info(f"[租户中间件] 从请求头获取到有效租户ID: {header_tenant_id}")
             except (ValueError, TypeError):
-                logger.warning(f"[租户中间件] 无效的租户ID格式: {header_tenant_id}")
-                raise ValidationError({"detail": f"无效的租户ID格式: {header_tenant_id}，租户ID必须是整数"})
+                logger.warning(f"[租户中间件] 无效的请求头租户ID格式: {header_tenant_id}")
+                raise ValidationError({"detail": f"无效的请求头租户ID格式: {header_tenant_id}，租户ID必须是整数"})
         
         # 获取用户关联的租户
         user_tenant = None
@@ -147,18 +166,33 @@ class TenantMiddleware(MiddlewareMixin):
                 is_super_admin = False
                 is_tenant_admin = False
         
-        # 如果是租户管理员且没有提供X-Tenant-ID，则使用其关联的租户ID
-        if is_tenant_admin and not header_tenant_id and user_tenant_id:
+        # 确定最终使用的租户ID（优先级：查询参数 > 请求头 > 用户关联租户）
+        if query_tenant_id:
+            effective_tenant_id = query_tenant_id
+            tenant_source = 'query_param'
+            logger.info(f"[租户中间件] 使用查询参数中的租户ID: {effective_tenant_id}")
+        elif header_tenant_id:
+            effective_tenant_id = header_tenant_id
+            tenant_source = 'header'
+            logger.info(f"[租户中间件] 使用请求头中的租户ID: {effective_tenant_id}")
+        elif user_tenant_id:
             effective_tenant_id = user_tenant_id
-            logger.info(f"[租户中间件] 租户管理员 {request.user.username} 未提供X-Tenant-ID，自动使用关联的租户ID: {effective_tenant_id}")
+            tenant_source = 'user_tenant'
+            logger.info(f"[租户中间件] 使用用户关联的租户ID: {effective_tenant_id}")
         else:
-            # 优先使用用户关联的租户ID，如果没有则使用请求头中的租户ID
-            effective_tenant_id = user_tenant_id or header_tenant_id
-            logger.info(f"[租户中间件] 最终使用的租户ID: {effective_tenant_id}, 来源: {'用户关联' if user_tenant_id else '请求头' if header_tenant_id else '无'}")
+            effective_tenant_id = None
+            tenant_source = 'none'
+            logger.info(f"[租户中间件] 未获取到任何租户ID")
+        
+        # 如果是租户管理员且没有提供任何租户ID，则使用其关联的租户ID
+        if is_tenant_admin and not effective_tenant_id and user_tenant_id:
+            effective_tenant_id = user_tenant_id
+            tenant_source = 'user_tenant'
+            logger.info(f"[租户中间件] 租户管理员 {request.user.username} 未提供任何租户ID，自动使用关联的租户ID: {effective_tenant_id}")
         
         # 处理GET请求（允许匿名访问，但需要租户ID）
         if request.method == 'GET':
-            # 超级管理员特殊处理：即使是GET请求，如果没有提供租户ID，也需要提示
+            # 超级管理员特殊处理：允许不提供租户ID访问系统级资源
             # 重新确认用户是否是通过JWT认证的超级管理员
             is_super_admin = False
             if hasattr(request, 'user') and request.user.is_authenticated and getattr(request, 'auth_type', None) == 'jwt':
@@ -167,29 +201,13 @@ class TenantMiddleware(MiddlewareMixin):
             # 如果没有有效的租户ID，返回错误（超级管理员除外）
             if not effective_tenant_id:
                 if is_super_admin:
-                    # 超级管理员需要明确指定租户ID
-                    logger.warning(f"[租户中间件] 超级管理员 {request.user.username} GET请求未提供租户ID: {request.path}")
-                    
-                    # 返回标准JSON错误响应
-                    error_response = {
-                        "success": False,
-                        "code": 4001,
-                        "message": "超级管理员需要通过X-Tenant-ID请求头指定租户ID",
-                        "data": None
-                    }
-                    
-                    # 如果请求头中包含X-Debug-Log，则添加调试日志
-                    if request.headers.get('X-Debug-Log') == 'true':
-                        error_response["debug_logs"] = [{
-                            "level": "error",
-                            "message": f"[租户中间件] 超级管理员 {request.user.username} GET请求未提供租户ID: {request.path}",
-                            "timestamp": time.time(),
-                            "path": request.path,
-                            "user": request.user.username,
-                            "is_super_admin": True
-                        }]
-                    
-                    return JsonResponse(error_response, status=status.HTTP_400_BAD_REQUEST)
+                    # 超级管理员可以没有租户ID，允许访问系统级资源
+                    logger.info(f"[租户中间件] 超级管理员 {request.user.username} GET请求未提供租户ID，允许访问: {request.path}")
+                    # 设置标志，表示这是超级管理员的无租户访问
+                    request.is_super_admin_no_tenant = True
+                    request.tenant_id = None
+                    request.tenant_source = 'super_admin_no_tenant'
+                    return None
                 else:
                     logger.warning(f"[租户中间件] GET请求未提供租户ID: {request.path}")
                     
@@ -344,23 +362,26 @@ class TenantMiddleware(MiddlewareMixin):
                 
                 return JsonResponse(error_response, status=status.HTTP_403_FORBIDDEN)
         
-        # 将租户ID保存到请求对象，方便视图使用
+        # 将租户信息保存到请求对象，方便视图使用
         request.tenant_id = effective_tenant_id
-        logger.info(f"[租户中间件] 已设置请求的tenant_id: {effective_tenant_id}")
+        request.tenant_source = tenant_source
+        request.query_tenant_id = query_tenant_id
+        request.header_tenant_id = header_tenant_id
+        logger.info(f"[租户中间件] 已设置请求的租户信息: tenant_id={effective_tenant_id}, source={tenant_source}")
         
         # 设置当前线程的租户上下文
-        if user_tenant:
-            logger.info(f"[租户中间件] 用户 {request.user.username} 属于租户 {user_tenant.name}, 已设置租户上下文")
-            set_current_tenant(user_tenant)
-        elif header_tenant_id:
-            # 如果有请求头租户ID但没有用户租户，尝试设置租户上下文
+        if effective_tenant_id:
             from tenants.models import Tenant
             try:
-                temp_tenant = Tenant.objects.get(id=int(header_tenant_id))
-                logger.info(f"[租户中间件] 从请求头设置租户上下文: {temp_tenant.name} (ID: {header_tenant_id})")
+                temp_tenant = Tenant.objects.get(id=int(effective_tenant_id))
+                logger.info(f"[租户中间件] 设置租户上下文: {temp_tenant.name} (ID: {effective_tenant_id})")
                 set_current_tenant(temp_tenant)
             except Tenant.DoesNotExist:
-                logger.warning(f"[租户中间件] 请求头指定的租户ID不存在: {header_tenant_id}")
+                logger.warning(f"[租户中间件] 指定的租户ID不存在: {effective_tenant_id}")
+        elif user_tenant:
+            # 如果用户有关联租户但没有指定其他租户，设置用户租户上下文
+            logger.info(f"[租户中间件] 用户 {request.user.username} 属于租户 {user_tenant.name}, 已设置租户上下文")
+            set_current_tenant(user_tenant)
         
         return None
     

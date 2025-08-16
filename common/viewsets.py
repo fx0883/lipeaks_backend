@@ -27,7 +27,13 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         """
         获取查询集并根据租户ID进行过滤
         
-        如果模型有tenant字段，则自动按当前租户ID过滤
+        支持两种租户过滤方式：
+        1. 查询参数：?tenant_id=1
+        2. 请求头：X-Tenant-ID: 1
+        
+        过滤逻辑：
+        - 超级管理员：可以通过参数过滤特定租户，也可以看所有租户数据
+        - 普通用户：只能看到自己租户的数据
         """
         queryset = super().get_queryset()
         
@@ -41,9 +47,12 @@ class TenantModelViewSet(viewsets.ModelViewSet):
             logger.info(f"[TenantModelViewSet] {view_name} 非CMS路径，跳过租户过滤: {request_path}")
             return queryset
         
-        # 获取当前租户ID
+        # 获取租户信息
         tenant_id = getattr(self.request, 'tenant_id', None)
-        logger.info(f"[TenantModelViewSet] {view_name} 获取到租户ID: {tenant_id}")
+        tenant_source = getattr(self.request, 'tenant_source', None)
+        is_super_admin_no_tenant = getattr(self.request, 'is_super_admin_no_tenant', False)
+        
+        logger.info(f"[TenantModelViewSet] {view_name} 获取到租户信息: tenant_id={tenant_id}, source={tenant_source}, is_super_admin_no_tenant={is_super_admin_no_tenant}")
         
         # 获取当前用户信息
         user = getattr(self.request, 'user', None)
@@ -53,28 +62,46 @@ class TenantModelViewSet(viewsets.ModelViewSet):
             logger.info(f"[TenantModelViewSet] {view_name} 用户: {user.username}, 超管: {is_super_admin}, 用户租户ID: {user_tenant.id if user_tenant else None}")
         else:
             logger.info(f"[TenantModelViewSet] {view_name} 用户未认证")
+            is_super_admin = False
         
-        # 如果没有租户ID，则返回空查询集
-        if not tenant_id:
-            logger.warning(f"[TenantModelViewSet] {view_name} 尝试获取查询集但未提供租户ID")
-            return queryset.none()
-            
-        # 如果模型有tenant字段且有租户ID，则按租户过滤
-        if tenant_id and hasattr(queryset.model, 'tenant'):
-            model_name = queryset.model.__name__
-            logger.info(f"[TenantModelViewSet] {view_name} 对模型 {model_name} 按租户ID {tenant_id} 过滤查询集")
+        # 如果模型没有tenant字段，则不需要过滤
+        if not hasattr(queryset.model, 'tenant'):
+            logger.info(f"[TenantModelViewSet] {view_name} 模型 {queryset.model.__name__} 没有tenant字段，跳过租户过滤")
+            return queryset
+        
+        # 超级管理员特殊处理
+        if is_super_admin:
+            if tenant_source == 'query_param':
+                # 查询参数指定的租户
+                logger.info(f"[TenantModelViewSet] {view_name} 超级管理员通过查询参数过滤租户: {tenant_id}")
+                return queryset.filter(tenant_id=tenant_id)
+            elif tenant_source == 'header':
+                # 请求头指定的租户
+                logger.info(f"[TenantModelViewSet] {view_name} 超级管理员通过请求头过滤租户: {tenant_id}")
+                return queryset.filter(tenant_id=tenant_id)
+            elif is_super_admin_no_tenant:
+                # 超级管理员没有指定租户，返回所有租户的数据
+                logger.info(f"[TenantModelViewSet] {view_name} 超级管理员未指定租户，返回所有租户数据")
+                return queryset
+            else:
+                # 其他情况，返回所有租户数据
+                logger.info(f"[TenantModelViewSet] {view_name} 超级管理员返回所有租户数据")
+                return queryset
+        
+        # 普通用户处理
+        if tenant_id:
+            # 有租户ID，按租户过滤
+            logger.info(f"[TenantModelViewSet] {view_name} 普通用户按租户ID过滤: {tenant_id}")
             try:
-                # 确保租户ID是整数
                 tenant_id = int(tenant_id)
-                filtered_queryset = queryset.filter(tenant_id=tenant_id)
-                logger.info(f"[TenantModelViewSet] {view_name} 过滤后的查询集记录数: {filtered_queryset.count()}")
-                return filtered_queryset
+                return queryset.filter(tenant_id=tenant_id)
             except (ValueError, TypeError):
-                # 这里不应该发生，因为中间件已经验证了租户ID
                 logger.error(f"[TenantModelViewSet] {view_name} 无效的租户ID: {tenant_id}")
                 raise ValidationError({"detail": f"无效的租户ID: {tenant_id}"})
-            
-        return queryset
+        else:
+            # 没有租户ID，返回空查询集
+            logger.warning(f"[TenantModelViewSet] {view_name} 普通用户未提供租户ID，返回空查询集")
+            return queryset.none()
     
     def perform_create(self, serializer):
         """
