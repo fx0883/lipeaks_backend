@@ -21,6 +21,7 @@ from .models import (
     AccessLog,
     OperationLog
 )
+from .admin_mixins import CMSAdminMixin
 
 class ArticleCategoryInline(admin.TabularInline):
     model = ArticleCategory
@@ -38,7 +39,7 @@ class ArticleMetaInline(admin.StackedInline):
     verbose_name_plural = _('文章元数据')
 
 @admin.register(Article)
-class ArticleAdmin(admin.ModelAdmin):
+class ArticleAdmin(CMSAdminMixin, admin.ModelAdmin):
     list_display = ['title', 'author', 'status', 'is_featured', 'is_pinned', 'created_at', 'published_at', 'view_count', 'comment_count']
     list_filter = ['status', 'is_featured', 'is_pinned', 'created_at', 'published_at', 'tenant']
     search_fields = ['title', 'content', 'excerpt']
@@ -50,6 +51,9 @@ class ArticleAdmin(admin.ModelAdmin):
     inlines = [ArticleCategoryInline, ArticleTagInline, ArticleMetaInline]
     save_on_top = True
     list_per_page = 20
+    
+    # 自定义模板
+    change_list_template = 'admin/cms/change_list.html'
     
     def view_count(self, obj):
         try:
@@ -72,15 +76,7 @@ class ArticleAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        # 如果是超级管理员，显示所有租户的数据
-        if request.user.is_superuser:
-            return qs.select_related('author', 'tenant')
-        # 如果是普通用户，只显示其关联租户的数据
-        elif hasattr(request.user, 'tenant') and request.user.tenant:
-            return qs.filter(tenant=request.user.tenant).select_related('author', 'tenant')
-        # 如果用户没有关联租户，返回空查询集
-        else:
-            return qs.none()
+        return qs.select_related('author', 'tenant')
     
     def has_add_permission(self, request):
         # 超级管理员可以添加任何租户的文章
@@ -108,7 +104,7 @@ class ArticleAdmin(admin.ModelAdmin):
         return False
 
 @admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
+class CategoryAdmin(CMSAdminMixin, admin.ModelAdmin):
     list_display = ['name', 'parent', 'is_active', 'article_count', 'created_at']
     list_filter = ['is_active', 'parent', 'tenant']
     search_fields = ['name', 'description']
@@ -117,21 +113,15 @@ class CategoryAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at']
     list_per_page = 30
     
+
+    
     def article_count(self, obj):
         return obj.article_categories.count()
     article_count.short_description = _('文章数')
     
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        # 如果是超级管理员，显示所有租户的数据
-        if request.user.is_superuser:
-            return qs.select_related('parent', 'tenant')
-        # 如果是普通用户，只显示其关联租户的数据
-        elif hasattr(request.user, 'tenant') and request.user.tenant:
-            return qs.filter(tenant=request.user.tenant).select_related('parent', 'tenant')
-        # 如果用户没有关联租户，返回空查询集
-        else:
-            return qs.none()
+        return qs.select_related('parent', 'tenant')
     
     def has_add_permission(self, request):
         # 超级管理员可以添加任何租户的类别
@@ -176,7 +166,7 @@ class TagGroupAdmin(admin.ModelAdmin):
         return qs.annotate(tag_count=Count('tags'))
 
 @admin.register(Tag)
-class TagAdmin(admin.ModelAdmin):
+class TagAdmin(CMSAdminMixin, admin.ModelAdmin):
     list_display = ['name', 'group', 'color', 'is_active', 'article_count', 'created_at']
     list_filter = ['is_active', 'group', 'tenant']
     search_fields = ['name', 'description']
@@ -194,7 +184,7 @@ class TagAdmin(admin.ModelAdmin):
         return qs.select_related('group', 'tenant')
 
 @admin.register(Comment)
-class CommentAdmin(admin.ModelAdmin):
+class CommentAdmin(CMSAdminMixin, admin.ModelAdmin):
     list_display = ['get_content', 'article', 'user', 'guest_name', 'status', 'created_at', 'is_pinned']
     list_filter = ['status', 'is_pinned', 'created_at', 'tenant']
     search_fields = ['content', 'user__username', 'guest_name', 'article__title']

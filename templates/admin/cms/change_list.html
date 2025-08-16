@@ -1,0 +1,136 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block object-tools-items %}
+    <!-- 租户选择过滤器 -->
+    <div class="tenant-filter-container">
+        <label for="tenant-filter">选择租户:</label>
+        <select id="tenant-filter">
+            <option value="">所有租户</option>
+            {% for tenant in available_tenants %}
+                <option value="{{ tenant.id }}" {% if selected_tenant == tenant.id %}selected{% endif %} title="{{ tenant.name }}">
+                    {{ tenant.name }}
+                </option>
+            {% endfor %}
+        </select>
+        <button id="apply-tenant-filter">
+            应用过滤
+        </button>
+        <span id="current-tenant-info">
+            {% if selected_tenant_name %}
+                当前显示: {{ selected_tenant_name }}
+            {% endif %}
+        </span>
+    </div>
+
+    {{ block.super }}
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/tenant_filter.css' %}">
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tenantFilter = document.getElementById('tenant-filter');
+            const applyButton = document.getElementById('apply-tenant-filter');
+            const currentTenantInfo = document.getElementById('current-tenant-info');
+            
+            // 调试信息
+            console.log('CMS租户过滤器初始化');
+            console.log('可用租户数量:', tenantFilter.options.length - 1); // 减去"所有租户"选项
+            
+            // 动态调整下拉框高度以确保文本完整显示
+            function adjustSelectHeight() {
+                const select = document.getElementById('tenant-filter');
+                if (select) {
+                    // 获取当前选中的选项
+                    const selectedOption = select.options[select.selectedIndex];
+                    if (selectedOption && selectedOption.text) {
+                        // 计算文本长度并调整高度
+                        const textLength = selectedOption.text.length;
+                        const baseHeight = 38; // 基础高度
+                        const extraHeight = Math.max(0, Math.floor(textLength / 20) * 8); // 每20个字符增加8px高度
+                        select.style.height = (baseHeight + extraHeight) + 'px';
+                        select.style.minHeight = (baseHeight + extraHeight) + 'px';
+                    }
+                }
+            }
+            
+            // 应用租户过滤
+            function applyTenantFilter() {
+                const selectedTenantId = tenantFilter.value;
+                const currentUrl = new URL(window.location);
+                
+                if (selectedTenantId) {
+                    currentUrl.searchParams.set('tenant_id', selectedTenantId);
+                } else {
+                    currentUrl.searchParams.delete('tenant_id');
+                }
+                
+                // 保持其他查询参数
+                const searchInput = document.querySelector('input[name="q"]');
+                if (searchInput && searchInput.value) {
+                    currentUrl.searchParams.set('q', searchInput.value);
+                }
+                
+                window.location.href = currentUrl.toString();
+            }
+            
+            // 绑定事件
+            applyButton.addEventListener('click', applyTenantFilter);
+            tenantFilter.addEventListener('change', function() {
+                // 调整下拉框高度
+                adjustSelectHeight();
+                            // 更新显示信息
+            const selectedOption = tenantFilter.options[tenantFilter.selectedIndex];
+            if (selectedOption.value) {
+                // 确保租户名称完整显示
+                const tenantName = selectedOption.text.trim();
+                console.log('选中租户:', { id: selectedOption.value, name: tenantName });
+                
+                if (tenantName && tenantName.length > 0) {
+                    currentTenantInfo.textContent = '当前显示: ' + tenantName;
+                    currentTenantInfo.title = '当前显示: ' + tenantName; // 添加tooltip
+                } else {
+                    console.warn('租户名称为空，使用ID显示');
+                    currentTenantInfo.textContent = '当前显示: 租户ID ' + selectedOption.value;
+                    currentTenantInfo.title = '当前显示: 租户ID ' + selectedOption.value;
+                }
+            } else {
+                currentTenantInfo.textContent = '';
+                currentTenantInfo.title = '';
+            }
+            });
+            
+            // 页面加载时设置当前选中的租户
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentTenantId = urlParams.get('tenant_id');
+            if (currentTenantId) {
+                tenantFilter.value = currentTenantId;
+                const selectedOption = tenantFilter.options[tenantFilter.selectedIndex];
+                if (selectedOption) {
+                    // 确保租户名称完整显示
+                    const tenantName = selectedOption.text.trim();
+                    console.log('页面加载时设置租户:', { id: selectedOption.value, name: tenantName });
+                    
+                    if (tenantName && tenantName.length > 0) {
+                        currentTenantInfo.textContent = '当前显示: ' + tenantName;
+                        currentTenantInfo.title = '当前显示: ' + tenantName; // 添加tooltip
+                    } else {
+                        console.warn('页面加载时租户名称为空，使用ID显示');
+                        currentTenantInfo.textContent = '当前显示: 租户ID ' + selectedOption.value;
+                        currentTenantInfo.title = '当前显示: 租户ID ' + selectedOption.value;
+                    }
+                    
+                    // 调整下拉框高度
+                    adjustSelectHeight();
+                }
+            }
+            
+            // 初始调整高度
+            adjustSelectHeight();
+        });
+    </script>
+    
+
+{% endblock %}

@@ -1,0 +1,143 @@
+/* 租户过滤器专用样式 - 确保文本完整显示 */
+
+.tenant-filter-container {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid #007cba;
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+}
+
+.tenant-filter-container select#tenant-filter {
+    /* 基础样式 */
+    padding: 8px 12px !important;
+    border: 1px solid #ccc !important;
+    border-radius: 4px !important;
+    min-width: 300px !important;
+    max-width: 400px !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    
+    /* 确保高度足够显示文本 */
+    height: auto !important;
+    min-height: 38px !important;
+    max-height: none !important;
+    
+    /* 文本显示相关 */
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    
+    /* 布局相关 */
+    box-sizing: border-box !important;
+    vertical-align: middle !important;
+    display: inline-block !important;
+    
+    /* 字体设置 */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+.tenant-filter-container select#tenant-filter option {
+    /* 选项样式 */
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 20px !important;
+    
+    /* 确保文本不被截断 */
+    text-overflow: clip !important;
+    overflow: visible !important;
+}
+
+.tenant-filter-container select#tenant-filter:focus {
+    outline: none !important;
+    border-color: #007cba !important;
+    box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.2) !important;
+}
+
+/* 确保下拉框展开时文本完整显示 */
+.tenant-filter-container select#tenant-filter:not([size]) {
+    height: auto !important;
+}
+
+/* 修复不同浏览器的兼容性 */
+.tenant-filter-container select#tenant-filter::-ms-expand {
+    display: none !important;
+}
+
+/* 确保选项文本不被截断 */
+.tenant-filter-container select#tenant-filter option:checked,
+.tenant-filter-container select#tenant-filter option:hover {
+    background-color: #007cba !important;
+    color: white !important;
+}
+
+/* 按钮样式 */
+.tenant-filter-container button#apply-tenant-filter {
+    margin-left: 10px !important;
+    padding: 8px 16px !important;
+    background: #007cba !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+}
+
+.tenant-filter-container button#apply-tenant-filter:hover {
+    background: #005a87 !important;
+}
+
+.tenant-filter-container button#apply-tenant-filter:active {
+    background: #004085 !important;
+}
+
+/* 租户信息显示 */
+.tenant-filter-container span#current-tenant-info {
+    margin-left: 15px !important;
+    color: #666 !important;
+    font-style: italic !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    max-width: none !important;
+}
+
+/* 标签样式 */
+.tenant-filter-container label[for="tenant-filter"] {
+    font-weight: bold !important;
+    margin-right: 10px !important;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .tenant-filter-container select#tenant-filter {
+        min-width: 250px !important;
+        max-width: 300px !important;
+    }
+    
+    .tenant-filter-container {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    
+    .tenant-filter-container > * {
+        margin-bottom: 10px !important;
+    }
+}
+
+/* 修复Firefox和Chrome的显示差异 */
+@supports (-moz-appearance: none) {
+    .tenant-filter-container select#tenant-filter {
+        -moz-appearance: none !important;
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath fill='%23666' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E") !important;
+        background-repeat: no-repeat !important;
+        background-position: right 8px center !important;
+        background-size: 16px !important;
+        padding-right: 32px !important;
+    }
+}
