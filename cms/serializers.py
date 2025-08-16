@@ -7,6 +7,7 @@ from django.utils.text import slugify
 from django.utils import timezone
 from users.serializers import UserSerializer
 from tenants.serializers import TenantSerializer
+from common.utils.image_url import add_domain_to_image_url
 
 from .models import (
     Article, Category, Tag, TagGroup, Comment, 
@@ -156,6 +157,7 @@ class ArticleListSerializer(serializers.ModelSerializer):
     comments_count = serializers.SerializerMethodField()
     likes_count = serializers.SerializerMethodField()
     views_count = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
     
     class Meta:
         model = Article
@@ -200,6 +202,18 @@ class ArticleListSerializer(serializers.ModelSerializer):
             return obj.statistics.views_count
         except:
             return 0
+    
+    def get_cover_image(self, obj) -> str:
+        """获取完整的封面图片URL"""
+        if not obj.cover_image:
+            return ""
+        
+        # 获取请求对象
+        request = self.context.get('request')
+        if request is not None:
+            return add_domain_to_image_url(request, obj.cover_image)
+        
+        return obj.cover_image
 
 
 class ArticleDetailSerializer(serializers.ModelSerializer):
@@ -212,6 +226,7 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
     stats = ArticleStatisticsSerializer(source='statistics', read_only=True)
     version_info = serializers.SerializerMethodField()
     tenant_info = TenantSerializer(source='tenant', read_only=True)
+    cover_image = serializers.SerializerMethodField()
     
     class Meta:
         model = Article
@@ -252,6 +267,18 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
         except:
             pass
         return None
+    
+    def get_cover_image(self, obj) -> str:
+        """获取完整的封面图片URL"""
+        if not obj.cover_image:
+            return ""
+        
+        # 获取请求对象
+        request = self.context.get('request')
+        if request is not None:
+            return add_domain_to_image_url(request, obj.cover_image)
+        
+        return obj.cover_image
 
 
 class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
