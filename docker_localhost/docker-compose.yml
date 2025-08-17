@@ -1,0 +1,67 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: multi_tenant_db_dev
+      MYSQL_USER: django
+      MYSQL_PASSWORD: django_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
+
+  web:
+    image: fx0883/lipeaks_backend:latest
+    restart: always
+    volumes:
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
+      - ./logs:/app/logs
+      - ./docs/init_sql:/app/docs/init_sql
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=your_production_secret_key_here
+      - DB_NAME=multi_tenant_db_dev
+      - DB_USER=django
+      - DB_PASSWORD=django_password
+      - DB_HOST=db
+      - DB_PORT=3306
+      - LOG_TO_CONSOLE=True
+      - DJANGO_SETTINGS_MODULE=core.settings_docker
+      # 超级管理员设置
+      - CREATE_SUPERUSER=true
+      - SUPERUSER_USERNAME=admin
+      - SUPERUSER_EMAIL=admin@example.com
+      - SUPERUSER_PASSWORD=admin_main
+      # 数据库快照导入设置
+      - IMPORT_DB_SNAPSHOT=true
+            # CORS设置
+      # - CORS_ALLOWED_ORIGINS=http://localhost,http://frontend
+    depends_on:
+      - db
+
+  frontend:
+    image: fx0883/lipeaks_admin:latest
+    restart: always
+    ports:
+      - "8848:8848"
+    # volumes:
+    #   - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - web
+  design_cms:
+    image: fx0883/lipeaks_design_cms:latest
+    restart: always
+    ports:
+      - "80:80"
+    # volumes:
+    #   - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - web
+volumes:
+  mysql_data: 

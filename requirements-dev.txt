@@ -1,0 +1,17 @@
+# 开发环境依赖
+-r requirements.txt
+
+# 测试相关
+pytest==8.3.5
+pytest-django==4.11.1
+coverage==7.8.0
+factory-boy==3.3.3
+Faker==37.1.0
+
+# 调试工具
+django-debug-toolbar==4.4.0
+
+# 代码质量
+black==24.1.1
+flake8==7.0.0
+isort==5.13.2

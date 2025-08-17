@@ -218,18 +218,18 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
         
         # 超级管理员可以查看所有任务类型
         if user.is_superuser:
-            return TaskCategory.objects.all()
+            return TaskCategory.objects.all().select_related('user', 'tenant')
         
         # 租户管理员可以查看所属租户的所有任务类型
         if user.is_admin:
             return TaskCategory.objects.filter(
                 Q(is_system=True) | Q(tenant=user.tenant)
-            )
+            ).select_related('user', 'tenant')
         
         # 普通用户只能查看系统预设类型和自己创建的类型
         return TaskCategory.objects.filter(
             Q(is_system=True) | Q(user=user)
-        )
+        ).select_related('user', 'tenant')
         
     def perform_create(self, serializer):
         """
@@ -632,14 +632,14 @@ class TaskViewSet(viewsets.ModelViewSet):
         
         # 超级管理员可以查看所有任务
         if user.is_superuser:
-            return Task.objects.all()
+            return Task.objects.all().select_related('user', 'tenant', 'category')
         
         # 租户管理员可以查看该租户下的所有任务
         if user.is_staff and user.tenant:
-            return Task.objects.filter(tenant=user.tenant)
+            return Task.objects.filter(tenant=user.tenant).select_related('user', 'tenant', 'category')
         
         # 普通用户只能查看自己的任务
-        return Task.objects.filter(user=user)
+        return Task.objects.filter(user=user).select_related('user', 'tenant', 'category')
     
     def perform_create(self, serializer):
         """
@@ -907,16 +907,16 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
         
         # 超级管理员可以查看所有打卡记录
         if user.is_superuser:
-            return CheckRecord.objects.all()
+            return CheckRecord.objects.all().select_related('user', 'task', 'task__category', 'task__tenant')
         
         # 租户管理员可以查看该租户下的所有打卡记录
         if user.is_staff and user.tenant:
             return CheckRecord.objects.filter(
                 Q(user__tenant=user.tenant) | Q(task__tenant=user.tenant)
-            )
+            ).select_related('user', 'task', 'task__category', 'task__tenant')
         
         # 普通用户只能查看自己的打卡记录
-        return CheckRecord.objects.filter(user=user)
+        return CheckRecord.objects.filter(user=user).select_related('user', 'task', 'task__category', 'task__tenant')
     
     def perform_create(self, serializer):
         """
@@ -1159,18 +1159,18 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
         
         # 超级管理员可以查看所有模板
         if user.is_superuser:
-            return TaskTemplate.objects.all()
+            return TaskTemplate.objects.all().select_related('user', 'tenant', 'category')
         
         # 租户管理员可以查看系统预设模板和该租户下的所有模板
         if user.is_staff and user.tenant:
             return TaskTemplate.objects.filter(
                 Q(is_system=True) | Q(tenant=user.tenant)
-            )
+            ).select_related('user', 'tenant', 'category')
         
         # 普通用户只能查看系统预设模板和自己创建的模板
         return TaskTemplate.objects.filter(
             Q(is_system=True) | Q(user=user)
-        )
+        ).select_related('user', 'tenant', 'category')
     
     def perform_create(self, serializer):
         """

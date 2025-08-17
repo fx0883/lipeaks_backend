@@ -668,11 +668,6 @@ class FileUploadView(APIView):
             # 生成相对URL路径
             relative_url = f"{settings.MEDIA_URL}uploads/{upload_dir_name}/{unique_filename}"
             
-            # 为响应生成完整URL
-            protocol = 'https' if request.is_secure() else 'http'
-            domain = request.get_host()
-            full_url = f"{protocol}://{domain}{relative_url}"
-            
             logger.info(f"用户 {user.username} 上传了图片 {unique_filename} 到目录 {upload_dir_name}")
             
             return Response({
@@ -680,7 +675,7 @@ class FileUploadView(APIView):
                 'code': 2000,
                 'message': '文件上传成功',
                 'data': {
-                    'url': full_url,
+                    'url': relative_url,
                     'filename': unique_filename,
                     'size': upload_file.size
                 }

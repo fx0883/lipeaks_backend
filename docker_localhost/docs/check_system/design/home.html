@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .tab-bar {
+            height: 83px;
+            border-top: 1px solid #dcfce7;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #94a3b8;
+            transition: color 0.2s;
+        }
+        .tab-item.active {
+            color: #22c55e;
+        }
+        .welcome-card {
+            border-radius: 16px;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+        }
+        .welcome-text {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .welcome-subtext {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .task-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+        .task-card:active {
+            transform: scale(0.98);
+        }
+        .task-card .task-title {
+            font-weight: 600;
+            color: #111827;
+        }
+        .task-card .task-meta {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .category-chip {
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .habit-chip {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        .learn-chip {
+            background-color: #fce7f3;
+            color: #db2777;
+        }
+        .fitness-chip {
+            background-color: #d1fae5;
+            color: #059669;
+        }
+        .work-chip {
+            background-color: #fef3c7;
+            color: #d97706;
+        }
+        .task-progress {
+            width: 100%;
+            height: 6px;
+            background-color: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        .green-bar {
+            background-color: #22c55e;
+        }
+        .streak-card {
+            border: 2px dashed #dcfce7;
+            border-radius: 16px;
+            background-color: #f0fdf4;
+        }
+        .streak-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #22c55e;
+        }
+        .feed-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .feed-header {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        .feed-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .feed-item:last-child {
+            border-bottom: none;
+        }
+        .feed-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: #f0fdf4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #22c55e;
+            margin-right: 12px;
+        }
+        .feed-content {
+            font-size: 14px;
+            color: #374151;
+        }
+        .feed-meta {
+            font-size: 12px;
+            color: #9ca3af;
+        }
+        .comment-dialog {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: white;
+            border-radius: 24px 24px 0 0;
+            padding: 20px;
+            box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            transform: translateY(100%);
+            transition: transform 0.3s;
+        }
+        .comment-dialog.active {
+            transform: translateY(0);
+        }
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 50;
+        }
+        .overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .comment-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            resize: none;
+            outline: none;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        .comment-input:focus {
+            border-color: #4ade80;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        /* 气泡动画 */
+        .bubble-animation {
+            animation: bubble 2s infinite;
+        }
+        @keyframes bubble {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        /* 时间轴样式 */
+        .timeline-container {
+            position: relative;
+            margin: 20px 0;
+        }
+        .timeline-line {
+            position: absolute;
+            left: 14px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: #dcfce7;
+            z-index: 1;
+        }
+        .timeline-item {
+            position: relative;
+            padding-left: 40px;
+            margin-bottom: 16px;
+            z-index: 2;
+        }
+        .timeline-item:last-child {
+            margin-bottom: 0;
+        }
+        .timeline-dot {
+            position: absolute;
+            left: 5px;
+            top: 0;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #22c55e;
+            border: 4px solid #f0fdf4;
+            z-index: 3;
+        }
+        .timeline-dot.empty {
+            background-color: #f0fdf4;
+            border: 2px solid #22c55e;
+        }
+        .timeline-dot.current {
+            background-color: #22c55e;
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+            animation: pulse 2s infinite;
+        }
+        .timeline-content {
+            background-color: white;
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        .timeline-date {
+            font-size: 14px;
+            font-weight: 600;
+            color: #22c55e;
+            margin-bottom: 4px;
+        }
+        .timeline-tabs {
+            display: flex;
+            border-radius: 12px;
+            background-color: #f0fdf4;
+            padding: 3px;
+            margin-bottom: 16px;
+        }
+        .timeline-tab {
+            flex: 1;
+            text-align: center;
+            padding: 8px 0;
+            font-size: 14px;
+            color: #6b7280;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .timeline-tab.active {
+            background-color: #22c55e;
+            color: white;
+            font-weight: 500;
+        }
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+            }
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="p-5 pb-24 overflow-y-auto" style="height: calc(100% - 127px);">
+        <!-- 顶部信息 -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold">你好，李明</h1>
+                <p class="text-gray-500">今天是继续保持的一天！</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80')"></div>
+        </div>
+        
+        <!-- 数据概览卡片 -->
+        <div class="welcome-card p-5 mb-6 bubble-animation">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">本周数据</h2>
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="flex justify-between">
+                <div class="text-center">
+                    <p class="text-3xl font-bold">85%</p>
+                    <p class="text-sm opacity-80">完成率</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-3xl font-bold">17</p>
+                    <p class="text-sm opacity-80">已完成</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-3xl font-bold">3</p>
+                    <p class="text-sm opacity-80">待完成</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 今日待打卡任务 -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">今日待打卡</h2>
+                <a href="tasks.html" class="text-green-500">查看全部 <i class="fas fa-chevron-right text-xs"></i></a>
+            </div>
+            
+            <!-- 任务列表 -->
+            <div class="space-y-3">
+                <!-- 任务1 -->
+                <div class="task-card p-4 flex items-center justify-between shadow-sm">
+                    <div class="flex items-center">
+                        <div class="task-checkbox w-6 h-6 rounded-full border-2 border-green-500 flex items-center justify-center mr-3">
+                            <i class="fas fa-check text-white opacity-0"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">晨间冥想</h3>
+                            <p class="text-xs text-gray-500">习惯养成 · 20分钟</p>
+                        </div>
+                    </div>
+                    <div class="bg-green-100 text-green-600 text-xs rounded-full px-2 py-1">
+                        9:00
+                    </div>
+                </div>
+                
+                <!-- 任务2 -->
+                <div class="task-card p-4 flex items-center justify-between shadow-sm">
+                    <div class="flex items-center">
+                        <div class="task-checkbox w-6 h-6 rounded-full border-2 border-green-500 flex items-center justify-center mr-3">
+                            <i class="fas fa-check text-white opacity-0"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">阅读专业书籍</h3>
+                            <p class="text-xs text-gray-500">学习提升 · 45分钟</p>
+                        </div>
+                    </div>
+                    <div class="bg-green-100 text-green-600 text-xs rounded-full px-2 py-1">
+                        14:00
+                    </div>
+                </div>
+                
+                <!-- 任务3 已完成 -->
+                <div class="task-card p-4 flex items-center justify-between shadow-sm bg-gray-50">
+                    <div class="flex items-center">
+                        <div class="task-checkbox checked w-6 h-6 rounded-full bg-green-500 flex items-center justify-center mr-3">
+                            <i class="fas fa-check text-white"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-500">晨跑5公里</h3>
+                            <p class="text-xs text-gray-400">健康运动 · 30分钟</p>
+                        </div>
+                    </div>
+                    <div class="bg-green-100 text-green-600 text-xs rounded-full px-2 py-1">
+                        已完成
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 打卡时间轴 -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">打卡时间轴</h2>
+                <a href="checkin_records.html" class="text-green-500">查看更多 <i class="fas fa-chevron-right text-xs"></i></a>
+            </div>
+            
+            <!-- 时间轴标签页 -->
+            <div class="timeline-tabs">
+                <div class="timeline-tab active" data-view="today">今日</div>
+                <div class="timeline-tab" data-view="week">本周</div>
+                <div class="timeline-tab" data-view="month">本月</div>
+            </div>
+            
+            <!-- 时间轴内容 -->
+            <div class="timeline-container">
+                <div class="timeline-line"></div>
+                
+                <!-- 未来事件 -->
+                <div class="timeline-item">
+                    <div class="timeline-dot empty"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-date">16:00</div>
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-medium">瑜伽训练</h4>
+                                <p class="text-xs text-gray-500">健康 · 45分钟</p>
+                            </div>
+                            <div class="text-xs text-gray-400">未开始</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 当前事件 -->
+                <div class="timeline-item">
+                    <div class="timeline-dot current"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-date">14:00 - 现在</div>
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-medium">阅读专业书籍</h4>
+                                <p class="text-xs text-gray-500">学习 · 45分钟</p>
+                            </div>
+                            <div class="bg-yellow-100 text-yellow-600 text-xs rounded-full px-2 py-1">
+                                进行中
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <div class="task-progress">
+                                <div class="progress-bar green-bar" style="width: 62%"></div>
+                            </div>
+                            <div class="flex justify-between mt-1">
+                                <span class="text-xs text-gray-500">已完成 28分钟</span>
+                                <span class="text-xs text-gray-500">62%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 已完成事件 -->
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-date">9:00 - 9:20</div>
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-medium">晨间冥想</h4>
+                                <p class="text-xs text-gray-500">习惯养成 · 20分钟</p>
+                            </div>
+                            <div class="bg-green-100 text-green-600 text-xs rounded-full px-2 py-1">
+                                已完成
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 已完成事件 -->
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-date">7:30 - 8:00</div>
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-medium">晨跑5公里</h4>
+                                <p class="text-xs text-gray-500">健康运动 · 30分钟</p>
+                            </div>
+                            <div class="bg-green-100 text-green-600 text-xs rounded-full px-2 py-1">
+                                已完成
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-2">今天跑了5.2公里，状态不错！保持下去！</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 最近打卡动态 -->
+        <div>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">最近打卡动态</h2>
+                <a href="#" class="text-green-500">更多 <i class="fas fa-chevron-right text-xs"></i></a>
+            </div>
+            
+            <!-- 动态列表 -->
+            <div class="space-y-4">
+                <!-- 动态1 -->
+                <div class="task-card p-4 shadow-sm">
+                    <div class="flex items-start mb-2">
+                        <div class="w-10 h-10 rounded-full bg-cover bg-center mr-3" style="background-image: url('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80')"></div>
+                        <div>
+                            <h3 class="font-medium">李明</h3>
+                            <p class="text-xs text-gray-500">完成了 晨跑5公里 · 30分钟前</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">今天跑了5.2公里，状态不错！保持下去！</p>
+                </div>
+                
+                <!-- 动态2 -->
+                <div class="task-card p-4 shadow-sm">
+                    <div class="flex items-start mb-2">
+                        <div class="w-10 h-10 rounded-full bg-cover bg-center mr-3" style="background-image: url('https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80')"></div>
+                        <div>
+                            <h3 class="font-medium">王芳</h3>
+                            <p class="text-xs text-gray-500">完成了 每日阅读 · 2小时前</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">今天读完了《原子习惯》第三章，很有收获！</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 底部导航栏 -->
+    <div class="tab-bar fixed bottom-0 left-0 right-0 flex justify-around">
+        <div class="tab-item active">
+            <i class="fas fa-home text-xl"></i>
+            <span class="text-xs mt-1">首页</span>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-tasks text-xl"></i>
+            <span class="text-xs mt-1">任务</span>
+        </div>
+        <div class="tab-item">
+            <div class="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white">
+                <i class="fas fa-plus"></i>
+            </div>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-chart-bar text-xl"></i>
+            <span class="text-xs mt-1">统计</span>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-user text-xl"></i>
+            <span class="text-xs mt-1">我的</span>
+        </div>
+    </div>
+    
+    <script>
+        // 模拟打卡功能
+        document.querySelectorAll('.task-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('click', function() {
+                if (!this.classList.contains('checked')) {
+                    this.classList.add('checked');
+                    this.classList.remove('border-2', 'border-green-500');
+                    this.classList.add('bg-green-500');
+                    this.querySelector('i').style.opacity = '1';
+                    this.closest('.task-card').style.backgroundColor = '#f9fafb';
+                    this.closest('.task-card').querySelector('h3').classList.add('text-gray-500');
+                    this.closest('.task-card').querySelector('p').classList.add('text-gray-400');
+                    
+                    // 动态更新打卡状态
+                    const statusEl = this.closest('.task-card').querySelector('div:last-child');
+                    statusEl.className = 'bg-green-100 text-green-600 text-xs rounded-full px-2 py-1';
+                    statusEl.textContent = '已完成';
+                    
+                    // 记录日志
+                    console.log('完成任务: ' + this.nextElementSibling.querySelector('h3').textContent);
+                    
+                    // 弹出评论输入框
+                    showCommentDialog(this.nextElementSibling.querySelector('h3').textContent);
+                    
+                    // 更新时间轴
+                    updateTimeline(this.nextElementSibling.querySelector('h3').textContent);
+                }
+            });
+        });
+        
+        // 显示评论对话框
+        function showCommentDialog(taskName) {
+            // 创建对话框元素
+            const dialog = document.createElement('div');
+            dialog.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            dialog.id = 'comment-dialog';
+            
+            // 对话框内容
+            dialog.innerHTML = `
+                <div class="bg-white rounded-xl p-5 w-10/12 max-w-sm">
+                    <h3 class="text-lg font-bold mb-2">打卡感想</h3>
+                    <p class="text-gray-600 mb-3">恭喜完成"${taskName}"！记录一下今天的感想吧~</p>
+                    <textarea class="w-full p-3 border border-gray-200 rounded-lg mb-4" 
+                              placeholder="写下你的感想..." rows="3"></textarea>
+                    <div class="flex justify-end space-x-3">
+                        <button id="cancel-comment" class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700">取消</button>
+                        <button id="submit-comment" class="px-4 py-2 rounded-lg bg-green-500 text-white">提交</button>
+                    </div>
+                </div>
+            `;
+            
+            // 添加到页面
+            document.body.appendChild(dialog);
+            
+            // 添加事件监听
+            document.getElementById('cancel-comment').addEventListener('click', function() {
+                document.getElementById('comment-dialog').remove();
+            });
+            
+            document.getElementById('submit-comment').addEventListener('click', function() {
+                const commentText = dialog.querySelector('textarea').value;
+                
+                if (commentText.trim()) {
+                    // 记录评论
+                    console.log('提交评论:', commentText);
+                    
+                    // 在动态列表中添加评论
+                    addCommentToFeed(taskName, commentText);
+                    
+                    // 在时间轴中添加评论
+                    addCommentToTimeline(taskName, commentText);
+                }
+                
+                // 关闭对话框
+                document.getElementById('comment-dialog').remove();
+            });
+        }
+        
+        // 将评论添加到动态流
+        function addCommentToFeed(taskName, commentText) {
+            // 获取动态列表容器
+            const feedContainer = document.querySelector('.space-y-4');
+            
+            // 创建新动态元素
+            const newFeed = document.createElement('div');
+            newFeed.className = 'task-card p-4 shadow-sm';
+            
+            // 设置动态内容
+            newFeed.innerHTML = `
+                <div class="flex items-start mb-2">
+                    <div class="w-10 h-10 rounded-full bg-cover bg-center mr-3" 
+                         style="background-image: url('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80')"></div>
+                    <div>
+                        <h3 class="font-medium">李明</h3>
+                        <p class="text-xs text-gray-500">完成了 ${taskName} · 刚刚</p>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-600">${commentText}</p>
+            `;
+            
+            // 插入到动态列表的顶部
+            feedContainer.insertBefore(newFeed, feedContainer.firstChild);
+        }
+        
+        // 更新时间轴
+        function updateTimeline(taskName) {
+            // 获取当前时间
+            const now = new Date();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const timeStr = `${hours}:${minutes}`;
+            
+            // 在时间轴添加已完成任务
+            const timelineContainer = document.querySelector('.timeline-container');
+            const newTimelineItem = document.createElement('div');
+            newTimelineItem.className = 'timeline-item';
+            newTimelineItem.innerHTML = `
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                    <div class="timeline-date">${timeStr} - 刚刚</div>
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h4 class="font-medium">${taskName}</h4>
+                            <p class="text-xs text-gray-500">已完成</p>
+                        </div>
+                        <div class="bg-green-100 text-green-600 text-xs rounded-full px-2 py-1">
+                            已完成
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 插入到时间轴的顶部（但在线条后面）
+            const firstItem = timelineContainer.querySelector('.timeline-item');
+            timelineContainer.insertBefore(newTimelineItem, firstItem);
+            
+            // 记录日志
+            console.log('更新时间轴: ' + taskName + ' 于 ' + timeStr);
+        }
+        
+        // 将评论添加到时间轴
+        function addCommentToTimeline(taskName, commentText) {
+            // 找到刚刚添加的时间轴项
+            const timelineItems = document.querySelectorAll('.timeline-item');
+            const lastAddedItem = timelineItems[0]; // 第一个是最新添加的
+            
+            // 如果找到对应的项，添加评论
+            if (lastAddedItem && lastAddedItem.querySelector('h4').textContent === taskName) {
+                const timelineContent = lastAddedItem.querySelector('.timeline-content');
+                
+                // 检查是否已有评论，如果没有则添加
+                if (!timelineContent.querySelector('p.text-sm')) {
+                    const commentElement = document.createElement('p');
+                    commentElement.className = 'text-sm text-gray-600 mt-2';
+                    commentElement.textContent = commentText;
+                    timelineContent.appendChild(commentElement);
+                    
+                    // 记录日志
+                    console.log('时间轴项添加评论: ' + taskName);
+                }
+            }
+        }
+        
+        // 时间轴标签页切换
+        document.querySelectorAll('.timeline-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // 移除所有标签的active类
+                document.querySelectorAll('.timeline-tab').forEach(t => {
+                    t.classList.remove('active');
+                });
+                
+                // 给当前标签添加active类
+                this.classList.add('active');
+                
+                // 根据选择的视图更新时间轴
+                const view = this.dataset.view;
+                console.log('切换时间轴视图: ' + view);
+                
+                // 这里可以通过AJAX加载不同的时间轴数据
+                // 为了演示，我们只打印一条日志
+                console.log('加载时间轴数据: ' + view);
+            });
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>提醒设置 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .settings-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .settings-group {
+            margin-bottom: 24px;
+        }
+        .setting-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            padding-left: 4px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #e2e8f0;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #22c55e;
+        }
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        .time-select {
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            background-color: #f9fafb;
+            font-size: 14px;
+            outline: none;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        /* 返回按钮颜色 */
+        .back-button {
+            color: #22c55e;
+        }
+        /* 设置组标题颜色 */
+        .settings-group-title {
+            color: #16a34a;
+        }
+        /* 信息徽章颜色 */
+        .badge {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        /* 保存按钮 */
+        .save-btn {
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+        }
+        /* 底部导航栏边框 */
+        .tab-bar {
+            border-top: 1px solid #dcfce7;
+        }
+        /* 激活的导航项颜色 */
+        .tab-item.active {
+            color: #22c55e;
+        }
+        /* 圆形加号按钮 */
+        .add-button {
+            background-color: #22c55e;
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="p-5 pb-24 overflow-y-auto" style="height: calc(100% - 44px);">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-6">
+            <a href="profile.html" class="text-green-500">
+                <i class="fas fa-arrow-left text-xl"></i>
+            </a>
+            <h1 class="text-2xl font-bold">提醒设置</h1>
+            <div class="w-6"></div> <!-- 占位元素保持布局平衡 -->
+        </div>
+        
+        <!-- 通知设置 -->
+        <div class="settings-group">
+            <div class="section-title">通知提醒</div>
+            <div class="settings-card">
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">打卡提醒</h3>
+                        <p class="text-xs text-gray-500">接收每日任务的打卡提醒</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="daily-reminder">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item" id="reminder-time-container">
+                    <div>
+                        <h3 class="font-medium">提醒时间</h3>
+                        <p class="text-xs text-gray-500">设置默认的提醒时间</p>
+                    </div>
+                    <select class="time-select" id="reminder-time">
+                        <option value="6:00">6:00</option>
+                        <option value="7:00">7:00</option>
+                        <option value="8:00" selected>8:00</option>
+                        <option value="9:00">9:00</option>
+                        <option value="10:00">10:00</option>
+                        <option value="11:00">11:00</option>
+                        <option value="12:00">12:00</option>
+                        <option value="13:00">13:00</option>
+                        <option value="14:00">14:00</option>
+                        <option value="15:00">15:00</option>
+                        <option value="16:00">16:00</option>
+                        <option value="17:00">17:00</option>
+                        <option value="18:00">18:00</option>
+                        <option value="19:00">19:00</option>
+                        <option value="20:00">20:00</option>
+                        <option value="21:00">21:00</option>
+                    </select>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">打卡期限提醒</h3>
+                        <p class="text-xs text-gray-500">接收任务即将到期的提醒</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="expiry-reminder">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">打卡成就提醒</h3>
+                        <p class="text-xs text-gray-500">接收解锁新成就的提醒</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="achievement-reminder">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 社交互动设置 -->
+        <div class="settings-group">
+            <div class="section-title">社交互动</div>
+            <div class="settings-card">
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">好友评论</h3>
+                        <p class="text-xs text-gray-500">接收好友对您打卡的评论通知</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="comment-notification">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">好友点赞</h3>
+                        <p class="text-xs text-gray-500">接收好友对您打卡的点赞通知</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="like-notification">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">好友动态</h3>
+                        <p class="text-xs text-gray-500">接收好友打卡的动态通知</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="friend-activity">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 其他通知设置 -->
+        <div class="settings-group">
+            <div class="section-title">其他通知</div>
+            <div class="settings-card">
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">应用更新</h3>
+                        <p class="text-xs text-gray-500">接收应用更新和新功能通知</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="app-update">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">特别活动</h3>
+                        <p class="text-xs text-gray-500">接收特别活动和促销信息</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="promotion-notification">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">通知声音</h3>
+                        <p class="text-xs text-gray-500">启用通知声音效果</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="notification-sound">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <h3 class="font-medium">通知震动</h3>
+                        <p class="text-xs text-gray-500">启用通知震动效果</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked id="notification-vibration">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 控制提醒时间选项的显示和隐藏
+        const dailyReminderToggle = document.getElementById('daily-reminder');
+        const reminderTimeContainer = document.getElementById('reminder-time-container');
+        
+        dailyReminderToggle.addEventListener('change', function() {
+            if (this.checked) {
+                reminderTimeContainer.style.display = 'flex';
+            } else {
+                reminderTimeContainer.style.display = 'none';
+            }
+            
+            // 记录日志
+            console.log('打卡提醒设置:', this.checked ? '开启' : '关闭');
+        });
+        
+        // 记录所有开关变化
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                console.log(`${this.id} 设置变更为: ${this.checked ? '开启' : '关闭'}`);
+            });
+        });
+        
+        // 监听提醒时间选择
+        document.getElementById('reminder-time').addEventListener('change', function() {
+            console.log('提醒时间设置为:', this.value);
+        });
+    </script>
+</body>
+</html> 

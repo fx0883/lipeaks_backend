@@ -23,6 +23,25 @@ pymysql.install_as_MySQLdb()
 # 加载.env文件
 load_dotenv()
 
+
+def get_required_env(key, default=None):
+    """获取必需的环境变量"""
+    value = os.getenv(key, default)
+    if value is None:
+        raise ValueError(f"Required environment variable {key} is not set")
+    return value
+
+
+def get_env_with_validation(key, validator, default=None):
+    """获取并验证环境变量"""
+    value = os.getenv(key, default)
+    if value is not None:
+        try:
+            return validator(value)
+        except Exception as e:
+            raise ValueError(f"Invalid value for environment variable {key}: {e}")
+    return value
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -31,10 +50,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-w7&3bzjc1s*bty@)%c3w&#fro!wu5@(9jxac46lqm^klo9^1df')
+SECRET_KEY = get_required_env('SECRET_KEY', 'django-insecure-w7&3bzjc1s*bty@)%c3w&#fro!wu5@(9jxac46lqm^klo9^1df')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+DEBUG = get_env_with_validation('DEBUG', lambda x: x.lower() == 'true', 'True')
 
 # 从环境变量读取日志输出方式，默认跟随DEBUG设置
 LOG_TO_CONSOLE = os.getenv('LOG_TO_CONSOLE', str(DEBUG)).lower() == 'true'
@@ -76,6 +95,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # 静态文件优化
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -133,6 +153,7 @@ DATABASES = {
             'init_command': "SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_ci'",
             'autocommit': True,
         },
+        'CONN_MAX_AGE': 600,  # 10分钟连接池
     }
 }
 
@@ -333,15 +354,19 @@ LOGGING = {
         },
         'file': {
             'level': 'INFO',
-            'class': 'logging.handlers.WatchedFileHandler',  # 使用WatchedFileHandler
+            'class': 'logging.handlers.RotatingFileHandler',  # 使用轮转日志
             'filename': get_log_filename('debug'),  # 使用带日期的文件名
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 5,  # 保留5个备份文件
             'formatter': 'verbose',
             'encoding': 'utf-8',
         },
         'error_file': {
             'level': 'ERROR',
-            'class': 'logging.handlers.WatchedFileHandler',  # 使用WatchedFileHandler
+            'class': 'logging.handlers.RotatingFileHandler',  # 使用轮转日志
             'filename': get_log_filename('error'),  # 使用带日期的文件名
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 5,  # 保留5个备份文件
             'formatter': 'verbose',
             'encoding': 'utf-8',
         },
@@ -373,3 +398,8 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')  # 发件人邮箱
 
 # 前端URL（用于构建密码重置链接）
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
+# WhiteNoise配置
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+WHITENOISE_USE_FINDERS = True
+WHITENENOISE_AUTOREFRESH = DEBUG

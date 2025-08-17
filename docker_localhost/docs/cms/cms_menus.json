@@ -1,0 +1,257 @@
+[
+  {
+    "model": "menus.menu",
+    "pk": 7,
+    "fields": {
+      "name": "文章管理",
+      "code": "article_management",
+      "icon": "document",
+      "path": "/cms/articles",
+      "component": "views/cms/article/ArticleList",
+      "rank": 2,
+      "parent": 4,
+      "is_active": true,
+      "remarks": "文章管理模块",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 8,
+    "fields": {
+      "name": "创建文章",
+      "code": "article_create",
+      "icon": "circle-plus",
+      "path": "/cms/articles/create",
+      "component": "views/cms/article/ArticleCreate",
+      "rank": 1,
+      "parent": 7,
+      "is_active": true,
+      "remarks": "创建新文章",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 9,
+    "fields": {
+      "name": "文章列表",
+      "code": "article_list",
+      "icon": "list",
+      "path": "/cms/articles/list",
+      "component": "views/cms/article/ArticleList",
+      "rank": 2,
+      "parent": 7,
+      "is_active": true,
+      "remarks": "文章列表",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 10,
+    "fields": {
+      "name": "文章归档",
+      "code": "article_archive",
+      "icon": "files",
+      "path": "/cms/articles/archive",
+      "component": "views/cms/article/ArticleArchive",
+      "rank": 3,
+      "parent": 7,
+      "is_active": true,
+      "remarks": "已归档文章",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 11,
+    "fields": {
+      "name": "评论管理",
+      "code": "comment_management",
+      "icon": "chat-dot-round",
+      "path": "/cms/comments",
+      "component": "views/cms/comment/CommentList",
+      "rank": 3,
+      "parent": 4,
+      "is_active": true,
+      "remarks": "评论管理模块",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 12,
+    "fields": {
+      "name": "待审核评论",
+      "code": "comment_pending",
+      "icon": "time",
+      "path": "/cms/comments/pending",
+      "component": "views/cms/comment/CommentPending",
+      "rank": 1,
+      "parent": 11,
+      "is_active": true,
+      "remarks": "待审核评论列表",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 13,
+    "fields": {
+      "name": "已批准评论",
+      "code": "comment_approved",
+      "icon": "check",
+      "path": "/cms/comments/approved",
+      "component": "views/cms/comment/CommentApproved",
+      "rank": 2,
+      "parent": 11,
+      "is_active": true,
+      "remarks": "已批准评论列表",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 14,
+    "fields": {
+      "name": "垃圾评论",
+      "code": "comment_spam",
+      "icon": "delete",
+      "path": "/cms/comments/spam",
+      "component": "views/cms/comment/CommentSpam",
+      "rank": 3,
+      "parent": 11,
+      "is_active": true,
+      "remarks": "垃圾评论列表",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 15,
+    "fields": {
+      "name": "分类管理",
+      "code": "category_management",
+      "icon": "folder",
+      "path": "/cms/categories",
+      "component": "views/cms/category/CategoryList",
+      "rank": 4,
+      "parent": 4,
+      "is_active": true,
+      "remarks": "分类管理模块",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 16,
+    "fields": {
+      "name": "标签管理",
+      "code": "tag_management",
+      "icon": "price-tag",
+      "path": "/cms/tags",
+      "component": "views/cms/tag/TagList",
+      "rank": 5,
+      "parent": 4,
+      "is_active": true,
+      "remarks": "标签管理模块",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 17,
+    "fields": {
+      "name": "标签组",
+      "code": "tag_group",
+      "icon": "collection-tag",
+      "path": "/cms/tags/groups",
+      "component": "views/cms/tag/TagGroup",
+      "rank": 1,
+      "parent": 16,
+      "is_active": true,
+      "remarks": "标签组管理",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 18,
+    "fields": {
+      "name": "标签列表",
+      "code": "tag_list",
+      "icon": "list",
+      "path": "/cms/tags/list",
+      "component": "views/cms/tag/TagList",
+      "rank": 2,
+      "parent": 16,
+      "is_active": true,
+      "remarks": "标签列表",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 19,
+    "fields": {
+      "name": "内容统计",
+      "code": "content_statistics",
+      "icon": "data-analysis",
+      "path": "/cms/statistics",
+      "component": "views/cms/statistics/ContentStatistics",
+      "rank": 6,
+      "parent": 4,
+      "is_active": true,
+      "remarks": "内容统计分析",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 20,
+    "fields": {
+      "name": "文章统计",
+      "code": "article_statistics",
+      "icon": "pie-chart",
+      "path": "/cms/statistics/articles",
+      "component": "views/cms/statistics/ArticleStatistics",
+      "rank": 1,
+      "parent": 19,
+      "is_active": true,
+      "remarks": "文章统计分析",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "menus.menu",
+    "pk": 21,
+    "fields": {
+      "name": "互动统计",
+      "code": "interaction_statistics",
+      "icon": "histogram",
+      "path": "/cms/statistics/interactions",
+      "component": "views/cms/statistics/InteractionStatistics",
+      "rank": 2,
+      "parent": 19,
+      "is_active": true,
+      "remarks": "用户互动统计",
+      "created_at": "2023-01-01T00:00:00Z",
+      "updated_at": "2023-01-01T00:00:00Z"
+    }
+  }
+] 

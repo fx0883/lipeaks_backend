@@ -949,16 +949,11 @@ class MemberAvatarUploadView(APIView):
             user.avatar = relative_url
             user.save(update_fields=['avatar'])
             
-            # 为响应生成完整URL
-            protocol = 'https' if request.is_secure() else 'http'
-            domain = request.get_host()
-            full_url = f"{protocol}://{domain}{relative_url}"
-            
             logger.info(f"普通用户 {user.username} 上传了新头像")
             
             return Response({
                 "detail": "头像上传成功",
-                "avatar": full_url  # 返回给前端的是完整URL
+                "avatar": relative_url  # 返回给前端的是相对路径
             })
         
         except Exception as e:
@@ -1118,11 +1113,6 @@ class MemberSpecificAvatarUploadView(APIView):
             target_user.avatar = relative_url
             target_user.save(update_fields=['avatar'])
             
-            # 为响应生成完整URL
-            protocol = 'https' if request.is_secure() else 'http'
-            domain = request.get_host()
-            full_url = f"{protocol}://{domain}{relative_url}"
-            
             # 根据当前用户类型记录日志
             if isinstance(current_user, Member):
                 logger.info(f"普通用户 {current_user.username} 为其子账号 {target_user.username} 上传了新头像")
@@ -1131,7 +1121,7 @@ class MemberSpecificAvatarUploadView(APIView):
             
             return Response({
                 "detail": "头像上传成功",
-                "avatar": full_url  # 返回给前端的是完整URL
+                "avatar": relative_url  # 返回给前端的是相对路径
             })
         
         except Exception as e:

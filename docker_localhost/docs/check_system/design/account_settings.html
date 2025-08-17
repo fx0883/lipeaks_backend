@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账户设置 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .form-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #4b5563;
+        }
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+            background-color: #f9fafb;
+        }
+        .form-input:focus {
+            border-color: #4ade80;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .submit-btn:active {
+            transform: scale(0.98);
+        }
+        .avatar-container {
+            width: 100px;
+            height: 100px;
+            position: relative;
+            margin: 0 auto 20px;
+        }
+        .avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #4ade80;
+        }
+        .avatar-edit {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: #22c55e;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="p-5 pb-24 overflow-y-auto" style="height: calc(100% - 44px);">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-6">
+            <a href="profile.html" class="text-green-500">
+                <i class="fas fa-arrow-left text-xl"></i>
+            </a>
+            <h1 class="text-2xl font-bold">账户设置</h1>
+            <div class="w-6"></div> <!-- 占位元素保持布局平衡 -->
+        </div>
+        
+        <!-- 表单 -->
+        <div class="form-card p-5">
+            <!-- 头像 -->
+            <div class="avatar-container">
+                <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="用户头像" class="avatar">
+                <div class="avatar-edit" id="change-avatar">
+                    <i class="fas fa-camera"></i>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="user-name">用户名</label>
+                <input type="text" id="user-name" class="form-input" value="李明">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="user-email">邮箱</label>
+                <input type="email" id="user-email" class="form-input" value="liming@example.com">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="user-phone">手机号</label>
+                <input type="tel" id="user-phone" class="form-input" value="138****1234">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="user-bio">个人简介</label>
+                <textarea id="user-bio" class="form-input" rows="3" style="resize: none;">热爱生活，追求自律，享受每一天的成长与进步。</textarea>
+            </div>
+            
+            <div class="form-group mt-8">
+                <button id="change-password" class="text-green-600 font-medium flex items-center">
+                    <i class="fas fa-lock mr-2"></i>修改密码
+                </button>
+            </div>
+            
+            <div class="form-group mt-4">
+                <button id="logout" class="text-red-500 font-medium flex items-center">
+                    <i class="fas fa-sign-out-alt mr-2"></i>退出登录
+                </button>
+            </div>
+            
+            <button class="submit-btn mt-6" id="save-profile-btn">
+                保存修改
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        // 修改头像
+        document.getElementById('change-avatar').addEventListener('click', function() {
+            console.log('点击更换头像');
+            alert('打开相册选择新头像（实际实现中会调用设备相册）');
+        });
+        
+        // 修改密码
+        document.getElementById('change-password').addEventListener('click', function() {
+            console.log('点击修改密码');
+            alert('跳转到修改密码页面');
+        });
+        
+        // 退出登录
+        document.getElementById('logout').addEventListener('click', function() {
+            console.log('点击退出登录');
+            const confirmLogout = confirm('确定要退出登录吗？');
+            if (confirmLogout) {
+                console.log('确认退出登录');
+                alert('退出成功，返回登录页');
+            }
+        });
+        
+        // 保存修改
+        document.getElementById('save-profile-btn').addEventListener('click', function() {
+            const userName = document.getElementById('user-name').value;
+            const userEmail = document.getElementById('user-email').value;
+            const userPhone = document.getElementById('user-phone').value;
+            const userBio = document.getElementById('user-bio').value;
+            
+            if (!userName) {
+                alert('用户名不能为空');
+                return;
+            }
+            
+            console.log('保存个人资料:', {
+                name: userName,
+                email: userEmail,
+                phone: userPhone,
+                bio: userBio
+            });
+            
+            alert('保存成功！');
+        });
+    </script>
+</body>
+</html> 

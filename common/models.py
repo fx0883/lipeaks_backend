@@ -7,7 +7,19 @@ from common.utils.tenant_manager import TenantManager
 
 class BaseModel(models.Model):
     """
-    基础模型，所有需要租户隔离的模型都应该继承此模型
+    基础模型，提供租户隔离和软删除功能
+    
+    所有需要租户隔离的模型都应该继承此模型。
+    自动提供以下功能：
+    - 租户关联：通过tenant字段关联到特定租户
+    - 创建/更新时间：自动记录创建和更新时间
+    - 软删除：通过is_deleted字段实现软删除
+    - 租户过滤管理器：默认只显示当前租户的数据
+    
+    使用示例：
+        class MyModel(BaseModel):
+            name = models.CharField(max_length=100)
+            # 自动继承租户隔离功能
     """
     tenant = models.ForeignKey(
         'tenants.Tenant', 
@@ -17,9 +29,9 @@ class BaseModel(models.Model):
         db_index=True,
         null=True
     )
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True, null=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True, null=True)
-    is_deleted = models.BooleanField(_("是否删除"), default=False)
+    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True, null=True, db_index=True)
+    updated_at = models.DateTimeField(_("更新时间"), auto_now=True, null=True, db_index=True)
+    is_deleted = models.BooleanField(_("是否删除"), default=False, db_index=True)
     
     # 默认管理器 - 按租户过滤
     objects = TenantManager()
@@ -43,7 +55,18 @@ class BaseModel(models.Model):
 class APILog(models.Model):
     """
     API访问日志模型
-    用于记录API请求信息，便于审计和排查问题
+    
+    用于记录API请求信息，便于审计和排查问题。
+    记录内容包括：
+    - 请求信息：用户、租户、IP地址、请求方法、路径、参数等
+    - 响应信息：状态码、响应时间、响应体、错误信息等
+    - 其他信息：用户代理、创建时间等
+    
+    主要用于：
+    - 安全审计：记录所有API访问行为
+    - 性能监控：分析响应时间和错误率
+    - 问题排查：通过日志定位问题原因
+    - 用户行为分析：了解用户使用模式
     """
     REQUEST_METHOD_CHOICES = (
         ('GET', 'GET'),

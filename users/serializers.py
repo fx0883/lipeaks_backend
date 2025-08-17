@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from users.models import User, Member, PasswordResetToken
 from tenants.models import Tenant
+from common.utils.image_url import add_domain_to_image_url
 
 # 添加日志器
 logger = logging.getLogger(__name__)
@@ -435,21 +436,12 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         """获取完整的头像URL"""
         if not obj.avatar:
             return ""
-            
-        # 如果已经是完整URL，直接返回
-        if obj.avatar.startswith(('http://', 'https://')):
-            return obj.avatar
-            
+        
         # 获取请求对象
         request = self.context.get('request')
         if request is not None:
-            # 从请求中获取域名和协议
-            protocol = 'https' if request.is_secure() else 'http'
-            domain = request.get_host()
-            # 确保路径以/开头
-            path = obj.avatar if obj.avatar.startswith('/') else f'/{obj.avatar}'
-            return f"{protocol}://{domain}{path}"
-            
+            return add_domain_to_image_url(request, obj.avatar)
+        
         # 如果无法获取请求对象，使用配置中的BASE_URL
         from django.conf import settings
         base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
@@ -474,21 +466,12 @@ class MemberMinimalSerializer(serializers.ModelSerializer):
         """获取完整的头像URL"""
         if not obj.avatar:
             return ""
-            
-        # 如果已经是完整URL，直接返回
-        if obj.avatar.startswith(('http://', 'https://')):
-            return obj.avatar
-            
+        
         # 获取请求对象
         request = self.context.get('request')
         if request is not None:
-            # 从请求中获取域名和协议
-            protocol = 'https' if request.is_secure() else 'http'
-            domain = request.get_host()
-            # 确保路径以/开头
-            path = obj.avatar if obj.avatar.startswith('/') else f'/{obj.avatar}'
-            return f"{protocol}://{domain}{path}"
-            
+            return add_domain_to_image_url(request, obj.avatar)
+        
         # 如果无法获取请求对象，使用配置中的BASE_URL
         from django.conf import settings
         base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
@@ -534,21 +517,12 @@ class UserListSerializer(serializers.ModelSerializer):
         """获取完整的头像URL"""
         if not obj.avatar:
             return ""
-            
-        # 如果已经是完整URL，直接返回
-        if obj.avatar.startswith(('http://', 'https://')):
-            return obj.avatar
-            
+        
         # 获取请求对象
         request = self.context.get('request')
         if request is not None:
-            # 从请求中获取域名和协议
-            protocol = 'https' if request.is_secure() else 'http'
-            domain = request.get_host()
-            # 确保路径以/开头
-            path = obj.avatar if obj.avatar.startswith('/') else f'/{obj.avatar}'
-            return f"{protocol}://{domain}{path}"
-            
+            return add_domain_to_image_url(request, obj.avatar)
+        
         # 如果无法获取请求对象，使用配置中的BASE_URL
         from django.conf import settings
         base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
@@ -827,21 +801,12 @@ class MemberSerializer(serializers.ModelSerializer):
         """获取完整的头像URL"""
         if not obj.avatar:
             return ""
-            
-        # 如果已经是完整URL，直接返回
-        if obj.avatar.startswith(('http://', 'https://')):
-            return obj.avatar
-            
+        
         # 获取请求对象
         request = self.context.get('request')
         if request is not None:
-            # 从请求中获取域名和协议
-            protocol = 'https' if request.is_secure() else 'http'
-            domain = request.get_host()
-            # 确保路径以/开头
-            path = obj.avatar if obj.avatar.startswith('/') else f'/{obj.avatar}'
-            return f"{protocol}://{domain}{path}"
-            
+            return add_domain_to_image_url(request, obj.avatar)
+        
         # 如果无法获取请求对象，使用配置中的BASE_URL
         from django.conf import settings
         base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
