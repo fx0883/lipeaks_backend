@@ -3,55 +3,10 @@
 [![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
 [![Django](https://img.shields.io/badge/Django-5.2+-green.svg)](https://www.djangoproject.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/fx0883/lipeaks_backend)](https://github.com/fx0883/lipeaks_backend/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/fx0883/lipeaks_backend)](https://github.com/fx0883/lipeaks_backend/network/members)
-
-<div align="center">
-
-# 🌟 LiPeaks Backend
-
-**企业级多租户SaaS平台后端系统**
-
-基于 Django 5.2 构建的现代化、高性能、可扩展的多租户后端系统
-
-[🚀 快速开始](#-快速开始) • [📚 文档](#-文档) • [🔧 功能特性](#-功能特性) • [🤝 贡献](#-贡献)
-
-[![LiPeaks Backend Demo](https://img.shields.io/badge/Demo-在线体验-blue?style=for-the-badge&logo=play-circle)](https://demo.lipeaks.com)
-[![Documentation](https://img.shields.io/badge/Docs-完整文档-green?style=for-the-badge&logo=book)](https://docs.lipeaks.com)
-
-</div>
-
----
-
-## 🌍 多语言支持 / Multi-Language Support
-
-- 🇨🇳 [中文 (简体)](README_zh.md) - 完整的中文文档
-- 🇺🇸 [English](README_en.md) - Complete English documentation  
-- 🇯🇵 [日本語](README_ja.md) - 完全な日本語ドキュメント
-- 🇰🇷 [한국어](README_ko.md) - 완전한 한국어 문서
-- 🇸🇦 [العربية](README_ar.md) - وثائق عربية كاملة
-
----
 
 ## 📖 项目简介
 
 LiPeaks Backend 是一个基于 Django 5.2 构建的企业级多租户 SaaS 平台后端系统。采用先进的多租户架构设计，为不同的组织或客户（租户）提供完全隔离的应用环境。
-
-### 🌟 核心价值
-
-- **🏢 企业级架构**：成熟的多租户架构，支持无限租户扩展
-- **🔐 安全可靠**：完整的权限控制和数据隔离机制
-- **📱 开箱即用**：完整的业务模块，无需重复开发
-- **🚀 高性能**：优化的数据库查询和缓存策略
-- **🌍 国际化**：完整的多语言支持和本地化
-
-### 🎯 适用场景
-
-- **SaaS平台开发**：快速构建多租户SaaS应用
-- **企业内部系统**：支持多部门、多分支的权限管理
-- **客户管理系统**：为不同客户提供独立的数据环境
-- **教育培训平台**：支持多学校、多班级的隔离管理
-- **电商平台**：支持多商家、多店铺的独立运营
 
 ## ✨ 核心功能特性
 
@@ -249,68 +204,12 @@ A: 设置 DEBUG=False，配置生产数据库，启用 HTTPS
 - **问题反馈**: [GitHub Issues](https://github.com/fx0883/lipeaks_backend/issues)
 - **技术交流群**: QQ群/微信群
 
-## 🌟 项目亮点
-
-### 🚀 为什么选择 LiPeaks Backend？
-
-- **⚡ 快速开发**: 基于成熟的Django生态，开发效率高
-- **🔒 企业级安全**: 完整的权限控制和数据隔离
-- **📱 开箱即用**: 内置完整的业务模块，无需重复开发
-- **🌍 国际化支持**: 多语言、多时区、多货币支持
-- **📊 性能优化**: 数据库优化、缓存策略、负载均衡
-- **🐳 容器化部署**: 完整的Docker支持，一键部署
-
-### 🎯 技术优势
-
-- **多租户架构**: 支持无限租户扩展，数据完全隔离
-- **RBAC权限**: 基于角色的访问控制，细粒度权限管理
-- **JWT认证**: 无状态认证，支持分布式部署
-- **API优先**: RESTful API设计，支持前后端分离
-- **文档完善**: 自动生成API文档，开发体验优秀
-
-## 📊 项目统计
-
-![GitHub stars](https://img.shields.io/github/stars/fx0883/lipeaks_backend)
-![GitHub forks](https://img.shields.io/github/forks/fx0883/lipeaks_backend)
-![GitHub issues](https://img.shields.io/github/issues/fx0883/lipeaks_backend)
-![GitHub pull requests](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
-![GitHub license](https://img.shields.io/github/license/fx0883/lipeaks_backend)
-
-## 🎉 社区
-
-### 🌟 贡献者
-
-感谢所有为这个项目做出贡献的开发者和用户！
-
-[![Contributors](https://contrib.rocks/image?repo=fx0883/lipeaks_backend)](https://github.com/fx0883/lipeaks_backend/graphs/contributors)
-
-### 📢 讨论
-
-- **GitHub Discussions**: [功能建议和问题讨论](https://github.com/fx0883/lipeaks_backend/discussions)
-- **技术博客**: [项目更新和技术分享](https://blog.lipeaks.com)
-- **视频教程**: [B站频道](https://space.bilibili.com/your-channel)
-
 ---
 
 <div align="center">
 
 **如果这个项目对您有帮助，请给我们一个 ⭐ Star！**
 
-**If this project helps you, please give us a ⭐ Star!**
-
-**このプロジェクトがお役に立てば、⭐ Starをお願いします！**
-
-**이 프로젝트가 도움이 되었다면 ⭐ Star를 부탁드립니다!**
-
-**إذا ساعدك هذا المشروع، يرجى إعطاؤنا ⭐ نجمة!**
-
 Made with ❤️ by [LiPeaks Team](https://github.com/fx0883)
-
----
-
-[![LiPeaks Backend](https://img.shields.io/badge/LiPeaks-Backend-blue?style=for-the-badge&logo=github)](https://github.com/fx0883/lipeaks_backend)
-[![MIT License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
-[![Django](https://img.shields.io/badge/Django-5.2+-green?style=for-the-badge&logo=django)](https://www.djangoproject.com/)
 
 </div>
