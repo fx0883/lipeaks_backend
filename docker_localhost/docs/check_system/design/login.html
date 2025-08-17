@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0fdf4;
+        }
+        .container {
+            max-width: 450px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            margin-top: 60px;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: 700;
+            color: #16a34a;
+            margin-bottom: 16px;
+        }
+        .app-description {
+            font-size: 16px;
+            color: #4b5563;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 24px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #4b5563;
+        }
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+            font-size: 16px;
+        }
+        .form-input:focus {
+            border-color: #4ade80;
+        }
+        .login-btn {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .login-btn:active {
+            transform: scale(0.98);
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 28px 0;
+            color: #9ca3af;
+        }
+        .divider::before, .divider::after {
+            content: "";
+            flex: 1;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .divider span {
+            padding: 0 10px;
+        }
+        .social-login {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        .social-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+        }
+        .social-icon {
+            width: 24px;
+            height: 24px;
+        }
+        .bottom-text {
+            text-align: center;
+            margin-top: 32px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .signup-link {
+            color: #16a34a;
+            font-weight: 500;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">自律打卡</div>
+            <p class="app-description">每天进步一点点，养成自律好习惯</p>
+        </div>
+        
+        <form>
+            <div class="form-group">
+                <label class="form-label" for="username">用户名 / 邮箱</label>
+                <input type="text" id="username" class="form-input" placeholder="请输入用户名或邮箱">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="password">密码</label>
+                <input type="password" id="password" class="form-input" placeholder="请输入密码">
+            </div>
+            
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center">
+                    <input type="checkbox" id="remember" class="mr-2">
+                    <label for="remember" class="text-sm text-gray-600">记住我</label>
+                </div>
+                <a href="#" class="text-sm text-green-600">忘记密码？</a>
+            </div>
+            
+            <button type="button" class="login-btn" id="login-btn">登录</button>
+        </form>
+        
+        <div class="divider">
+            <span>或使用第三方登录</span>
+        </div>
+        
+        <div class="social-login">
+            <div class="social-btn">
+                <img src="https://cdn.jsdelivr.net/npm/simple-icons@v5/icons/wechat.svg" alt="微信" class="social-icon">
+            </div>
+            <div class="social-btn">
+                <img src="https://cdn.jsdelivr.net/npm/simple-icons@v5/icons/qq.svg" alt="QQ" class="social-icon">
+            </div>
+            <div class="social-btn">
+                <img src="https://cdn.jsdelivr.net/npm/simple-icons@v5/icons/weibo.svg" alt="微博" class="social-icon">
+            </div>
+        </div>
+        
+        <div class="bottom-text">
+            还没有账号？<a href="register.html" class="signup-link">立即注册</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('login-btn').addEventListener('click', function() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            // 简单的表单验证
+            if (!username || !password) {
+                alert('请输入用户名和密码');
+                return;
+            }
+            
+            // 记录登录操作（实际环境中会发送到服务器进行验证）
+            console.log('登录操作：', {
+                username: username,
+                password: '******' // 实际项目中不要记录密码
+            });
+            
+            // 模拟登录成功，跳转到首页
+            window.location.href = 'home.html';
+        });
+    </script>
+</body>
+</html> 

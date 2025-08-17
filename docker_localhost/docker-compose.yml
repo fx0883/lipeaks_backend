@@ -14,10 +14,7 @@ services:
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
 
   web:
-    image: lipeaks_backend:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: fx0883/lipeaks_backend:latest
     restart: always
     volumes:
       - ./staticfiles:/app/staticfiles
@@ -43,12 +40,13 @@ services:
       - SUPERUSER_PASSWORD=admin_main
       # 数据库快照导入设置
       - IMPORT_DB_SNAPSHOT=true
-      
+            # CORS设置
+      # - CORS_ALLOWED_ORIGINS=http://localhost,http://frontend
     depends_on:
       - db
 
   frontend:
-    image: lipeaks_admin:latest
+    image: fx0883/lipeaks_admin:latest
     restart: always
     ports:
       - "8848:8848"
@@ -57,7 +55,7 @@ services:
     depends_on:
       - web
   design_cms:
-    image: lipeaks_cms:latest
+    image: fx0883/lipeaks_design_cms:latest
     restart: always
     ports:
       - "80:80"

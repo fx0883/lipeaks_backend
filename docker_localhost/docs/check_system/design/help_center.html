@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>帮助中心 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .content-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .faq-item {
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .faq-item:last-child {
+            border-bottom: none;
+        }
+        .faq-question {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .faq-question:active {
+            background-color: #f9fafb;
+        }
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            background-color: #f9fafb;
+        }
+        .faq-answer.show {
+            max-height: 500px;
+        }
+        .contact-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.25rem;
+            margin-right: 16px;
+        }
+        .search-bar {
+            border-radius: 12px;
+            background-color: white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        .category-tab {
+            padding: 6px 14px;
+            border-radius: 20px;
+            white-space: nowrap;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+        .category-tab.active {
+            background-color: #22c55e;
+            color: white;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        /* 返回按钮颜色 */
+        .back-button {
+            color: #22c55e;
+        }
+        /* 搜索栏边框和焦点颜色 */
+        .search-input {
+            border: 1px solid #dcfce7;
+        }
+        .search-input:focus {
+            border-color: #22c55e;
+        }
+        /* 常见问题分类标签 */
+        .category-tab.active {
+            color: #22c55e;
+            border-bottom: 2px solid #22c55e;
+        }
+        /* 手风琴样式 */
+        .accordion-header.active {
+            color: #22c55e;
+        }
+        .accordion-header.active i {
+            color: #22c55e;
+        }
+        /* 联系支持按钮 */
+        .contact-support-btn {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        /* 底部导航栏边框 */
+        .tab-bar {
+            border-top: 1px solid #dcfce7;
+        }
+        /* 激活的导航项颜色 */
+        .tab-item.active {
+            color: #22c55e;
+        }
+        /* 圆形加号按钮 */
+        .add-button {
+            background-color: #22c55e;
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="p-5 pb-24 overflow-y-auto" style="height: calc(100% - 44px);">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-6">
+            <a href="profile.html" class="text-green-500">
+                <i class="fas fa-arrow-left text-xl"></i>
+            </a>
+            <h1 class="text-2xl font-bold">帮助中心</h1>
+            <div class="w-6"></div> <!-- 占位元素保持布局平衡 -->
+        </div>
+        
+        <!-- 搜索栏 -->
+        <div class="search-bar flex items-center px-4 py-3 mb-6">
+            <i class="fas fa-search text-gray-400 mr-3"></i>
+            <input type="text" placeholder="搜索问题..." class="bg-transparent outline-none flex-1 text-gray-700">
+        </div>
+        
+        <!-- 类型筛选条 -->
+        <div class="mb-6">
+            <div class="overflow-x-auto -mx-5 px-5">
+                <div class="flex pb-2 whitespace-nowrap">
+                    <div class="category-tab active mr-2">
+                        所有问题
+                    </div>
+                    <div class="category-tab bg-white mr-2">
+                        账户相关
+                    </div>
+                    <div class="category-tab bg-white mr-2">
+                        打卡功能
+                    </div>
+                    <div class="category-tab bg-white mr-2">
+                        统计分析
+                    </div>
+                    <div class="category-tab bg-white mr-2">
+                        设置选项
+                    </div>
+                    <div class="category-tab bg-white mr-2">
+                        社交功能
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 常见问题 -->
+        <div class="mb-8">
+            <h2 class="text-lg font-semibold mb-4">常见问题</h2>
+            <div class="content-card">
+                <!-- 问题1 -->
+                <div class="faq-item">
+                    <div class="faq-question p-4 flex justify-between items-center">
+                        <h3 class="font-medium">如何创建新的打卡任务？</h3>
+                        <i class="fas fa-chevron-down text-gray-400 transform transition-transform"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <div class="p-4 text-gray-600">
+                            <p>创建新的打卡任务非常简单：</p>
+                            <ol class="list-decimal pl-5 mt-2 space-y-1">
+                                <li>在底部导航栏点击"+"按钮</li>
+                                <li>或在任务列表页面点击右上角的"+"图标</li>
+                                <li>填写任务名称、选择打卡类型</li>
+                                <li>设置开始日期和提醒时间</li>
+                                <li>点击"创建任务"按钮完成</li>
+                            </ol>
+                            <p class="mt-2">您还可以从预设模板中选择，快速创建常用任务。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 问题2 -->
+                <div class="faq-item">
+                    <div class="faq-question p-4 flex justify-between items-center">
+                        <h3 class="font-medium">如何修改或删除已创建的打卡任务？</h3>
+                        <i class="fas fa-chevron-down text-gray-400 transform transition-transform"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <div class="p-4 text-gray-600">
+                            <p>修改或删除已创建的打卡任务：</p>
+                            <ol class="list-decimal pl-5 mt-2 space-y-1">
+                                <li>在任务列表页面，长按需要操作的任务</li>
+                                <li>在弹出的菜单中选择"编辑"或"删除"</li>
+                                <li>如果选择编辑，可以修改任务的各项内容</li>
+                                <li>完成编辑后点击"保存"按钮</li>
+                            </ol>
+                            <p class="mt-2">注意：已经完成的历史打卡记录不会因为删除任务而消失，您仍然可以在统计页面查看历史数据。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 问题3 -->
+                <div class="faq-item">
+                    <div class="faq-question p-4 flex justify-between items-center">
+                        <h3 class="font-medium">如何查看我的打卡统计和历史记录？</h3>
+                        <i class="fas fa-chevron-down text-gray-400 transform transition-transform"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <div class="p-4 text-gray-600">
+                            <p>查看打卡统计和历史记录的方法：</p>
+                            <ol class="list-decimal pl-5 mt-2 space-y-1">
+                                <li>点击底部导航栏的"统计"图标</li>
+                                <li>在统计页面可以看到您的整体打卡情况</li>
+                                <li>包括完成率、连续打卡天数以及各类任务的完成情况</li>
+                                <li>点击"打卡日历"可以查看每日具体的打卡记录</li>
+                                <li>选择特定日期可以查看当日的详细打卡情况</li>
+                            </ol>
+                            <p class="mt-2">您还可以切换不同的时间范围（如周、月、年），查看不同时期的统计数据。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 问题4 -->
+                <div class="faq-item">
+                    <div class="faq-question p-4 flex justify-between items-center">
+                        <h3 class="font-medium">如何添加自定义打卡类型？</h3>
+                        <i class="fas fa-chevron-down text-gray-400 transform transition-transform"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <div class="p-4 text-gray-600">
+                            <p>添加自定义打卡类型的步骤：</p>
+                            <ol class="list-decimal pl-5 mt-2 space-y-1">
+                                <li>在任务列表页面点击"打卡类型"选项</li>
+                                <li>或在创建任务页面，点击"创建新类型"链接</li>
+                                <li>在打卡类型页面，点击右下角的"+"按钮</li>
+                                <li>填写类型名称和描述</li>
+                                <li>选择图标和颜色</li>
+                                <li>点击"保存"按钮完成创建</li>
+                            </ol>
+                            <p class="mt-2">创建自定义类型后，您可以在创建任务时选择这些类型，更好地组织和分类您的打卡任务。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 问题5 -->
+                <div class="faq-item">
+                    <div class="faq-question p-4 flex justify-between items-center">
+                        <h3 class="font-medium">如何设置打卡提醒？</h3>
+                        <i class="fas fa-chevron-down text-gray-400 transform transition-transform"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <div class="p-4 text-gray-600">
+                            <p>设置打卡提醒的方法：</p>
+                            <ol class="list-decimal pl-5 mt-2 space-y-1">
+                                <li>创建或编辑任务时，在"提醒时间"选项设置具体时间</li>
+                                <li>或在个人中心 -> 提醒设置中，管理所有提醒</li>
+                                <li>可以设置全局提醒时间和特定任务的提醒时间</li>
+                                <li>还可以选择提醒方式（声音、震动等）</li>
+                            </ol>
+                            <p class="mt-2">注意：为确保提醒正常工作，请允许应用的通知权限，并且不要将应用加入省电模式限制。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 联系我们 -->
+        <div class="mb-8">
+            <h2 class="text-lg font-semibold mb-4">联系我们</h2>
+            <div class="content-card space-y-4 p-4">
+                <div class="flex items-center">
+                    <div class="contact-icon bg-green-500">
+                        <i class="fas fa-envelope"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-medium">电子邮件</h3>
+                        <p class="text-sm text-gray-500">support@ziluda.com</p>
+                        <p class="text-xs text-gray-400">工作日24小时内回复</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center">
+                    <div class="contact-icon bg-green-500">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-medium">在线客服</h3>
+                        <p class="text-sm text-gray-500">每天9:00-22:00</p>
+                        <button class="text-green-500 text-sm flex items-center mt-1">
+                            <i class="fas fa-headset mr-1"></i> 立即咨询
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex items-center">
+                    <div class="contact-icon bg-green-500">
+                        <i class="fas fa-phone"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-medium">客服热线</h3>
+                        <p class="text-sm text-gray-500">400-123-4567</p>
+                        <p class="text-xs text-gray-400">每天9:00-18:00</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 意见反馈 -->
+        <div class="mb-8">
+            <h2 class="text-lg font-semibold mb-4">意见反馈</h2>
+            <div class="content-card p-4">
+                <p class="text-gray-600 mb-4">我们非常重视您的反馈，您的建议将帮助我们不断改进产品。</p>
+                <textarea class="w-full p-3 border border-gray-200 rounded-lg mb-4" placeholder="请输入您的问题或建议..." rows="4"></textarea>
+                <button class="w-full py-3 bg-green-500 text-white rounded-lg font-medium">
+                    提交反馈
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // FAQ手风琴效果
+        const faqQuestions = document.querySelectorAll('.faq-question');
+        
+        faqQuestions.forEach(question => {
+            question.addEventListener('click', function() {
+                const answer = this.nextElementSibling;
+                const icon = this.querySelector('i');
+                
+                // 切换当前答案的显示状态
+                answer.classList.toggle('show');
+                
+                // 旋转图标
+                if (answer.classList.contains('show')) {
+                    icon.style.transform = 'rotate(180deg)';
+                } else {
+                    icon.style.transform = 'rotate(0)';
+                }
+                
+                // 记录日志
+                console.log('点击问题:', this.querySelector('h3').textContent);
+            });
+        });
+        
+        // 类别选择功能
+        document.querySelectorAll('.category-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // 移除所有激活状态
+                document.querySelectorAll('.category-tab').forEach(t => {
+                    t.classList.remove('active');
+                    t.classList.add('bg-white');
+                });
+                
+                // 为当前点击项添加激活状态
+                this.classList.add('active');
+                this.classList.remove('bg-white');
+                
+                // 记录日志
+                console.log('选择问题类别:', this.textContent.trim());
+            });
+        });
+        
+        // 模拟提交反馈
+        document.querySelector('button.w-full').addEventListener('click', function() {
+            const feedbackText = document.querySelector('textarea').value;
+            
+            if (!feedbackText.trim()) {
+                alert('请输入反馈内容');
+                return;
+            }
+            
+            console.log('提交反馈:', feedbackText);
+            alert('感谢您的反馈，我们会认真阅读并尽快处理！');
+            document.querySelector('textarea').value = '';
+        });
+        
+        // 模拟在线客服
+        document.querySelector('button.text-green-500').addEventListener('click', function() {
+            console.log('点击在线客服');
+            alert('即将打开在线客服聊天窗口');
+        });
+    </script>
+</body>
+</html> 

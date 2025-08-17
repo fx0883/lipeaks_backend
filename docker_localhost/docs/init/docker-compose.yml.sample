@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: multi_tenant_db
+      MYSQL_USER: django
+      MYSQL_PASSWORD: django_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docs/init_sql/common_config.sql:/docker-entrypoint-initdb.d/common_config.sql
+    ports:
+      - "3306:3306"
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    restart: always
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=your_production_secret_key
+      - DB_NAME=multi_tenant_db
+      - DB_USER=django
+      - DB_PASSWORD=django_password
+      - DB_HOST=db
+      - DB_PORT=3306
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+  static_volume:
+  media_volume: 

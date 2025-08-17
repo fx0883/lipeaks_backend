@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务列表 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .tab-bar {
+            height: 83px;
+            border-top: 1px solid #dcfce7;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #94a3b8;
+            transition: color 0.2s;
+        }
+        .tab-item.active {
+            color: #22c55e;
+        }
+        .task-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+        .task-card:active {
+            transform: scale(0.98);
+        }
+        .category-badge {
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .habit-badge {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        .task-checkbox {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid #d1d5db;
+            display: inline-block;
+            position: relative;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .task-checkbox.checked {
+            background-color: #22c55e;
+            border-color: #22c55e;
+        }
+        .task-checkbox.checked::after {
+            content: '';
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: white;
+        }
+        .floating-button {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 28px;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        .floating-button:active {
+            transform: scale(0.95);
+        }
+        .filter-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            margin-right: 8px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .filter-badge.active {
+            background-color: #22c55e;
+            color: white;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        .search-bar {
+            border-radius: 12px;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .categories-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="p-5 pb-24 overflow-y-auto" style="height: calc(100% - 127px);">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">任务列表</h1>
+            <a href="create_task.html" class="text-green-500">
+                <i class="fas fa-plus-circle text-xl"></i>
+            </a>
+        </div>
+        
+        <!-- 搜索栏 -->
+        <div class="search-bar flex items-center px-4 py-3 mb-6">
+            <button class="text-green-500">
+                <i class="fas fa-search text-xl"></i>
+            </button>
+            <input type="text" placeholder="搜索任务..." class="bg-transparent outline-none flex-1 text-gray-700">
+        </div>
+        
+        <!-- 类型筛选条 -->
+        <div class="mb-6">
+            <div class="overflow-x-auto -mx-5 px-5">
+                <div class="flex pb-2">
+                    <div class="filter-badge active bg-green-50 text-green-600">
+                        所有任务
+                    </div>
+                    <div class="filter-badge bg-white">
+                        今日待办
+                    </div>
+                    <div class="filter-badge bg-white">
+                        已完成
+                    </div>
+                    <div class="filter-badge bg-white">
+                        进行中
+                    </div>
+                    <div class="filter-badge bg-white">
+                        已过期
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 任务列表 -->
+        <div class="space-y-4">
+            <!-- 任务1 -->
+            <div class="task-card p-4 shadow-sm">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="task-checkbox mr-3">
+                            <i class="fas fa-check text-white opacity-0"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">晨间冥想</h3>
+                            <p class="text-xs text-gray-500">习惯养成 · 20分钟</p>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-100 text-indigo-600 text-xs rounded-full px-2 py-1">
+                        9:00
+                    </div>
+                </div>
+                <div class="pl-9">
+                    <p class="text-sm text-gray-600">每天早上冥想20分钟，培养专注力和平静心态</p>
+                </div>
+            </div>
+            
+            <!-- 任务2 -->
+            <div class="task-card p-4 shadow-sm">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="task-checkbox mr-3">
+                            <i class="fas fa-check text-white opacity-0"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">阅读专业书籍</h3>
+                            <p class="text-xs text-gray-500">学习提升 · 45分钟</p>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-100 text-indigo-600 text-xs rounded-full px-2 py-1">
+                        14:00
+                    </div>
+                </div>
+                <div class="pl-9">
+                    <p class="text-sm text-gray-600">每天阅读45分钟专业书籍，提升专业知识</p>
+                </div>
+            </div>
+            
+            <!-- 任务3 已完成 -->
+            <div class="task-card p-4 shadow-sm bg-gray-50">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="task-checkbox checked mr-3">
+                            <i class="fas fa-check text-white"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-500">晨跑5公里</h3>
+                            <p class="text-xs text-gray-400">健康运动 · 30分钟</p>
+                        </div>
+                    </div>
+                    <div class="bg-green-100 text-green-600 text-xs rounded-full px-2 py-1">
+                        已完成
+                    </div>
+                </div>
+                <div class="pl-9">
+                    <p class="text-sm text-gray-500">每天早上跑步5公里，保持身体健康</p>
+                </div>
+            </div>
+            
+            <!-- 任务4 -->
+            <div class="task-card p-4 shadow-sm">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="task-checkbox mr-3">
+                            <i class="fas fa-check text-white opacity-0"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">项目A进度跟进</h3>
+                            <p class="text-xs text-gray-500">工作事务 · 1小时</p>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-100 text-indigo-600 text-xs rounded-full px-2 py-1">
+                        16:00
+                    </div>
+                </div>
+                <div class="pl-9">
+                    <p class="text-sm text-gray-600">检查项目A的进度，更新任务状态，与团队沟通</p>
+                </div>
+            </div>
+            
+            <!-- 任务5 -->
+            <div class="task-card p-4 shadow-sm">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="task-checkbox mr-3">
+                            <i class="fas fa-check text-white opacity-0"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">每周健身计划</h3>
+                            <p class="text-xs text-gray-500">健康运动 · 1小时</p>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-100 text-indigo-600 text-xs rounded-full px-2 py-1">
+                        19:30
+                    </div>
+                </div>
+                <div class="pl-9">
+                    <p class="text-sm text-gray-600">每周三次健身房锻炼，全身力量训练</p>
+                </div>
+            </div>
+            
+            <!-- 任务6 -->
+            <div class="task-card p-4 shadow-sm">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="task-checkbox mr-3">
+                            <i class="fas fa-check text-white opacity-0"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">英语口语练习</h3>
+                            <p class="text-xs text-gray-500">学习提升 · 30分钟</p>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-100 text-indigo-600 text-xs rounded-full px-2 py-1">
+                        20:00
+                    </div>
+                </div>
+                <div class="pl-9">
+                    <p class="text-sm text-gray-600">每天练习英语口语30分钟，提高英语表达能力</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 底部导航栏 -->
+    <div class="tab-bar fixed bottom-0 left-0 right-0 flex justify-around">
+        <div class="tab-item">
+            <i class="fas fa-home text-xl"></i>
+            <span class="text-xs mt-1">首页</span>
+        </div>
+        <div class="tab-item active">
+            <i class="fas fa-tasks text-xl"></i>
+            <span class="text-xs mt-1">任务</span>
+        </div>
+        <div class="tab-item">
+            <div class="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white">
+                <i class="fas fa-plus"></i>
+            </div>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-chart-bar text-xl"></i>
+            <span class="text-xs mt-1">统计</span>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-user text-xl"></i>
+            <span class="text-xs mt-1">我的</span>
+        </div>
+    </div>
+    
+    <script>
+        // 模拟分类选择功能
+        document.querySelectorAll('.category-pill').forEach(pill => {
+            pill.addEventListener('click', function() {
+                // 移除所有激活状态
+                document.querySelectorAll('.category-pill').forEach(p => {
+                    p.classList.remove('active');
+                    p.classList.add('bg-white');
+                });
+                
+                // 为当前点击项添加激活状态
+                this.classList.add('active');
+                this.classList.remove('bg-white');
+                
+                // 记录日志
+                console.log('选择类别: ' + this.textContent.trim());
+            });
+        });
+        
+        // 模拟任务过滤功能
+        document.querySelectorAll('.flex.mb-6.border-b.border-gray-200 > div').forEach(filter => {
+            filter.addEventListener('click', function() {
+                // 移除所有激活状态
+                document.querySelectorAll('.flex.mb-6.border-b.border-gray-200 > div').forEach(f => {
+                    f.classList.remove('border-b-2', 'border-indigo-500', 'text-indigo-500');
+                    f.classList.add('text-gray-500');
+                });
+                
+                // 为当前点击项添加激活状态
+                this.classList.remove('text-gray-500');
+                this.classList.add('border-b-2', 'border-green-500', 'text-green-500', 'font-medium');
+                
+                // 记录日志
+                console.log('过滤任务: ' + this.textContent.trim());
+            });
+        });
+        
+        // 模拟打卡功能
+        document.querySelectorAll('.task-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('click', function() {
+                if (!this.classList.contains('checked')) {
+                    this.classList.add('checked');
+                    this.querySelector('i').style.opacity = '1';
+                    this.closest('.task-card').style.backgroundColor = '#f9fafb';
+                    this.closest('.task-card').querySelector('h3').classList.add('text-gray-500');
+                    this.closest('.task-card').querySelectorAll('p').forEach(p => p.classList.add('text-gray-400'));
+                    
+                    // 动态更新打卡状态
+                    const statusEl = this.closest('.flex.justify-between').querySelector('div:last-child');
+                    statusEl.className = 'bg-green-100 text-green-600 text-xs rounded-full px-2 py-1';
+                    statusEl.textContent = '已完成';
+                    
+                    // 获取任务名称
+                    const taskName = this.closest('.flex.items-center').querySelector('h3').textContent;
+                    
+                    // 记录日志
+                    console.log('完成任务: ' + taskName);
+                    
+                    // 弹出评论输入框
+                    showCommentDialog(taskName);
+                }
+            });
+        });
+        
+        // 显示评论对话框
+        function showCommentDialog(taskName) {
+            // 创建对话框元素
+            const dialog = document.createElement('div');
+            dialog.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            dialog.id = 'comment-dialog';
+            
+            // 对话框内容
+            dialog.innerHTML = `
+                <div class="bg-white rounded-xl p-5 w-10/12 max-w-sm">
+                    <h3 class="text-lg font-bold mb-2">打卡感想</h3>
+                    <p class="text-gray-600 mb-3">恭喜完成"${taskName}"！记录一下今天的感想吧~</p>
+                    <textarea class="w-full p-3 border border-gray-200 rounded-lg mb-4" 
+                              placeholder="写下你的感想..." rows="3"></textarea>
+                    <div class="flex justify-end space-x-3">
+                        <button id="cancel-comment" class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700">取消</button>
+                        <button id="submit-comment" class="px-4 py-2 rounded-lg bg-green-500 text-white">提交</button>
+                    </div>
+                </div>
+            `;
+            
+            // 添加到页面
+            document.body.appendChild(dialog);
+            
+            // 添加事件监听
+            document.getElementById('cancel-comment').addEventListener('click', function() {
+                document.getElementById('comment-dialog').remove();
+            });
+            
+            document.getElementById('submit-comment').addEventListener('click', function() {
+                const commentText = dialog.querySelector('textarea').value;
+                
+                if (commentText.trim()) {
+                    // 记录评论
+                    console.log('提交评论:', commentText);
+                    alert('评论已提交: ' + commentText);
+                }
+                
+                // 关闭对话框
+                document.getElementById('comment-dialog').remove();
+            });
+        }
+    </script>
+</body>
+</html> 

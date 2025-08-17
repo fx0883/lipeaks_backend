@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>打卡记录 - 自律打卡</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f0fdf4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .status-bar {
+            height: 44px;
+            background-color: #f0fdf4;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .tab-bar {
+            height: 83px;
+            border-top: 1px solid #dcfce7;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        .tab-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #94a3b8;
+            transition: color 0.2s;
+        }
+        .tab-item.active {
+            color: #22c55e;
+        }
+        .filter-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            margin-right: 8px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .filter-badge.active {
+            background-color: #22c55e;
+            color: white;
+        }
+        .record-card {
+            border-radius: 16px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+        .record-card:active {
+            transform: scale(0.98);
+        }
+        .date-divider {
+            position: relative;
+            display: flex;
+            align-items: center;
+            margin: 24px 0 16px;
+        }
+        .date-divider::before {
+            content: "";
+            flex: 1;
+            border-top: 1px solid #dcfce7;
+            margin-right: 8px;
+        }
+        .date-divider::after {
+            content: "";
+            flex: 1;
+            border-top: 1px solid #dcfce7;
+            margin-left: 8px;
+        }
+        .category-chip {
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .habit-chip {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        .learn-chip {
+            background-color: #fce7f3;
+            color: #db2777;
+        }
+        .fitness-chip {
+            background-color: #d1fae5;
+            color: #059669;
+        }
+        .work-chip {
+            background-color: #fef3c7;
+            color: #d97706;
+        }
+        .meditation-chip {
+            background-color: #ede9fe;
+            color: #7c3aed;
+        }
+        .project-chip {
+            background-color: #fee2e2;
+            color: #dc2626;
+        }
+        .record-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .record-icon.habit {
+            background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+        }
+        .record-icon.learn {
+            background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+        }
+        .record-icon.fitness {
+            background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+        }
+        .record-icon.work {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        }
+        .record-icon.meditation {
+            background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+        }
+        .record-icon.project {
+            background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+        }
+        .date-box {
+            padding: 6px 10px;
+            border-radius: 12px;
+            background-color: #f0fdf4;
+            border: 1px solid #dcfce7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #16a34a;
+            font-weight: 500;
+        }
+        .streak-badge {
+            background-color: #dcfce7;
+            color: #16a34a;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .calendar-header {
+            background-color: #f0fdf4;
+            border-radius: 16px 16px 0 0;
+            border-bottom: 1px solid #dcfce7;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+        }
+        .calendar-day {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .calendar-day.complete {
+            background-color: #22c55e;
+            color: white;
+        }
+        .calendar-day.partial {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        .calendar-day.today {
+            border: 2px solid #22c55e;
+        }
+        .calendar-day.empty {
+            background-color: transparent;
+            color: #9ca3af;
+        }
+        .search-bar {
+            border-radius: 12px;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="h-full">
+    <!-- 状态栏 -->
+    <div class="status-bar px-5 flex items-center justify-between">
+        <div class="text-lg font-semibold">9:41</div>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-signal"></i>
+            <i class="fas fa-wifi"></i>
+            <i class="fas fa-battery-full"></i>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="p-5 pb-24 overflow-y-auto" style="height: calc(100% - 127px);">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-6">
+            <a href="profile.html" class="text-green-500">
+                <i class="fas fa-arrow-left text-xl"></i>
+            </a>
+            <h1 class="text-2xl font-bold">打卡记录</h1>
+            <a href="#" class="text-green-500" id="calendar-toggle">
+                <i class="fas fa-calendar-alt text-xl"></i>
+            </a>
+        </div>
+        
+        <!-- 搜索栏 -->
+        <div class="search-bar flex items-center px-4 py-3 mb-6">
+            <button class="text-green-500">
+                <i class="fas fa-search text-xl"></i>
+            </button>
+            <input type="text" placeholder="搜索打卡记录..." class="bg-transparent outline-none flex-1 text-gray-700">
+        </div>
+        
+        <!-- 日历视图 (默认隐藏) -->
+        <div id="calendar-view" class="mb-6 hidden">
+            <div class="record-card">
+                <div class="calendar-header p-4 flex justify-between items-center">
+                    <button class="text-green-500" id="prev-month">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <h2 class="font-semibold text-gray-700" id="calendar-title">2023年7月</h2>
+                    <button class="text-green-500" id="next-month">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="p-4">
+                    <!-- 星期头部 -->
+                    <div class="calendar-grid mb-2">
+                        <div class="text-center text-gray-500 text-xs">日</div>
+                        <div class="text-center text-gray-500 text-xs">一</div>
+                        <div class="text-center text-gray-500 text-xs">二</div>
+                        <div class="text-center text-gray-500 text-xs">三</div>
+                        <div class="text-center text-gray-500 text-xs">四</div>
+                        <div class="text-center text-gray-500 text-xs">五</div>
+                        <div class="text-center text-gray-500 text-xs">六</div>
+                    </div>
+                    
+                    <!-- 日期网格 -->
+                    <div class="calendar-grid">
+                        <!-- 第一行 -->
+                        <div class="calendar-day empty">25</div>
+                        <div class="calendar-day empty">26</div>
+                        <div class="calendar-day empty">27</div>
+                        <div class="calendar-day empty">28</div>
+                        <div class="calendar-day empty">29</div>
+                        <div class="calendar-day empty">30</div>
+                        <div class="calendar-day">1</div>
+                        
+                        <!-- 第二行 -->
+                        <div class="calendar-day">2</div>
+                        <div class="calendar-day">3</div>
+                        <div class="calendar-day">4</div>
+                        <div class="calendar-day">5</div>
+                        <div class="calendar-day">6</div>
+                        <div class="calendar-day">7</div>
+                        <div class="calendar-day">8</div>
+                        
+                        <!-- 第三行 -->
+                        <div class="calendar-day">9</div>
+                        <div class="calendar-day">10</div>
+                        <div class="calendar-day">11</div>
+                        <div class="calendar-day">12</div>
+                        <div class="calendar-day">13</div>
+                        <div class="calendar-day">14</div>
+                        <div class="calendar-day">15</div>
+                        
+                        <!-- 第四行 -->
+                        <div class="calendar-day">16</div>
+                        <div class="calendar-day complete">17</div>
+                        <div class="calendar-day complete">18</div>
+                        <div class="calendar-day complete">19</div>
+                        <div class="calendar-day partial">20</div>
+                        <div class="calendar-day complete">21</div>
+                        <div class="calendar-day">22</div>
+                        
+                        <!-- 第五行 -->
+                        <div class="calendar-day">23</div>
+                        <div class="calendar-day today">24</div>
+                        <div class="calendar-day">25</div>
+                        <div class="calendar-day">26</div>
+                        <div class="calendar-day">27</div>
+                        <div class="calendar-day">28</div>
+                        <div class="calendar-day">29</div>
+                        
+                        <!-- 第六行 -->
+                        <div class="calendar-day">30</div>
+                        <div class="calendar-day">31</div>
+                        <div class="calendar-day empty">1</div>
+                        <div class="calendar-day empty">2</div>
+                        <div class="calendar-day empty">3</div>
+                        <div class="calendar-day empty">4</div>
+                        <div class="calendar-day empty">5</div>
+                    </div>
+                </div>
+                
+                <!-- 日历图例 -->
+                <div class="px-4 pb-4 flex justify-center space-x-6">
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full bg-green-500 mr-2"></div>
+                        <span class="text-xs text-gray-600">全部完成</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full bg-green-100 mr-2"></div>
+                        <span class="text-xs text-gray-600">部分完成</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full border-2 border-green-500 mr-2"></div>
+                        <span class="text-xs text-gray-600">今日</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 本月统计 -->
+            <div class="record-card p-4 mt-4">
+                <h3 class="font-semibold text-gray-700 mb-2">本月统计</h3>
+                <div class="flex justify-between items-center mb-3">
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-green-500">18</p>
+                        <p class="text-xs text-gray-500">打卡天数</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-green-500">85%</p>
+                        <p class="text-xs text-gray-500">完成率</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-green-500">5</p>
+                        <p class="text-xs text-gray-500">连续打卡</p>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div class="bg-green-500 h-2.5 rounded-full" style="width: 85%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 筛选条件 -->
+        <div class="mb-6">
+            <div class="overflow-x-auto -mx-5 px-5">
+                <div class="flex pb-2">
+                    <div class="filter-badge active bg-green-50 text-green-600">
+                        全部记录
+                    </div>
+                    <div class="filter-badge bg-white">
+                        习惯养成
+                    </div>
+                    <div class="filter-badge bg-white">
+                        学习提升
+                    </div>
+                    <div class="filter-badge bg-white">
+                        健康运动
+                    </div>
+                    <div class="filter-badge bg-white">
+                        工作事务
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 日期选择器 -->
+        <div class="flex justify-between items-center mb-6">
+            <div class="date-box">
+                <i class="fas fa-calendar-alt mr-2 text-sm"></i>
+                <span id="current-date">2023年7月24日</span>
+            </div>
+            <div class="flex">
+                <button class="h-10 w-10 rounded-l-lg bg-white border border-gray-200 flex items-center justify-center text-gray-600" id="prev-day">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="h-10 w-10 rounded-r-lg bg-white border border-gray-200 flex items-center justify-center text-gray-600" id="next-day">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 打卡记录列表 -->
+        <div class="space-y-4">
+            <!-- 今日 -->
+            <div class="date-divider">
+                <span class="text-sm font-medium bg-white px-3 text-gray-500">今日</span>
+            </div>
+            
+            <!-- 记录1 -->
+            <div class="record-card p-4">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="record-icon fitness mr-3">
+                            <i class="fas fa-running"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">晨跑5公里</h3>
+                            <p class="text-xs text-gray-500">健康运动 · 今天 06:30</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="streak-badge mr-2">
+                            <i class="fas fa-fire-alt mr-1"></i>连续7天
+                        </span>
+                    </div>
+                </div>
+                <div class="mt-2 bg-gray-50 p-3 rounded-lg text-sm text-gray-600">
+                    今天比昨天提高了30秒，状态不错！保持下去！
+                </div>
+            </div>
+            
+            <!-- 昨日 -->
+            <div class="date-divider">
+                <span class="text-sm font-medium bg-white px-3 text-gray-500">昨日</span>
+            </div>
+            
+            <!-- 记录2 -->
+            <div class="record-card p-4">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="record-icon fitness mr-3">
+                            <i class="fas fa-running"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">晨跑5公里</h3>
+                            <p class="text-xs text-gray-500">健康运动 · 昨天 06:45</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="streak-badge mr-2">
+                            <i class="fas fa-fire-alt mr-1"></i>连续6天
+                        </span>
+                    </div>
+                </div>
+                <div class="mt-2 bg-gray-50 p-3 rounded-lg text-sm text-gray-600">
+                    今天感觉有点累，但还是坚持完成了！明天争取更好的状态。
+                </div>
+            </div>
+            
+            <!-- 记录3 -->
+            <div class="record-card p-4">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="record-icon meditation mr-3">
+                            <i class="fas fa-spa"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">晨间冥想</h3>
+                            <p class="text-xs text-gray-500">习惯养成 · 昨天 07:30</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="streak-badge mr-2">
+                            <i class="fas fa-fire-alt mr-1"></i>连续12天
+                        </span>
+                    </div>
+                </div>
+                <div class="mt-2 bg-gray-50 p-3 rounded-lg text-sm text-gray-600">
+                    今天冥想20分钟，感觉精神状态很好，一整天都很专注。
+                </div>
+            </div>
+            
+            <!-- 记录4 -->
+            <div class="record-card p-4">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="record-icon learn mr-3">
+                            <i class="fas fa-book"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">阅读专业书籍</h3>
+                            <p class="text-xs text-gray-500">学习提升 · 昨天 20:15</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="streak-badge mr-2">
+                            <i class="fas fa-fire-alt mr-1"></i>连续3天
+                        </span>
+                    </div>
+                </div>
+                <div class="mt-2 bg-gray-50 p-3 rounded-lg text-sm text-gray-600">
+                    阅读《原子习惯》第五章，收获很多关于如何建立好习惯的方法。
+                </div>
+            </div>
+            
+            <!-- 前日 -->
+            <div class="date-divider">
+                <span class="text-sm font-medium bg-white px-3 text-gray-500">7月22日</span>
+            </div>
+            
+            <!-- 记录5 -->
+            <div class="record-card p-4">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="record-icon fitness mr-3">
+                            <i class="fas fa-running"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">晨跑5公里</h3>
+                            <p class="text-xs text-gray-500">健康运动 · 7月22日 06:30</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="streak-badge mr-2">
+                            <i class="fas fa-fire-alt mr-1"></i>连续5天
+                        </span>
+                    </div>
+                </div>
+                <div class="mt-2 bg-gray-50 p-3 rounded-lg text-sm text-gray-600">
+                    今天跑步时天气很好，心情愉快！
+                </div>
+            </div>
+            
+            <!-- 记录6 -->
+            <div class="record-card p-4">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <div class="record-icon work mr-3">
+                            <i class="fas fa-briefcase"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">项目进度跟进</h3>
+                            <p class="text-xs text-gray-500">工作事务 · 7月22日 14:30</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="streak-badge mr-2">
+                            <i class="fas fa-fire-alt mr-1"></i>连续4天
+                        </span>
+                    </div>
+                </div>
+                <div class="mt-2 bg-gray-50 p-3 rounded-lg text-sm text-gray-600">
+                    项目进展顺利，所有任务都按计划完成。团队配合很好！
+                </div>
+            </div>
+            
+            <!-- 加载更多按钮 -->
+            <button class="w-full py-3 text-center text-green-500 font-medium bg-white rounded-lg shadow-sm" id="load-more">
+                加载更多记录
+            </button>
+        </div>
+    </div>
+    
+    <!-- 底部导航栏 -->
+    <div class="tab-bar fixed bottom-0 left-0 right-0 flex justify-around">
+        <div class="tab-item">
+            <i class="fas fa-home text-xl"></i>
+            <span class="text-xs mt-1">首页</span>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-tasks text-xl"></i>
+            <span class="text-xs mt-1">任务</span>
+        </div>
+        <div class="tab-item">
+            <div class="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white">
+                <i class="fas fa-plus"></i>
+            </div>
+        </div>
+        <div class="tab-item active">
+            <i class="fas fa-chart-bar text-xl"></i>
+            <span class="text-xs mt-1">统计</span>
+        </div>
+        <div class="tab-item">
+            <i class="fas fa-user text-xl"></i>
+            <span class="text-xs mt-1">我的</span>
+        </div>
+    </div>
+    
+    <script>
+        // 切换日历视图和列表视图
+        document.getElementById('calendar-toggle').addEventListener('click', function(e) {
+            e.preventDefault();
+            const calendarView = document.getElementById('calendar-view');
+            
+            if (calendarView.classList.contains('hidden')) {
+                calendarView.classList.remove('hidden');
+                this.innerHTML = '<i class="fas fa-list text-xl"></i>';
+            } else {
+                calendarView.classList.add('hidden');
+                this.innerHTML = '<i class="fas fa-calendar-alt text-xl"></i>';
+            }
+            
+            // 记录日志
+            console.log('切换视图模式');
+        });
+        
+        // 筛选功能
+        document.querySelectorAll('.filter-badge').forEach(badge => {
+            badge.addEventListener('click', function() {
+                // 移除所有激活状态
+                document.querySelectorAll('.filter-badge').forEach(b => {
+                    b.classList.remove('active', 'bg-green-50', 'text-green-600');
+                    b.classList.add('bg-white');
+                });
+                
+                // 添加当前选中状态
+                this.classList.add('active', 'bg-green-50', 'text-green-600');
+                this.classList.remove('bg-white');
+                
+                // 记录日志
+                console.log('筛选类别: ' + this.textContent.trim());
+                
+                // 这里应该添加实际的筛选逻辑
+                filterRecords(this.textContent.trim());
+            });
+        });
+        
+        // 筛选记录的函数
+        function filterRecords(category) {
+            // 实际应用中，这里会根据类别筛选记录
+            console.log('筛选记录，类别: ' + category);
+            
+            // 模拟筛选效果
+            if (category === '全部记录') {
+                document.querySelectorAll('.record-card').forEach(card => {
+                    card.style.display = 'block';
+                });
+            } else {
+                document.querySelectorAll('.record-card').forEach(card => {
+                    const cardCategory = card.querySelector('.text-xs.text-gray-500').textContent;
+                    if (cardCategory.includes(category)) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            }
+        }
+        
+        // 日期导航功能
+        document.getElementById('prev-day').addEventListener('click', function() {
+            // 这里应该是实际的日期变更逻辑
+            console.log('查看前一天记录');
+            alert('查看前一天记录（实际应用中会加载前一天的数据）');
+        });
+        
+        document.getElementById('next-day').addEventListener('click', function() {
+            // 这里应该是实际的日期变更逻辑
+            console.log('查看后一天记录');
+            alert('查看后一天记录（实际应用中会加载后一天的数据）');
+        });
+        
+        // 日历月份导航
+        document.getElementById('prev-month').addEventListener('click', function() {
+            // 这里应该是实际的月份变更逻辑
+            console.log('查看上个月日历');
+            alert('查看上个月日历（实际应用中会更新日历显示）');
+        });
+        
+        document.getElementById('next-month').addEventListener('click', function() {
+            // 这里应该是实际的月份变更逻辑
+            console.log('查看下个月日历');
+            alert('查看下个月日历（实际应用中会更新日历显示）');
+        });
+        
+        // 加载更多记录
+        document.getElementById('load-more').addEventListener('click', function() {
+            // 这里应该是实际加载更多记录的逻辑
+            console.log('加载更多记录');
+            alert('加载更多记录（实际应用中会加载更早的打卡记录）');
+        });
+        
+        // 搜索功能
+        const searchInput = document.querySelector('.search-bar input');
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            console.log('搜索: ' + searchTerm);
+            
+            // 实际应用中，这里会进行搜索
+            if (searchTerm) {
+                document.querySelectorAll('.record-card').forEach(card => {
+                    const title = card.querySelector('h3').textContent.toLowerCase();
+                    const description = card.querySelector('.text-sm.text-gray-600')?.textContent.toLowerCase() || '';
+                    
+                    if (title.includes(searchTerm) || description.includes(searchTerm)) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            } else {
+                // 如果搜索框为空，显示所有记录
+                document.querySelectorAll('.record-card').forEach(card => {
+                    card.style.display = 'block';
+                });
+            }
+        });
+    </script>
+</body>
+</html> 
