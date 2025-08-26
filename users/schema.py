@@ -26,6 +26,33 @@ login_request_examples = [
             "password": "admin_password"
         },
         request_only=True
+    ),
+    OpenApiExample(
+        name="成员登录（body携带tenant_id）",
+        summary="成员使用用户名/邮箱 + 租户ID 登录",
+        description=(
+            "当相同用户名/邮箱在多个租户中存在时，必须提供租户标识进行消歧。"
+            "成员可在请求体提供 tenant_id 进行租户定位。"
+        ),
+        value={
+            "username": "member@example.com",
+            "password": "member_password",
+            "tenant_id": 1
+        },
+        request_only=True
+    ),
+    OpenApiExample(
+        name="成员登录（使用请求头X-Tenant-ID）",
+        summary="成员使用用户名/邮箱 + X-Tenant-ID 登录",
+        description=(
+            "成员也可以通过请求头 X-Tenant-ID 指定租户ID（与请求体的 tenant_id 等价，优先级：请求体 > 请求头）。"
+            "示例：在请求头中添加 X-Tenant-ID: 1"
+        ),
+        value={
+            "username": "tenant_member",
+            "password": "member_password"
+        },
+        request_only=True
     )
 ]
 

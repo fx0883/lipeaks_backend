@@ -347,68 +347,100 @@ class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, style={'input_type': 'password'})
     
+    def _header_tenant_id(self):
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        if not request:
+            return None
+        raw = request.META.get('HTTP_X_TENANT_ID')
+        if not raw:
+            return None
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+
+    def _resolve_tenant_id(self):
+        # body 优先，其次 header
+        body_val = None
+        if hasattr(self, 'initial_data'):
+            body_val = self.initial_data.get('tenant_id')
+        if body_val is not None and body_val != "":
+            try:
+                return int(body_val)
+            except (TypeError, ValueError):
+                # 明确提示 body 非法
+                raise serializers.ValidationError({"tenant_id": "无效的租户ID"})
+        return self._header_tenant_id()
+
+    def _member_lookup_by_identifier(self, identifier: str, tenant_id: int):
+        """
+        在 Member 中按用户名或邮箱查找。
+        - 若传入 tenant_id：限定租户；
+        - 若未传入：允许唯一命中；多命中则返回 ('ambiguous', None)。
+        返回: (status, member or None)
+          status in {'found', 'not_found', 'ambiguous'}
+        """
+        from users.models import Member
+        qs_email = Member.objects.filter(email=identifier, is_deleted=False)
+        qs_username = Member.objects.filter(username=identifier, is_deleted=False)
+
+        if tenant_id:
+            qs_email = qs_email.filter(tenant_id=tenant_id)
+            qs_username = qs_username.filter(tenant_id=tenant_id)
+
+        # 优先邮箱，再用户名
+        for qs in (qs_email, qs_username):
+            count = qs.count()
+            if count == 1:
+                return ('found', qs.first())
+            if count > 1 and not tenant_id:
+                return ('ambiguous', None)
+        return ('not_found', None)
+
     def validate(self, data):
         """
-        验证用户名/邮箱和密码
-        从User和Member两个模型中查找用户
+        验证用户名/邮箱和密码。支持 User 与 Member；Member 支持按租户消歧。
         """
-        username_or_email = data['username']
+        identifier = data['username']
         password = data['password']
-        
-        # 尝试通过用户名登录
-        user = authenticate(username=username_or_email, password=password)
-        
-        # 如果用户名登录失败，尝试通过邮箱登录
+
+        # 1) 先尝试管理员(User)：用户名认证或邮箱精确匹配
+        user = authenticate(username=identifier, password=password)
         if not user:
-            # 从User模型中查找邮箱匹配的用户
             try:
-                user_by_email = User.objects.get(email=username_or_email, is_deleted=False)
-                # 验证密码
+                user_by_email = User.objects.get(email=identifier, is_deleted=False)
                 if user_by_email.check_password(password):
                     user = user_by_email
             except User.DoesNotExist:
-                # 尝试从Member模型中查找
-                from users.models import Member
-                try:
-                    member_by_email = Member.objects.get(email=username_or_email, is_deleted=False)
-                    # 验证密码
-                    if member_by_email.check_password(password):
-                        user = member_by_email
-                except Member.DoesNotExist:
-                    # 邮箱也找不到，保持user = None
-                    pass
-        
-        # 如果仍未找到用户，尝试在Member模型中通过用户名查找
-        if not user:
-            from users.models import Member
-            try:
-                member = Member.objects.get(username=username_or_email, is_deleted=False)
-                # 验证密码
-                if member.check_password(password):
-                    user = member
-            except Member.DoesNotExist:
-                # 用户名也找不到，保持user = None
                 pass
-        
+
+        # 2) 若非 User，再尝试 Member，结合租户消歧
+        if not user:
+            tenant_id = self._resolve_tenant_id()
+            status_key, member = self._member_lookup_by_identifier(identifier, tenant_id)
+            if status_key == 'ambiguous':
+                raise serializers.ValidationError({
+                    "tenant_id": "该标识在多个租户中存在，请提供租户ID或通过请求头 X-Tenant-ID 指定租户"
+                })
+            if status_key == 'found' and member and member.check_password(password):
+                user = member
+
         if not user:
             raise serializers.ValidationError("用户名/邮箱或密码错误")
-        
-        # 验证用户状态
+
+        # 通用状态校验
         if not user.is_active:
             raise serializers.ValidationError("用户已被禁用")
-        
         if user.is_deleted:
             raise serializers.ValidationError("用户已被删除")
-            
-        # 检查用户是否为子账号（适用于Member模型）
+        # 子账号限制
         if hasattr(user, 'parent') and user.parent:
             raise serializers.ValidationError("子账号不允许登录")
-            
-        # 验证租户状态
+        # 租户状态校验（非超管）
         if user.tenant and not getattr(user, 'is_super_admin', False):
             if user.tenant.status != 'active':
                 raise serializers.ValidationError("所属租户已被禁用或暂停")
-        
+
         data['user'] = user
         return data
 

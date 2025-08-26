@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
-from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample, OpenApiParameter
 
 from common.authentication.jwt_auth import generate_jwt_token
 from users.serializers import (
@@ -200,10 +200,22 @@ class LoginView(APIView):
     
     @extend_schema(
         summary="用户登录",
-        description="用户登录接口，验证用户名/邮箱和密码，返回JWT令牌",
+        description=(
+            "用户登录接口，验证用户名/邮箱和密码，返回JWT令牌。\n"
+            "成员可通过请求体的 tenant_id 或请求头 X-Tenant-ID 指定租户；当标识在多个租户中存在时需提供租户ID进行消歧。"
+        ),
         request=LoginSerializer,
         responses=login_responses,
         examples=login_request_examples + login_response_examples,
+        parameters=[
+            OpenApiParameter(
+                name="X-Tenant-ID",
+                location=OpenApiParameter.HEADER,
+                required=False,
+                description="租户ID。用于成员登录的租户定位（与请求体 tenant_id 等价；优先级：请求体 > 请求头）",
+                type=int,
+            ),
+        ],
         tags=["认证"]
     )
     def post(self, request):
