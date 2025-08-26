@@ -4,16 +4,20 @@
 import logging
 import jwt
 from django.conf import settings
-from rest_framework import status
+
 from rest_framework.views import APIView
+from rest_framework import status, permissions, generics, serializers
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from drf_spectacular.utils import extend_schema
-from common.authentication.jwt_auth import generate_jwt_token, refresh_jwt_token
+from django.shortcuts import get_object_or_404
+from django.core.exceptions import PermissionDenied
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
+
+from common.authentication.jwt_auth import generate_jwt_token
 from users.serializers import (
     LoginSerializer, TokenRefreshSerializer, RegisterSerializer,
     ChangePasswordSerializer, PasswordResetRequestSerializer, PasswordResetVerifySerializer,
-    PasswordResetConfirmSerializer
+    PasswordResetConfirmSerializer, MemberSelfRegisterSerializer
 )
 from users.schema import (
     login_responses, login_request_examples, login_response_examples,
@@ -24,14 +28,6 @@ from users.schema import (
     password_reset_verify_responses, password_reset_verify_examples, password_reset_verify_response_examples,
     password_reset_confirm_responses, password_reset_confirm_examples, password_reset_confirm_response_examples
 )
-from common.schema import api_schema
-from rest_framework import generics
-from rest_framework import permissions
-from rest_framework import serializers
-from drf_spectacular.utils import OpenApiResponse, OpenApiExample
-from rest_framework.exceptions import PermissionDenied, Throttled
-from django.shortcuts import get_object_or_404
-from users.models import User, Member, PasswordResetToken
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +36,6 @@ class RegisterView(APIView):
     用户注册视图
     """
     permission_classes = [AllowAny]
-    
     @extend_schema(
         summary="用户注册",
         description="新用户注册接口，可选关联到指定租户",
@@ -112,6 +107,83 @@ class RegisterView(APIView):
         """
         获取客户端IP地址
         """
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+
+
+class MemberRegisterView(APIView):
+    """
+    成员自助注册视图
+    """
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="成员自助注册",
+        description="成员自助注册接口，tenant_id可从请求体或请求头X-Tenant-ID获取",
+        request=MemberSelfRegisterSerializer,
+        responses=register_responses,
+        examples=register_request_examples + register_response_examples,
+        tags=["认证"]
+    )
+    def post(self, request):
+        serializer = MemberSelfRegisterSerializer(data=request.data, context={"request": request})
+        if serializer.is_valid():
+            # 创建成员
+            member = serializer.save()
+
+            # 生成JWT令牌
+            tokens = generate_jwt_token(member)
+            token = tokens['access_token']
+            refresh_token = tokens['refresh_token']
+
+            # 记录IP
+            ip = self.get_client_ip(request)
+            member.last_login_ip = ip
+            member.save(update_fields=['last_login_ip', 'last_login'])
+
+            # 构建成员信息
+            user_data = {
+                'id': member.id,
+                'username': member.username,
+                'email': member.email,
+                'nick_name': member.nick_name or '',
+                'avatar': member.avatar or '',
+                'is_admin': False,
+                'is_super_admin': False,
+                'is_member': True,
+                'is_sub_account': getattr(member, 'is_sub_account', False),
+            }
+
+            if member.tenant:
+                user_data['tenant_id'] = member.tenant.id
+                user_data['tenant_name'] = member.tenant.name
+
+            logger.info(f"新成员 {member.username} 自助注册成功, IP: {ip}")
+
+            return Response({
+                'success': True,
+                'code': 2000,
+                'message': '注册成功',
+                'data': {
+                    'token': token,
+                    'refresh_token': refresh_token,
+                    'user': user_data
+                }
+            }, status=status.HTTP_201_CREATED)
+
+        logger.warning(f"成员自助注册失败: {serializer.errors}, IP: {self.get_client_ip(request)}")
+        return Response({
+            'success': False,
+            'code': 4000,
+            'message': '注册失败',
+            'data': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_client_ip(self, request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             ip = x_forwarded_for.split(',')[0]

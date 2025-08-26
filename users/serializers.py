@@ -817,55 +817,181 @@ class MemberSerializer(serializers.ModelSerializer):
 
 class MemberCreateSerializer(serializers.ModelSerializer):
     """
-    普通用户创建序列化器
+    管理端创建普通成员序列化器
+    - 超级管理员可通过 body 的 tenant_id 指定租户；否则使用当前管理员的 tenant
+    - 校验密码一致性与强度
+    - 在目标租户下校验 username/email/phone 唯一
     """
-    password_confirm = serializers.CharField(write_only=True)
-    tenant_id = serializers.PrimaryKeyRelatedField(
-        queryset=Tenant.objects.all(),
-        required=False,
-        source='tenant',
-        write_only=True
-    )
-    
+    password_confirm = serializers.CharField(write_only=True, required=True)
+    tenant_id = serializers.IntegerField(write_only=True, required=False)
+
     class Meta:
         model = Member
         fields = [
-            'id', 'username', 'email', 'phone', 'nick_name', 'first_name',
-            'last_name', 'password', 'password_confirm', 'tenant_id',
-            'avatar', 'wechat_id'
+            'username', 'email', 'phone', 'nick_name', 'wechat_id',
+            'password', 'password_confirm', 'tenant_id'
         ]
         extra_kwargs = {
             'password': {'write_only': True},
-            'id': {'read_only': True}
+            'email': {'required': True},
+            'phone': {'required': False},
+            'nick_name': {'required': False},
+            'wechat_id': {'required': False}
         }
-    
+
+    def _resolve_target_tenant_id(self) -> int:
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        input_tenant_id = self.initial_data.get('tenant_id') if hasattr(self, 'initial_data') else None
+        if input_tenant_id:
+            try:
+                return int(input_tenant_id)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError({"tenant_id": "无效的租户ID"})
+        # 未提供 tenant_id，则从请求用户推断
+        if request and hasattr(request.user, 'is_super_admin'):
+            if request.user.is_super_admin:
+                # 超级管理员必须显式提供 tenant_id
+                raise serializers.ValidationError({"tenant_id": "超级管理员创建成员时必须提供租户ID"})
+            # 非超级管理员必须有绑定租户
+            if not request.user.tenant:
+                raise serializers.ValidationError({"tenant_id": "当前管理员未关联租户，无法创建成员"})
+            return request.user.tenant.id
+        return None
+
     def validate(self, data):
-        """
-        验证密码一致性
-        """
+        # 密码一致性
         if data['password'] != data.pop('password_confirm'):
             raise serializers.ValidationError({"password_confirm": "两次输入的密码不一致"})
-        
-        # 验证密码强度
+
+        # 密码强度
         validate_password(data['password'])
-        
+
+        # 解析并校验租户
+        tenant_id = self._resolve_target_tenant_id()
+        try:
+            tenant = Tenant.objects.get(id=tenant_id, status='active', is_deleted=False)
+        except Tenant.DoesNotExist:
+            raise serializers.ValidationError({"tenant_id": "无效的租户ID"})
+
+        # 唯一性校验（在该租户内）
+        username = data.get('username')
+        email = data.get('email')
+        phone = data.get('phone')
+        if username and Member.objects.filter(username=username, tenant_id=tenant_id, is_deleted=False).exists():
+            raise serializers.ValidationError({"username": "该租户下此用户名已被使用"})
+        if email and Member.objects.filter(email=email, tenant_id=tenant_id, is_deleted=False).exists():
+            raise serializers.ValidationError({"email": "该租户下此邮箱已被注册"})
+        if phone and Member.objects.filter(phone=phone, tenant_id=tenant_id, is_deleted=False).exists():
+            raise serializers.ValidationError({"phone": "该租户下此手机号已被注册"})
+
+        # 注入租户对象供 create 使用
+        data['tenant'] = tenant
         return data
-    
+
     def create(self, validated_data):
-        """
-        创建普通用户
-        """
         member = Member.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
             password=validated_data['password']
         )
-        
-        # 设置其他字段
-        for field in ['phone', 'nick_name', 'first_name', 'last_name', 'tenant', 'avatar']:
+
+        for field in ['phone', 'nick_name', 'tenant', 'wechat_id']:
             if field in validated_data:
                 setattr(member, field, validated_data[field])
-        
+
+        member.status = 'active'
+        member.is_active = True
+        member.save()
+        return member
+
+
+class MemberSelfRegisterSerializer(serializers.ModelSerializer):
+    """
+    成员自助注册序列化器
+    - tenant_id 可从 body 提供；缺省则从请求头 X-Tenant-ID 兜底
+    - 校验密码一致性与强度
+    - 校验在同一租户内的 username/email/phone 唯一
+    - 创建激活状态的 Member
+    """
+    password_confirm = serializers.CharField(write_only=True, required=True)
+    tenant_id = serializers.IntegerField(write_only=True, required=False)
+
+    class Meta:
+        model = Member
+        fields = [
+            'username', 'email', 'phone', 'nick_name', 'wechat_id',
+            'password', 'password_confirm', 'tenant_id'
+        ]
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'email': {'required': True},
+            'phone': {'required': False},
+            'nick_name': {'required': False},
+            'wechat_id': {'required': False}
+        }
+
+    def _resolve_tenant_id_from_header(self) -> int:
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        if not request:
+            return None
+        header_val = request.META.get('HTTP_X_TENANT_ID')
+        if not header_val:
+            return None
+        try:
+            return int(header_val)
+        except (TypeError, ValueError):
+            return None
+
+    def validate(self, data):
+        # 密码一致性
+        if data['password'] != data.pop('password_confirm'):
+            raise serializers.ValidationError({"password_confirm": "两次输入的密码不一致"})
+
+        # 密码强度
+        validate_password(data['password'])
+
+        # 解析租户ID：body 优先，其次请求头
+        input_tenant_id = data.pop('tenant_id', None)
+        tenant_id = input_tenant_id if input_tenant_id else self._resolve_tenant_id_from_header()
+        if not tenant_id:
+            raise serializers.ValidationError({"tenant_id": "请在请求体提供 tenant_id 或通过请求头 X-Tenant-ID 提供"})
+
+        # 校验租户有效
+        try:
+            tenant = Tenant.objects.get(id=tenant_id, status='active', is_deleted=False)
+        except Tenant.DoesNotExist:
+            raise serializers.ValidationError({"tenant_id": "无效的租户ID"})
+
+        # 在该租户内做唯一性校验（仅针对 Member 模型）
+        username = data.get('username')
+        email = data.get('email')
+        phone = data.get('phone')
+
+        if username and Member.objects.filter(username=username, tenant_id=tenant_id, is_deleted=False).exists():
+            raise serializers.ValidationError({"username": "该租户下此用户名已被使用"})
+        if email and Member.objects.filter(email=email, tenant_id=tenant_id, is_deleted=False).exists():
+            raise serializers.ValidationError({"email": "该租户下此邮箱已被注册"})
+        if phone and Member.objects.filter(phone=phone, tenant_id=tenant_id, is_deleted=False).exists():
+            raise serializers.ValidationError({"phone": "该租户下此手机号已被注册"})
+
+        # 注入解析出的租户对象
+        data['tenant'] = tenant
+        return data
+
+    def create(self, validated_data):
+        member = Member.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password']
+        )
+
+        for field in ['phone', 'nick_name', 'tenant']:
+            if field in validated_data:
+                setattr(member, field, validated_data[field])
+
+        # 设置为激活状态
+        member.status = 'active'
+        member.is_active = True
         member.save()
         return member
 
