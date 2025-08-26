@@ -464,8 +464,8 @@ class CurrentMemberView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # 不允许通过此接口修改某些字段
-        protected_fields = ['username', 'email', 'is_active', 'tenant', 'parent']
+        # 不允许通过此接口修改用户名和邮箱，其他字段允许，交由序列化器校验
+        protected_fields = ['username', 'email']
         for field in protected_fields:
             if field in request.data:
                 return Response(

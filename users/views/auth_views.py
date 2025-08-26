@@ -745,96 +745,100 @@ class PasswordResetRequestView(APIView):
         
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
+            # 延迟导入以避免循环依赖
+            from users.models import User, Member, PasswordResetToken
+            from django.utils import timezone
+            import secrets
+            import string
+            from django.core.mail import send_mail
+            from django.template.loader import render_to_string
+            from django.conf import settings
+
             email = serializer.validated_data['email']
-            user = User.objects.filter(email=email, is_active=True, is_deleted=False).first()
-            
-            if user:
-                # 生成重置令牌
-                from django.utils import timezone
-                import secrets
-                import string
-                
-                # 生成安全的随机令牌
+            account_type = serializer.validated_data.get('account_type')
+            tenant_id = serializer.validated_data.get('tenant_id')
+
+            target_user = None  # 可为 User 或 Member
+
+            try:
+                if account_type == 'user':
+                    target_user = User.objects.filter(email=email, is_active=True, is_deleted=False).first()
+                elif account_type == 'member':
+                    qs = Member.objects.filter(email=email, is_active=True, is_deleted=False, status='active')
+                    # 子账号不允许找回
+                    qs = qs.filter(parent__isnull=True)
+                    if tenant_id:
+                        qs = qs.filter(tenant_id=tenant_id)
+                    # 若出现多租户歧义，返回通用成功（不发送邮件）
+                    if qs.count() == 1:
+                        target_user = qs.first()
+                else:
+                    # 未指定类型：优先匹配 User；否则匹配唯一 Member
+                    target_user = User.objects.filter(email=email, is_active=True, is_deleted=False).first()
+                    if not target_user:
+                        qs = Member.objects.filter(email=email, is_active=True, is_deleted=False, status='active').filter(parent__isnull=True)
+                        if tenant_id:
+                            qs = qs.filter(tenant_id=tenant_id)
+                        if qs.count() == 1:
+                            target_user = qs.first()
+            except Exception as e:
+                # 出现异常也不暴露细节
+                logger.error(f"查找重置主体异常: {str(e)}")
+
+            if target_user:
+                # 生成安全令牌与过期时间
                 token = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(64))
-                
-                # 设置过期时间（1小时）
                 expires_at = timezone.now() + timezone.timedelta(hours=1)
-                
-                # 创建密码重置令牌记录
-                reset_token = PasswordResetToken.objects.create(
-                    user=user,
-                    token=token,
-                    expires_at=expires_at
-                )
-                
-                # 构建重置链接
-                from django.conf import settings
+
+                # 创建统一令牌，关联到 user 或 member
+                kwargs = {'token': token, 'expires_at': expires_at}
+                if hasattr(target_user, '_meta') and target_user._meta.model_name == 'user':
+                    kwargs['user'] = target_user
+                else:
+                    kwargs['member'] = target_user
+                reset_token = PasswordResetToken.objects.create(**kwargs)
+
+                # 重置链接
                 frontend_url = settings.FRONTEND_URL
                 reset_link = f"{frontend_url}/reset-password?token={token}"
-                
-                # 发送邮件
-                from django.core.mail import send_mail
-                from django.template.loader import render_to_string
-                
-                # 邮件主题
-                subject = '密码重置 - 多租户用户管理系统'
-                
+
                 # 邮件内容
                 context = {
-                    'user': user,
+                    'user': target_user,
                     'reset_link': reset_link,
                     'expires_at': expires_at.strftime('%Y-%m-%d %H:%M:%S')
                 }
-                
-                # 使用HTML模板
+                subject = '密码重置 - 多租户用户管理系统'
                 html_message = render_to_string('email/password_reset.html', context)
-                
-                # 纯文本消息
                 plain_message = f"""
-                尊敬的 {user.display_name}，
-                
+                尊敬的 {getattr(target_user, 'display_name', getattr(target_user, 'username', '用户'))}，
+
                 您收到此邮件是因为您请求重置您在多租户用户管理系统的密码。
-                
+
                 请点击以下链接重置密码：
                 {reset_link}
-                
+
                 此链接将在 {expires_at.strftime('%Y-%m-%d %H:%M:%S')} 过期。
-                
+
                 如果您没有请求重置密码，请忽略此邮件。
-                
+
                 多租户用户管理系统团队
                 """
-                
-                # 发送邮件
+
                 try:
                     send_mail(
                         subject=subject,
                         message=plain_message,
                         from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[user.email],
+                        recipient_list=[target_user.email],
                         html_message=html_message,
                         fail_silently=False
                     )
-                    
-                    # 记录成功发送
-                    logger.info(f"已发送密码重置邮件至 {user.email}")
-                    
-                    return Response({
-                        'success': True,
-                        'code': 2000,
-                        'message': '密码重置链接已发送到您的邮箱',
-                        'data': {
-                            'detail': '密码重置链接已发送到您的邮箱'
-                        }
-                    })
-                    
+                    logger.info(f"已发送密码重置邮件至 {target_user.email}")
                 except Exception as e:
-                    # 记录发送失败
                     logger.error(f"发送密码重置邮件失败: {str(e)}")
-                    
-                    # 删除已创建的令牌
+                    # 删除已创建的令牌，避免脏数据
                     reset_token.delete()
-                    
                     return Response({
                         'success': False,
                         'code': 5000,
@@ -843,9 +847,10 @@ class PasswordResetRequestView(APIView):
                             'detail': '发送邮件失败，请稍后再试'
                         }
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-            # 即使找不到用户，也返回成功消息，以防止枚举攻击
-            logger.info(f"用户请求密码重置，但邮箱 {email} 不存在或非活跃状态")
+
+            # 无论是否找到主体，都返回通用成功，避免用户枚举
+            if not target_user:
+                logger.info(f"密码重置请求提交（可能存在租户歧义/不存在）：{email}")
             return Response({
                 'success': True,
                 'code': 2000,
@@ -889,19 +894,24 @@ class PasswordResetVerifyView(APIView):
             token_obj = PasswordResetToken.objects.filter(token=token, is_used=False).first()
             
             if token_obj and not token_obj.is_expired():
-                logger.info(f"密码重置令牌验证成功，用户: {token_obj.user.username}")
+                # 兼容 user/member
+                owner = token_obj.user or token_obj.member
+                email = getattr(owner, 'email', None)
+                name = getattr(owner, 'username', '用户')
+                logger.info(f"密码重置令牌验证成功，账号: {name}")
                 return Response({
                     'success': True,
                     'code': 2000,
                     'message': '重置令牌有效',
                     'data': {
                         'detail': '重置令牌有效',
-                        'user_email': token_obj.user.email
+                        'user_email': email
                     }
                 })
             
             if token_obj and token_obj.is_expired():
-                logger.warning(f"密码重置令牌已过期，用户: {token_obj.user.username}")
+                owner = token_obj.user or token_obj.member
+                logger.warning(f"密码重置令牌已过期，账号: {getattr(owner, 'username', '未知')}")
                 return Response({
                     'success': False,
                     'code': 4000,
@@ -953,18 +963,22 @@ class PasswordResetConfirmView(APIView):
             token_obj = serializer.validated_data['token_obj']
             new_password = serializer.validated_data['new_password']
             
-            # 获取用户
-            user = token_obj.user
-            
+            # 获取目标账号（User 或 Member）
+            owner = token_obj.user or token_obj.member
+
+            # 校验密码强度
+            from django.contrib.auth.password_validation import validate_password
+            validate_password(new_password)
+
             # 设置新密码
-            user.set_password(new_password)
-            user.save(update_fields=['password'])
+            owner.set_password(new_password)
+            owner.save(update_fields=['password'])
             
             # 标记令牌为已使用
             token_obj.mark_as_used()
             
             # 记录密码重置
-            logger.info(f"用户 {user.username} 的密码已重置")
+            logger.info(f"账号 {getattr(owner, 'username', '用户')} 的密码已重置")
             
             return Response({
                 'success': True,

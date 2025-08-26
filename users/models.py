@@ -253,7 +253,17 @@ class PasswordResetToken(models.Model):
         'users.User', 
         on_delete=models.CASCADE,
         related_name='password_reset_tokens',
-        verbose_name=_("用户")
+        verbose_name=_("用户"),
+        null=True,
+        blank=True
+    )
+    member = models.ForeignKey(
+        'users.Member',
+        on_delete=models.CASCADE,
+        related_name='password_reset_tokens',
+        verbose_name=_("成员"),
+        null=True,
+        blank=True
     )
     token = models.CharField(_("重置令牌"), max_length=64, unique=True)
     created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
@@ -266,7 +276,14 @@ class PasswordResetToken(models.Model):
         db_table = 'password_reset_token'
     
     def __str__(self):
-        return f"{self.user.username}的重置令牌 ({self.created_at})"
+        owner = None
+        if self.user:
+            owner = self.user.username
+        elif self.member:
+            owner = self.member.username
+        else:
+            owner = "未知用户"
+        return f"{owner}的重置令牌 ({self.created_at})"
     
     def is_expired(self):
         """

@@ -730,19 +730,14 @@ class SubAccountCreateSerializer(serializers.ModelSerializer):
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     """
-    请求密码重置的序列化器
+    请求密码重置的序列化器（统一 User/Member）
+    - 仅校验基本字段格式，不泄露账号是否存在
+    - account_type 可选：user / member，用于明确主体；不提供时由服务端尝试自动判定
+    - tenant_id 可选：当 account_type=member 且邮箱在多租户下重复时需要提供
     """
     email = serializers.EmailField(required=True)
-    
-    def validate_email(self, value):
-        """
-        验证邮箱是否存在
-        """
-        from users.models import User
-        user = User.objects.filter(email=value, is_active=True, is_deleted=False).first()
-        if not user:
-            raise serializers.ValidationError("未找到使用此邮箱的活跃账户")
-        return value
+    account_type = serializers.ChoiceField(choices=["user", "member"], required=False)
+    tenant_id = serializers.IntegerField(required=False)
 
 
 class PasswordResetVerifySerializer(serializers.Serializer):
