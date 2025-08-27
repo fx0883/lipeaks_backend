@@ -8,6 +8,8 @@ from django.contrib.auth.password_validation import validate_password
 from users.models import User, Member, PasswordResetToken
 from tenants.models import Tenant
 from common.utils.image_url import add_domain_to_image_url
+from common.utils.tenant_header import get_header_tenant_id, require_member_header_match
+from common.exceptions import TenantHeaderInvalidOrMissing, TenantMismatchOrNoPermission
 
 # 添加日志器
 logger = logging.getLogger(__name__)
@@ -26,7 +28,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'phone', 'nick_name', 'first_name', 
             'last_name', 'is_active', 'avatar', 'tenant', 'tenant_name', 
-            'is_admin', 'is_member', 'is_super_admin', 'role', 'date_joined',
+            'is_admin', 'is_member', 'role', 'date_joined',
             'wechat_id'
         ]
         read_only_fields = ['id', 'date_joined', 'role', 'tenant_name', 'is_member']
@@ -54,10 +56,6 @@ class UserSerializer(serializers.ModelSerializer):
         """获取完整的头像URL"""
         if not obj.avatar:
             return ""
-            
-        # 如果已经是完整URL，直接返回
-        if obj.avatar.startswith(('http://', 'https://')):
-            return obj.avatar
             
         # 获取请求对象
         request = self.context.get('request')
@@ -351,26 +349,7 @@ class LoginSerializer(serializers.Serializer):
         request = self.context.get('request') if hasattr(self, 'context') else None
         if not request:
             return None
-        raw = request.META.get('HTTP_X_TENANT_ID')
-        if not raw:
-            return None
-        try:
-            return int(raw)
-        except (TypeError, ValueError):
-            return None
-
-    def _resolve_tenant_id(self):
-        # body 优先，其次 header
-        body_val = None
-        if hasattr(self, 'initial_data'):
-            body_val = self.initial_data.get('tenant_id')
-        if body_val is not None and body_val != "":
-            try:
-                return int(body_val)
-            except (TypeError, ValueError):
-                # 明确提示 body 非法
-                raise serializers.ValidationError({"tenant_id": "无效的租户ID"})
-        return self._header_tenant_id()
+        return get_header_tenant_id(request)
 
     def _member_lookup_by_identifier(self, identifier: str, tenant_id: int):
         """
@@ -404,26 +383,46 @@ class LoginSerializer(serializers.Serializer):
         identifier = data['username']
         password = data['password']
 
-        # 1) 先尝试管理员(User)：用户名认证或邮箱精确匹配
-        user = authenticate(username=identifier, password=password)
-        if not user:
-            try:
-                user_by_email = User.objects.get(email=identifier, is_deleted=False)
-                if user_by_email.check_password(password):
-                    user = user_by_email
-            except User.DoesNotExist:
-                pass
+        request = self.context.get('request') if hasattr(self, 'context') else None
 
-        # 2) 若非 User，再尝试 Member，结合租户消歧
-        if not user:
-            tenant_id = self._resolve_tenant_id()
-            status_key, member = self._member_lookup_by_identifier(identifier, tenant_id)
-            if status_key == 'ambiguous':
-                raise serializers.ValidationError({
-                    "tenant_id": "该标识在多个租户中存在，请提供租户ID或通过请求头 X-Tenant-ID 指定租户"
-                })
+        # 有 Header => 强制成员流程；管理员/超管携带 Header 禁止
+        header_tid = self._header_tenant_id()
+        if header_tid is not None:
+            # 成员流程：忽略 body tenant_id 并记录（由工具函数负责日志）
+            if request:
+                require_member_header_match(request)  # 缺失/非法会抛4001；未认证用户仅校验Header格式
+            status_key, member = self._member_lookup_by_identifier(identifier, header_tid)
             if status_key == 'found' and member and member.check_password(password):
                 user = member
+            else:
+                # 若凭据命中了管理员账号，也应当禁止（管理员/超管禁头）
+                possible_admin = authenticate(username=identifier, password=password)
+                if not possible_admin:
+                    try:
+                        user_by_email = User.objects.get(email=identifier, is_deleted=False)
+                        if user_by_email.check_password(password):
+                            possible_admin = user_by_email
+                    except User.DoesNotExist:
+                        pass
+                if possible_admin is not None:
+                    # 管理员/超管携带Header登录，返回4001
+                    raise TenantHeaderInvalidOrMissing()
+                # 其他情况按通用失败处理
+                raise serializers.ValidationError("用户名/邮箱或密码错误")
+        else:
+            # 无 Header => 仅允许管理员/超管流程；成员必须使用Header
+            user = authenticate(username=identifier, password=password)
+            if not user:
+                try:
+                    user_by_email = User.objects.get(email=identifier, is_deleted=False)
+                    if user_by_email.check_password(password):
+                        user = user_by_email
+                except User.DoesNotExist:
+                    pass
+            # 若命中成员，则因无Header而拒绝
+            if not user:
+                # 不再进行成员查找，直接要求Header
+                raise TenantHeaderInvalidOrMissing()
 
         if not user:
             raise serializers.ValidationError("用户名/邮箱或密码错误")
@@ -630,6 +629,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         """
         验证密码一致性和强度
         """
+        # 管理员/超管注册接口禁用 Header：若携带 X-Tenant-ID 则报 4001
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        if request is not None and get_header_tenant_id(request) is not None:
+            raise TenantHeaderInvalidOrMissing()
+
         if data['password'] != data.pop('password_confirm'):
             raise serializers.ValidationError({"password_confirm": "两次输入的密码不一致"})
         
@@ -738,6 +742,37 @@ class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     account_type = serializers.ChoiceField(choices=["user", "member"], required=False)
     tenant_id = serializers.IntegerField(required=False)
+
+    def validate(self, data):
+        """
+        根据 account_type 与 X-Tenant-ID 执行租户头规则：
+        - account_type=member：强制使用 Header，忽略 body tenant_id
+        - account_type=user：若携带 Header -> 4001
+        - 未指定：若携带 Header -> 按成员流程；否则保持原有策略
+        """
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        header_tid = get_header_tenant_id(request) if request else None
+        acct = data.get('account_type')
+
+        if acct == 'member' or (acct is None and header_tid is not None):
+            # 成员流程：要求并校验 Header，忽略 body 的 tenant_id
+            if request:
+                require_member_header_match(request)
+            if header_tid is None:
+                # 兜底：按规则这里应已抛错
+                raise TenantHeaderInvalidOrMissing()
+            # 覆盖为 Header 值
+            data['tenant_id'] = header_tid
+            return data
+
+        if acct == 'user':
+            # 管理员/超管禁用 Header
+            if header_tid is not None:
+                raise TenantHeaderInvalidOrMissing()
+            return data
+
+        # acct is None 且无 Header：保持既有策略，不做额外强制
+        return data
 
 
 class PasswordResetVerifySerializer(serializers.Serializer):
@@ -935,7 +970,7 @@ class MemberCreateSerializer(serializers.ModelSerializer):
 class MemberSelfRegisterSerializer(serializers.ModelSerializer):
     """
     成员自助注册序列化器
-    - tenant_id 可从 body 提供；缺省则从请求头 X-Tenant-ID 兜底
+    - 仅从请求头 X-Tenant-ID 获取租户ID（忽略 body 的 tenant_id）
     - 校验密码一致性与强度
     - 校验在同一租户内的 username/email/phone 唯一
     - 创建激活状态的 Member
@@ -977,11 +1012,17 @@ class MemberSelfRegisterSerializer(serializers.ModelSerializer):
         # 密码强度
         validate_password(data['password'])
 
-        # 解析租户ID：body 优先，其次请求头
-        input_tenant_id = data.pop('tenant_id', None)
-        tenant_id = input_tenant_id if input_tenant_id else self._resolve_tenant_id_from_header()
-        if not tenant_id:
-            raise serializers.ValidationError({"tenant_id": "请在请求体提供 tenant_id 或通过请求头 X-Tenant-ID 提供"})
+        # 成员注册仅允许并强制使用 Header 的租户ID，忽略 body 的 tenant_id
+        # 移除并忽略 body 中的 tenant_id（如提供）
+        data.pop('tenant_id', None)
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        if request:
+            # 统一校验与日志（缺失/非法->4001，已登录且租户不匹配->4003）
+            require_member_header_match(request)
+        tenant_id = get_header_tenant_id(request) if request else None
+        if tenant_id is None:
+            # 兜底：无有效 Header
+            raise TenantHeaderInvalidOrMissing()
 
         # 校验租户有效
         try:

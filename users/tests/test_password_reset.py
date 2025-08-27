@@ -70,16 +70,16 @@ class PasswordResetTests(TestCase):
         self.url_verify = reverse("auth:password-reset-verify")
         self.url_confirm = reverse("auth:password-reset-confirm")
 
-    def test_member_request_with_tenant_id_creates_token(self):
+    def test_member_request_with_header_creates_token(self):
         before = PasswordResetToken.objects.count()
         resp = self.client.post(
             self.url_request,
             {
                 "email": "ma@example.com",
                 "account_type": "member",
-                "tenant_id": self.tenant_a.id,
             },
             format="json",
+            HTTP_X_TENANT_ID=str(self.tenant_a.id),
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data.get("success"))
@@ -90,21 +90,38 @@ class PasswordResetTests(TestCase):
         self.assertEqual(token.member_id, self.member_ta.id)
         self.assertFalse(token.is_used)
 
-    def test_member_request_ambiguous_email_no_token_created(self):
+    def test_member_request_without_header_returns_4001(self):
+        # account_type=member 但无 Header -> 4001
         before = PasswordResetToken.objects.count()
         resp = self.client.post(
             self.url_request,
             {
                 "email": "member.same@example.com",
                 "account_type": "member",
-                # no tenant_id -> ambiguous across tenants
             },
             format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(resp.data.get("success"))
+        self.assertEqual(resp.data.get("code"), 4001)
+        after = PasswordResetToken.objects.count()
+        self.assertEqual(after, before)
+
+    def test_member_request_with_header_resolves_ambiguity_and_creates_token(self):
+        before = PasswordResetToken.objects.count()
+        resp = self.client.post(
+            self.url_request,
+            {
+                "email": "member.same@example.com",
+                "account_type": "member",
+            },
+            format="json",
+            HTTP_X_TENANT_ID=str(self.tenant_b.id),
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data.get("success"))
         after = PasswordResetToken.objects.count()
-        self.assertEqual(after, before)
+        self.assertEqual(after, before + 1)
 
     def test_sub_account_cannot_request_reset(self):
         before = PasswordResetToken.objects.count()
@@ -113,7 +130,40 @@ class PasswordResetTests(TestCase):
             {
                 "email": "sub@example.com",
                 "account_type": "member",
-                "tenant_id": self.tenant_a.id,
+            },
+            format="json",
+            HTTP_X_TENANT_ID=str(self.tenant_a.id),
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data.get("success"))
+        after = PasswordResetToken.objects.count()
+        self.assertEqual(after, before)
+
+    def test_user_request_with_header_forbidden_4001(self):
+        # 管理员/超管请求阶段禁止携带 Header
+        before = PasswordResetToken.objects.count()
+        resp = self.client.post(
+            self.url_request,
+            {
+                "email": "admin@example.com",
+                "account_type": "user",
+            },
+            format="json",
+            HTTP_X_TENANT_ID=str(self.tenant_a.id),
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(resp.data.get("success"))
+        self.assertEqual(resp.data.get("code"), 4001)
+        after = PasswordResetToken.objects.count()
+        self.assertEqual(after, before)
+
+    def test_user_request_without_header_returns_200(self):
+        before = PasswordResetToken.objects.count()
+        resp = self.client.post(
+            self.url_request,
+            {
+                "email": "admin@example.com",
+                "account_type": "user",
             },
             format="json",
         )
@@ -121,6 +171,21 @@ class PasswordResetTests(TestCase):
         self.assertTrue(resp.data.get("success"))
         after = PasswordResetToken.objects.count()
         self.assertEqual(after, before)
+
+    def test_unspecified_account_type_with_header_treated_as_member(self):
+        before = PasswordResetToken.objects.count()
+        resp = self.client.post(
+            self.url_request,
+            {
+                "email": "ma@example.com",
+            },
+            format="json",
+            HTTP_X_TENANT_ID=str(self.tenant_a.id),
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data.get("success"))
+        after = PasswordResetToken.objects.count()
+        self.assertEqual(after, before + 1)
 
     def test_verify_invalid_token(self):
         resp = self.client.post(self.url_verify, {"token": "invalid"}, format="json")

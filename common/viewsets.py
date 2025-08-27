@@ -4,6 +4,9 @@
 import logging
 from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from django.conf import settings
+from common.utils.tenant_header import get_header_tenant_id, require_member_header_match
+from common.exceptions import TenantHeaderInvalidOrMissing, TenantMismatchOrNoPermission
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +50,69 @@ class TenantModelViewSet(viewsets.ModelViewSet):
             logger.info(f"[TenantModelViewSet] {view_name} 非CMS路径，跳过租户过滤: {request_path}")
             return queryset
         
-        # 获取租户信息
+        # 如果模型没有tenant字段，则不需要过滤
+        if not hasattr(queryset.model, 'tenant'):
+            logger.info(f"[TenantModelViewSet] {view_name} 模型 {queryset.model.__name__} 没有tenant字段，跳过租户过滤")
+            return queryset
+        
+        # feature flag：开启后按新规则执行租户来源与角色分流
+        if getattr(settings, 'FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER', True):
+            request = self.request
+            user = getattr(request, 'user', None)
+            is_auth = bool(user and getattr(user, 'is_authenticated', False))
+            is_super_admin = bool(is_auth and getattr(request, 'auth_type', None) == 'jwt' and getattr(user, 'is_super_admin', False))
+            is_tenant_admin = bool(is_auth and getattr(user, 'is_admin', False) and not is_super_admin)
+
+            # 防御性：管理员/超管禁头（应被中间件拦截，这里再次保障）
+            header_tid = get_header_tenant_id(request)
+            if (is_super_admin or is_tenant_admin) and header_tid is not None:
+                logger.warning(f"[TenantModelViewSet] {view_name} 管理员/超管携带X-Tenant-ID被拒绝")
+                raise TenantHeaderInvalidOrMissing()
+
+            # 计算有效租户ID
+            effective_tenant_id = None
+            if is_super_admin:
+                q_tid = request.GET.get('tenant_id')
+                if q_tid is not None:
+                    try:
+                        effective_tenant_id = int(q_tid)
+                    except (TypeError, ValueError):
+                        raise TenantHeaderInvalidOrMissing()
+                else:
+                    # GET可以不指定 -> 返回全量；非GET在写操作里另行校验
+                    logger.info(f"[TenantModelViewSet] {view_name} 超管未提供tenant_id参数，GET场景返回全量")
+                    return queryset
+            elif is_tenant_admin:
+                q_tid = request.GET.get('tenant_id')
+                if q_tid is not None:
+                    try:
+                        effective_tenant_id = int(q_tid)
+                    except (TypeError, ValueError):
+                        raise TenantHeaderInvalidOrMissing()
+                else:
+                    user_tenant = getattr(user, 'tenant', None)
+                    if user_tenant:
+                        effective_tenant_id = int(user_tenant.id)
+                    else:
+                        # 管理员无绑定租户视为无权限
+                        raise TenantMismatchOrNoPermission()
+            else:
+                # 成员或匿名：仅用Header并校验匹配
+                require_member_header_match(request)
+                # 再取到已验证的header作为过滤租户
+                header_tid_val = get_header_tenant_id(request)
+                if header_tid_val is None:
+                    raise TenantHeaderInvalidOrMissing()
+                effective_tenant_id = int(header_tid_val)
+
+            logger.info(f"[TenantModelViewSet] {view_name} 按新规则过滤租户: {effective_tenant_id}")
+            return queryset.filter(tenant_id=effective_tenant_id)
+        
+        # feature flag 关闭：维持旧逻辑（依赖中间件注入的 request.tenant_id 等）
         tenant_id = getattr(self.request, 'tenant_id', None)
         tenant_source = getattr(self.request, 'tenant_source', None)
         is_super_admin_no_tenant = getattr(self.request, 'is_super_admin_no_tenant', False)
-        
         logger.info(f"[TenantModelViewSet] {view_name} 获取到租户信息: tenant_id={tenant_id}, source={tenant_source}, is_super_admin_no_tenant={is_super_admin_no_tenant}")
-        
-        # 获取当前用户信息
         user = getattr(self.request, 'user', None)
         if user and user.is_authenticated:
             is_super_admin = getattr(user, 'is_super_admin', False)
@@ -63,34 +121,20 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         else:
             logger.info(f"[TenantModelViewSet] {view_name} 用户未认证")
             is_super_admin = False
-        
-        # 如果模型没有tenant字段，则不需要过滤
-        if not hasattr(queryset.model, 'tenant'):
-            logger.info(f"[TenantModelViewSet] {view_name} 模型 {queryset.model.__name__} 没有tenant字段，跳过租户过滤")
-            return queryset
-        
-        # 超级管理员特殊处理
         if is_super_admin:
             if tenant_source == 'query_param':
-                # 查询参数指定的租户
                 logger.info(f"[TenantModelViewSet] {view_name} 超级管理员通过查询参数过滤租户: {tenant_id}")
                 return queryset.filter(tenant_id=tenant_id)
             elif tenant_source == 'header':
-                # 请求头指定的租户
                 logger.info(f"[TenantModelViewSet] {view_name} 超级管理员通过请求头过滤租户: {tenant_id}")
                 return queryset.filter(tenant_id=tenant_id)
             elif is_super_admin_no_tenant:
-                # 超级管理员没有指定租户，返回所有租户的数据
                 logger.info(f"[TenantModelViewSet] {view_name} 超级管理员未指定租户，返回所有租户数据")
                 return queryset
             else:
-                # 其他情况，返回所有租户数据
                 logger.info(f"[TenantModelViewSet] {view_name} 超级管理员返回所有租户数据")
                 return queryset
-        
-        # 普通用户处理
         if tenant_id:
-            # 有租户ID，按租户过滤
             logger.info(f"[TenantModelViewSet] {view_name} 普通用户按租户ID过滤: {tenant_id}")
             try:
                 tenant_id = int(tenant_id)
@@ -99,7 +143,6 @@ class TenantModelViewSet(viewsets.ModelViewSet):
                 logger.error(f"[TenantModelViewSet] {view_name} 无效的租户ID: {tenant_id}")
                 raise ValidationError({"detail": f"无效的租户ID: {tenant_id}"})
         else:
-            # 没有租户ID，返回空查询集
             logger.warning(f"[TenantModelViewSet] {view_name} 普通用户未提供租户ID，返回空查询集")
             return queryset.none()
     
@@ -114,14 +157,9 @@ class TenantModelViewSet(viewsets.ModelViewSet):
             logger.info(f"[TenantModelViewSet] {view_name} 非CMS路径，跳过租户设置: {self.request.path}")
             return serializer.save()
         
-        # 获取当前租户ID
-        tenant_id = getattr(self.request, 'tenant_id', None)
-        logger.info(f"[TenantModelViewSet] {view_name} 创建对象时获取到租户ID: {tenant_id}")
-        
-        # 如果没有租户ID，则拒绝创建
-        if not tenant_id:
-            logger.warning(f"[TenantModelViewSet] {view_name} 尝试创建对象但未提供租户ID")
-            raise ValidationError({"detail": "未提供租户ID，无法创建对象"})
+        # 计算有效租户ID（新规则下覆盖 request.tenant_id）
+        tenant_id = self._effective_tenant_id_for_write()
+        logger.info(f"[TenantModelViewSet] {view_name} 创建对象使用有效租户ID: {tenant_id}")
         
         # 如果模型有tenant字段且有租户ID，则自动设置
         if tenant_id and hasattr(serializer.Meta.model, 'tenant'):
@@ -131,25 +169,7 @@ class TenantModelViewSet(viewsets.ModelViewSet):
                 # 确保租户ID是整数
                 tenant_id = int(tenant_id)
                 
-                # 超级管理员特殊处理：允许通过X-Tenant-ID请求头指定租户进行操作
-                user = self.request.user
-                is_super_admin = getattr(user, 'is_super_admin', False)
-                
-                if is_super_admin:
-                    # 超级管理员已经在中间件中验证了租户ID的有效性
-                    logger.info(f"[TenantModelViewSet] {view_name} 超级管理员 {user.username} 在租户 {tenant_id} 中创建对象")
-                    serializer.save(tenant_id=tenant_id)
-                    return
-                
-                # 验证普通用户是否关联该租户
-                if user.is_authenticated and hasattr(user, 'tenant') and user.tenant:
-                    user_tenant_id = str(user.tenant.id)
-                    if user_tenant_id != str(tenant_id):
-                        logger.warning(f"[TenantModelViewSet] {view_name} 用户 {user.username} 尝试在其他租户创建对象: 用户租户={user_tenant_id}, 请求租户={tenant_id}")
-                        raise PermissionDenied("无法在其他租户创建对象")
-                    
-                    logger.info(f"[TenantModelViewSet] {view_name} 用户 {user.username} 在自己的租户 {tenant_id} 中创建对象")
-                
+                # 有效租户ID基于角色已校验匹配/权限
                 serializer.save(tenant_id=tenant_id)
             except (ValueError, TypeError):
                 logger.error(f"[TenantModelViewSet] {view_name} 无效的租户ID: {tenant_id}")
@@ -230,7 +250,7 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         tenant_id = getattr(self.request, 'tenant_id', None)
         
         # 如果没有设置租户ID，则拒绝访问
-        if not tenant_id:
+        if tenant_id is None:
             logger.warning(f"[TenantModelViewSet] {view_name} 尝试操作对象但未提供租户ID")
             raise PermissionDenied("无法操作对象: 未提供租户ID")
             
@@ -241,3 +261,119 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         if obj_tenant_id and obj_tenant_id != str(tenant_id):
             logger.warning(f"[TenantModelViewSet] {view_name} 尝试操作不属于当前租户的对象: 对象租户ID={obj_tenant_id}, 当前租户ID={tenant_id}")
             raise PermissionDenied("无法操作不属于当前租户的对象") 
+
+    # —— 辅助方法：按新规则计算有效租户 ——
+    def _effective_tenant_id_for_read(self, default_none_ok: bool = False):
+        """为读取场景确定有效租户ID。仅在CMS路径使用。"""
+        if "/cms/" not in self.request.path:
+            return None
+        if not getattr(settings, 'FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER', True):
+            return getattr(self.request, 'tenant_id', None)
+
+        request = self.request
+        user = getattr(request, 'user', None)
+        is_auth = bool(user and getattr(user, 'is_authenticated', False))
+        is_super_admin = bool(is_auth and getattr(request, 'auth_type', None) == 'jwt' and getattr(user, 'is_super_admin', False))
+        is_tenant_admin = bool(is_auth and getattr(user, 'is_admin', False) and not is_super_admin)
+
+        header_tid = get_header_tenant_id(request)
+        if (is_super_admin or is_tenant_admin) and header_tid is not None:
+            raise TenantHeaderInvalidOrMissing()
+
+        if is_super_admin:
+            q_tid = request.GET.get('tenant_id')
+            if q_tid is not None:
+                try:
+                    return int(q_tid)
+                except (TypeError, ValueError):
+                    raise TenantHeaderInvalidOrMissing()
+            return None if default_none_ok else None
+        if is_tenant_admin:
+            q_tid = request.GET.get('tenant_id')
+            if q_tid is not None:
+                try:
+                    return int(q_tid)
+                except (TypeError, ValueError):
+                    raise TenantHeaderInvalidOrMissing()
+            user_tenant = getattr(user, 'tenant', None)
+            if user_tenant:
+                return int(user_tenant.id)
+            raise TenantMismatchOrNoPermission()
+
+        # 成员/匿名
+        require_member_header_match(request)
+        tid = get_header_tenant_id(request)
+        if tid is None:
+            raise TenantHeaderInvalidOrMissing()
+        return int(tid)
+
+    def _effective_tenant_id_for_write(self):
+        """为写操作确定有效租户ID，严格规则。"""
+        if "/cms/" not in self.request.path:
+            return getattr(self.request, 'tenant_id', None)
+        request = self.request
+        if not getattr(settings, 'FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER', True):
+            tid = getattr(request, 'tenant_id', None)
+            if tid is None:
+                raise ValidationError({"detail": "未提供租户ID，无法创建对象"})
+            return tid
+
+        user = getattr(request, 'user', None)
+        is_auth = bool(user and getattr(user, 'is_authenticated', False))
+        is_super_admin = bool(is_auth and getattr(request, 'auth_type', None) == 'jwt' and getattr(user, 'is_super_admin', False))
+        is_tenant_admin = bool(is_auth and getattr(user, 'is_admin', False) and not is_super_admin)
+
+        header_tid = get_header_tenant_id(request)
+        if (is_super_admin or is_tenant_admin) and header_tid is not None:
+            raise TenantHeaderInvalidOrMissing()
+
+        if is_super_admin:
+            q_tid = request.GET.get('tenant_id')
+            if q_tid is None:
+                # 确认：超管写操作必须提供?tenant_id=
+                raise TenantHeaderInvalidOrMissing()
+            try:
+                return int(q_tid)
+            except (TypeError, ValueError):
+                raise TenantHeaderInvalidOrMissing()
+        if is_tenant_admin:
+            q_tid = request.GET.get('tenant_id')
+            if q_tid is not None:
+                try:
+                    return int(q_tid)
+                except (TypeError, ValueError):
+                    raise TenantHeaderInvalidOrMissing()
+            user_tenant = getattr(user, 'tenant', None)
+            if user_tenant:
+                return int(user_tenant.id)
+            raise TenantMismatchOrNoPermission()
+
+        # 成员/匿名
+        require_member_header_match(request)
+        tid = get_header_tenant_id(request)
+        if tid is None:
+            raise TenantHeaderInvalidOrMissing()
+        return int(tid)
+
+    # —— 为成员/匿名 CMS GET 添加 Vary: X-Tenant-ID ——
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        try:
+            if request and request.method == 'GET' and '/cms/' in getattr(request, 'path', ''):
+                user = getattr(request, 'user', None)
+                is_auth = bool(user and getattr(user, 'is_authenticated', False))
+                is_super_admin = bool(is_auth and getattr(request, 'auth_type', None) == 'jwt' and getattr(user, 'is_super_admin', False))
+                is_tenant_admin = bool(is_auth and getattr(user, 'is_admin', False) and not is_super_admin)
+                # 仅对成员/匿名添加Vary
+                if not (is_super_admin or is_tenant_admin):
+                    vary = response.headers.get('Vary') or response.get('Vary')
+                    header_name = 'X-Tenant-ID'
+                    if vary:
+                        if header_name not in str(vary):
+                            response['Vary'] = f"{vary}, {header_name}"
+                    else:
+                        response['Vary'] = header_name
+        except Exception:
+            # 响应对象可能因渲染器差异不具备headers属性，尽量容错
+            pass
+        return response

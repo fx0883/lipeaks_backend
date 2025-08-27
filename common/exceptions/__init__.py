@@ -43,6 +43,29 @@ def custom_exception_handler(exc, context):
     """
     # 首先调用REST framework的默认异常处理
     response = exception_handler(exc, context)
+
+    # 优先处理租户头相关的统一错误，固定中文文案与业务码
+    if isinstance(exc, TenantHeaderInvalidOrMissing):
+        return Response(
+            {
+                'success': False,
+                'code': 4001,
+                'message': '缺少或非法的租户ID',
+                'data': None,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if isinstance(exc, TenantMismatchOrNoPermission):
+        return Response(
+            {
+                'success': False,
+                'code': 4003,
+                'message': '租户不匹配，或者没有权限',
+                'data': None,
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
     
     if response is not None:
         # 自定义格式化响应
@@ -119,4 +142,19 @@ class APIException(APIException):
     """服务器错误异常"""
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = '服务器内部错误'
-    default_code = 'server_error' 
+    default_code = 'server_error'
+
+
+# —— 成员/CMS 租户头统一错误 ——
+class TenantHeaderInvalidOrMissing(APIException):
+    """缺少或非法的租户ID（4001）"""
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = '缺少或非法的租户ID'
+    default_code = 'tenant_header_invalid_or_missing'
+
+
+class TenantMismatchOrNoPermission(APIException):
+    """租户不匹配，或者没有权限（4003）"""
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = '租户不匹配，或者没有权限'
+    default_code = 'tenant_mismatch_or_no_permission'

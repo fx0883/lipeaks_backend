@@ -109,14 +109,15 @@ class LoginTests(TestCase):
         self.assertTrue(resp.data.get("success"))
 
     def test_member_login_with_tenant_id_in_body(self):
+        # 改为仅使用 Header；body 中的 tenant_id 不再支持
         resp = self.client.post(
             self.url,
-            {"username": "ma@example.com", "password": "GoodPass123!", "tenant_id": self.tenant_a.id},
+            {"username": "ma@example.com", "password": "GoodPass123!"},
             format="json",
+            HTTP_X_TENANT_ID=str(self.tenant_a.id),
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data.get("success"))
-        self.assertEqual(resp.data.get("data", {}).get("user", {}).get("tenant_id"), self.tenant_a.id)
 
     def test_member_login_with_x_tenant_id_header(self):
         resp = self.client.post(
@@ -128,34 +129,59 @@ class LoginTests(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data.get("success"))
 
-    def test_ambiguity_requires_tenant(self):
-        # same email exists in two tenants; without tenant, should get 401 generic error
+    def test_ambiguity_requires_tenant_header(self):
+        # 成员登录无 Header 一律 4001（成员必须使用 Header）
         resp = self.client.post(
             self.url,
             {"username": "member.same@example.com", "password": "MemberPass123!"},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("message"), "用户名/邮箱或密码错误")
+        self.assertEqual(resp.data.get("code"), 4001)
 
     def test_sub_account_cannot_login(self):
         resp = self.client.post(
             self.url,
-            {"username": "sub@example.com", "password": "SubPass123!", "tenant_id": self.tenant_a.id},
+            {"username": "sub@example.com", "password": "SubPass123!"},
             format="json",
+            HTTP_X_TENANT_ID=str(self.tenant_a.id),
         )
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("message"), "用户名/邮箱或密码错误")
+        self.assertEqual(resp.data.get("message"), "子账号不允许登录")
 
     def test_member_tenant_status_enforced(self):
         # suspended tenant member should not login
         resp = self.client.post(
             self.url,
-            {"username": "s@example.com", "password": "Suspended123!", "tenant_id": self.suspended_tenant.id},
+            {"username": "s@example.com", "password": "Suspended123!"},
             format="json",
+            HTTP_X_TENANT_ID=str(self.suspended_tenant.id),
         )
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("message"), "用户名/邮箱或密码错误")
+        self.assertEqual(resp.data.get("message"), "所属租户已被禁用或暂停")
+
+    def test_admin_login_with_header_forbidden(self):
+        # 管理员/超管携带 Header 登录 -> 4001
+        resp = self.client.post(
+            self.url,
+            {"username": "admin_user", "password": "AdminPass123!"},
+            format="json",
+            HTTP_X_TENANT_ID=str(self.tenant_a.id),
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(resp.data.get("success"))
+        self.assertEqual(resp.data.get("code"), 4001)
+
+    def test_member_login_without_header_forbidden(self):
+        # 成员无 Header 登录 -> 4001
+        resp = self.client.post(
+            self.url,
+            {"username": "ma@example.com", "password": "GoodPass123!"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(resp.data.get("success"))
+        self.assertEqual(resp.data.get("code"), 4001)

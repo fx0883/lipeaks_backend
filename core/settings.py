@@ -58,6 +58,12 @@ DEBUG = get_env_with_validation('DEBUG', lambda x: x.lower() == 'true', 'True')
 # 从环境变量读取日志输出方式，默认跟随DEBUG设置
 LOG_TO_CONSOLE = os.getenv('LOG_TO_CONSOLE', str(DEBUG)).lower() == 'true'
 
+# Feature flags
+# 是否强制成员/匿名在CMS路径携带并校验 X-Tenant-ID（默认开启，可用环境变量关闭以便灰度）
+FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER = get_env_with_validation(
+    'FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER', lambda x: x.lower() == 'true', 'True'
+)
+
 # 从环境变量读取ALLOWED_HOSTS，并添加espressox.online
 allowed_hosts_from_env = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 ALLOWED_HOSTS = allowed_hosts_from_env + ['espressox.online']
@@ -104,6 +110,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     # 添加API认证中间件在AuthenticationMiddleware之后,TenantMiddleware之前
     'common.middleware.api_auth_middleware.APIAuthMiddleware',
+    # 成员租户头强制中间件（必须位于TenantMiddleware之前）
+    'common.middleware.member_header_enforce_middleware.MemberHeaderEnforceMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # 自定义租户中间件
