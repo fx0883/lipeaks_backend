@@ -28,14 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 class MemberHeaderEnforceMiddleware(MiddlewareMixin):
-    CMS_PREFIX = "/api/v1/cms/"
+    API_PREFIX = "/api/v1/"
 
     def process_request(self, request: HttpRequest):
         # feature flag gating
         if not getattr(settings, "FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER", True):
             return None
         path = getattr(request, "path", "") or ""
-        if not path.startswith(self.CMS_PREFIX):
+        if not path.startswith(self.API_PREFIX):
             return None
 
         user = getattr(request, "user", None)
