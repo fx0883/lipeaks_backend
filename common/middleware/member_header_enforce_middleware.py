@@ -31,12 +31,24 @@ class MemberHeaderEnforceMiddleware(MiddlewareMixin):
     API_PREFIX = "/api/v1/"
 
     def process_request(self, request: HttpRequest):
+        logger.info(f"[进入中间件] MemberHeaderEnforceMiddleware - 处理请求: {request.path}")
+
+
         # feature flag gating
         if not getattr(settings, "FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER", True):
             return None
         path = getattr(request, "path", "") or ""
+
+
+
+        if path.startswith('/api/v1/docs/'):
+            return None
+
         if not path.startswith(self.API_PREFIX):
             return None
+
+        # if path.startswith('/api/v1/auth/'):
+        #     return None
 
         user = getattr(request, "user", None)
         is_authenticated = getattr(user, "is_authenticated", False)

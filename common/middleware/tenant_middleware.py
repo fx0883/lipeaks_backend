@@ -68,6 +68,7 @@ class TenantMiddleware(MiddlewareMixin):
         Returns:
             None
         """
+        logger.info(f"[进入中间件] TenantMiddleware - 处理请求: {request.path}")
         # 清除之前的租户上下文
         clear_current_tenant()
         
