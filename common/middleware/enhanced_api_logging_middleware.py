@@ -237,6 +237,7 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
         Args:
             request: HTTP请求对象
         """
+        logger.info(f"[进入中间件] EnhancedAPILoggingMiddleware - 处理请求: {request.path}")
         if not self._should_log(request):
             return None
         
