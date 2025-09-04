@@ -110,8 +110,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     # 添加API认证中间件在AuthenticationMiddleware之后,TenantMiddleware之前
     'common.middleware.api_auth_middleware.APIAuthMiddleware',
-    # 成员租户头强制中间件（必须位于TenantMiddleware之前）
-    'common.middleware.member_header_enforce_middleware.MemberHeaderEnforceMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # 自定义租户中间件
