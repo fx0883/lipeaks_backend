@@ -9,6 +9,8 @@ from users.models import User, Member, PasswordResetToken
 from tenants.models import Tenant
 from common.utils.image_url import add_domain_to_image_url
 from common.utils.tenant_header import get_header_tenant_id, require_member_header_match
+from common.permissions import IsSuperAdmin, IsAdmin
+from common.utils.user_permissions import is_super_admin, is_admin
 from common.exceptions import TenantHeaderInvalidOrMissing, TenantMismatchOrNoPermission
 
 # 添加日志器
@@ -260,18 +262,18 @@ class UserRoleUpdateSerializer(serializers.Serializer):
         target_user = self.instance
         
         # 只有超级管理员或同一租户的管理员可以更改角色
-        if not request_user.is_super_admin and (
-            not request_user.is_admin or 
+        if not is_super_admin(request_user) and (
+            not is_admin(request_user) or 
             request_user.tenant != target_user.tenant
         ):
             raise serializers.ValidationError("您没有权限更改此用户的角色")
         
         # 不能取消自己的管理员权限
-        if request_user == target_user and not data['is_admin'] and request_user.is_admin:
+        if request_user == target_user and not data['is_admin'] and is_admin(request_user):
             raise serializers.ValidationError("您不能取消自己的管理员权限")
         
         # 租户管理员不能修改超级管理员的角色
-        if target_user.is_super_admin and not request_user.is_super_admin:
+        if is_super_admin(target_user) and not is_super_admin(request_user):
             raise serializers.ValidationError("您不能修改超级管理员的角色")
         
         return data
@@ -281,7 +283,7 @@ class UserRoleUpdateSerializer(serializers.Serializer):
         更新用户角色
         """
         # 如果用户变成管理员，检查配额
-        if validated_data['is_admin'] and not instance.is_admin and instance.tenant:
+        if validated_data['is_admin'] and not is_admin(instance) and instance.tenant:
             quota = instance.tenant.quota
             if not quota.can_add_user(is_admin=True):
                 raise serializers.ValidationError({"is_admin": "租户管理员配额已满"})
@@ -329,7 +331,7 @@ class UserRoleSerializer(serializers.ModelSerializer):
             validated_data.pop('is_member')
         
         # 设置普通管理员还是超级管理员
-        if instance.is_super_admin and not instance.is_admin:
+        if is_super_admin(instance) and not instance.is_admin:
             instance.is_super_admin = False
             instance.is_staff = False
             instance.is_superuser = False
@@ -911,7 +913,7 @@ class MemberCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"tenant_id": "无效的租户ID"})
         # 未提供 tenant_id，则从请求用户推断
         if request and hasattr(request.user, 'is_super_admin'):
-            if request.user.is_super_admin:
+            if is_super_admin(request.user):
                 # 超级管理员必须显式提供 tenant_id
                 raise serializers.ValidationError({"tenant_id": "超级管理员创建成员时必须提供租户ID"})
             # 非超级管理员必须有绑定租户

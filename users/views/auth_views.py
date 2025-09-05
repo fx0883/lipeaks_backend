@@ -9,6 +9,8 @@ from rest_framework.views import APIView
 from rest_framework import status, permissions, generics, serializers
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from common.permissions import IsSuperAdmin, IsAdmin
+from common.utils.user_permissions import is_super_admin, is_admin
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample, OpenApiParameter
@@ -48,7 +50,7 @@ class RegisterView(APIView):
         """
         处理用户注册请求
         """
-        serializer = RegisterSerializer(data=request.data)
+        serializer = RegisterSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             # 创建用户
             user = serializer.save()
@@ -69,7 +71,7 @@ class RegisterView(APIView):
                 'username': user.username,
                 'email': user.email,
                 'nick_name': user.nick_name or '',
-                'is_admin': user.is_admin,
+                'is_admin': is_admin(user),
                 'is_member': user.is_member,
                 'avatar': user.avatar or '',
             }
@@ -222,7 +224,7 @@ class LoginView(APIView):
         """
         处理用户登录请求
         """
-        serializer = LoginSerializer(data=request.data)
+        serializer = LoginSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             user = serializer.validated_data['user']
             
@@ -248,8 +250,8 @@ class LoginView(APIView):
             # 根据用户类型添加对应字段
             from users.models import User as AdminUser
             if isinstance(user, AdminUser):
-                user_data['is_admin'] = user.is_admin
-                user_data['is_super_admin'] = user.is_super_admin
+                user_data['is_admin'] = is_admin(user)
+                user_data['is_super_admin'] = is_super_admin(user)
                 user_data['is_member'] = False
             else:  # Member类型
                 user_data['is_admin'] = False
@@ -316,7 +318,7 @@ class TokenRefreshView(APIView):
         """
         处理刷新Token请求
         """
-        serializer = TokenRefreshSerializer(data=request.data)
+        serializer = TokenRefreshSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
             return Response({
                 'success': False,
@@ -445,8 +447,8 @@ class TokenVerifyView(APIView):
         # 根据用户类型添加对应字段
         from users.models import User as AdminUser
         if isinstance(user, AdminUser):
-            user_data['is_admin'] = user.is_admin
-            user_data['is_super_admin'] = user.is_super_admin
+            user_data['is_admin'] = is_admin(user)
+            user_data['is_super_admin'] = is_super_admin(user)
             user_data['is_member'] = False
         else:  # Member类型
             user_data['is_admin'] = False
@@ -588,7 +590,7 @@ class AdminChangePasswordView(generics.UpdateAPIView):
         检查当前用户是否有权限修改指定用户密码
         """
         super().check_permissions(request)
-        if not (request.user.is_admin or request.user.is_super_admin):
+        if not (is_admin(request.user) or is_super_admin(request.user)):
             raise PermissionDenied("只有管理员才能修改其他用户的密码")
     
     @extend_schema(
@@ -743,7 +745,7 @@ class PasswordResetRequestView(APIView):
         # 增加请求计数并设置过期时间
         cache.set(cache_key, request_count + 1, 600)  # 10分钟 = 600秒
         
-        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer = PasswordResetRequestSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             # 延迟导入以避免循环依赖
             from users.models import User, Member, PasswordResetToken
@@ -887,7 +889,7 @@ class PasswordResetVerifyView(APIView):
         """
         验证密码重置令牌
         """
-        serializer = PasswordResetVerifySerializer(data=request.data)
+        serializer = PasswordResetVerifySerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             token = serializer.validated_data['token']
             from users.models import PasswordResetToken
@@ -958,7 +960,7 @@ class PasswordResetConfirmView(APIView):
         """
         确认密码重置
         """
-        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer = PasswordResetConfirmSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             token_obj = serializer.validated_data['token_obj']
             new_password = serializer.validated_data['new_password']

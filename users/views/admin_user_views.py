@@ -16,7 +16,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, OpenApiExample
 
-from common.permissions import IsAdmin, IsSuperAdmin
+from common.permissions import IsSuperAdmin, IsAdmin
+from common.utils.user_permissions import is_super_admin, is_admin
 from users.models import User
 from users.serializers import (
     UserSerializer, 
@@ -52,7 +53,7 @@ class CurrentAdminUserView(APIView):
     )
     def get(self, request, *args, **kwargs):
         # 检查用户是否为管理员
-        if not request.user.is_admin:
+        if not is_admin(request.user):
             return Response(
                 {"detail": "该接口仅适用于管理员"},
                 status=status.HTTP_403_FORBIDDEN
@@ -83,7 +84,7 @@ class CurrentAdminUserView(APIView):
         更新当前用户的基本信息
         """
         # 检查用户是否为管理员
-        if not request.user.is_admin:
+        if not is_admin(request.user):
             return Response(
                 {"detail": "该接口仅适用于管理员"},
                 status=status.HTTP_403_FORBIDDEN
@@ -260,10 +261,10 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
         queryset = User.objects.filter(is_admin=True, is_deleted=False)
         
         # 超级管理员可以看到所有管理员
-        if user.is_super_admin:
+        if is_super_admin(user):
             pass # 保持查询集不变
         # 租户管理员只能看到自己租户的管理员
-        elif user.is_admin and user.tenant:
+        elif is_admin(user) and user.tenant:
             queryset = queryset.filter(tenant=user.tenant)
         # 其他情况返回空查询集
         else:
@@ -292,7 +293,7 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
         
         # 租户ID过滤
         tenant_id = self.request.query_params.get('tenant_id', None)
-        if tenant_id and user.is_super_admin:  # 只有超级管理员可以按租户筛选
+        if tenant_id and is_super_admin(user):  # 只有超级管理员可以按租户筛选
             try:
                 tenant_id = int(tenant_id)
                 queryset = queryset.filter(tenant_id=tenant_id)
@@ -316,7 +317,7 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
         
         # 设置租户
         tenant = None
-        if not user.is_super_admin:
+        if not is_super_admin(user):
             # 非超级管理员只能在自己租户创建用户
             tenant = user.tenant
             if not tenant:
@@ -324,14 +325,14 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
         
         # 如果传入了tenant_id参数并且是超级管理员
         tenant_id = self.request.data.get('tenant_id')
-        if tenant_id and user.is_super_admin:
+        if tenant_id and is_super_admin(user):
             try:
                 tenant_id = int(tenant_id)
                 tenant = get_object_or_404(Tenant, pk=tenant_id)
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {tenant_id}")
                 raise serializers.ValidationError({"tenant_id": f"无效的租户ID: {tenant_id}"})
-        elif tenant_id and not user.is_super_admin:
+        elif tenant_id and not is_super_admin(user):
             # 非超级管理员尝试指定租户ID
             try:
                 tenant_id = int(tenant_id)
@@ -431,11 +432,11 @@ class AdminUserRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
         queryset = User.objects.filter(is_admin=True, is_deleted=False)
         
         # 超级管理员可以操作所有管理员用户
-        if user.is_super_admin:
+        if is_super_admin(user):
             return queryset
             
         # 租户管理员只能操作自己租户的管理员
-        if user.is_admin and user.tenant:
+        if is_admin(user) and user.tenant:
             return queryset.filter(tenant=user.tenant)
             
         # 其他情况返回空查询集
@@ -449,7 +450,7 @@ class AdminUserRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
         user = self.request.user
         
         # 不允许非超级管理员修改 is_super_admin 字段
-        if not user.is_super_admin and 'is_super_admin' in serializer.validated_data:
+        if not is_super_admin(user) and 'is_super_admin' in serializer.validated_data:
             raise PermissionDenied("只有超级管理员可以修改超级管理员标志")
             
         # 确保用户仍然是管理员
@@ -468,7 +469,7 @@ class AdminUserRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
         user = self.request.user
         
         # 检查是否尝试删除超级管理员
-        if instance.is_super_admin and not user.is_super_admin:
+        if is_super_admin(instance) and not is_super_admin(user):
             logger.warning(f"用户 {user.username} 尝试删除超级管理员 {instance.username}，操作被拒绝")
             raise PermissionDenied("只有超级管理员可以删除其他超级管理员")
         
@@ -518,14 +519,14 @@ class GrantSuperAdminView(APIView):
             target_user = get_object_or_404(User, pk=pk, is_deleted=False)
             
             # 检查目标用户是否已经是管理员
-            if not target_user.is_admin:
+            if not is_admin(target_user):
                 return Response(
                     {"detail": "只能为管理员授予超级管理员权限"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
             # 检查用户是否已经是超级管理员
-            if target_user.is_super_admin:
+            if is_super_admin(target_user):
                 return Response(
                     {"detail": f"用户 {target_user.username} 已经是超级管理员"},
                     status=status.HTTP_400_BAD_REQUEST
@@ -589,7 +590,7 @@ class RevokeSuperAdminView(APIView):
                 )
             
             # 检查用户是否是超级管理员
-            if not target_user.is_super_admin:
+            if not is_super_admin(target_user):
                 return Response(
                     {"detail": f"用户 {target_user.username} 不是超级管理员"},
                     status=status.HTTP_400_BAD_REQUEST
@@ -692,9 +693,10 @@ class AdminPasswordUpdateView(generics.UpdateAPIView):
             
             logger.info(f"用户 {user.username} 成功修改了密码")
             
-            return api_schema.success("密码修改成功", {
+            return Response({
+                "message": "密码修改成功",
                 "detail": "密码修改成功"
-            })
+            }, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -777,7 +779,7 @@ class AdminUserAvatarUploadView(APIView):
         user = request.user
         
         # 检查用户是否为管理员
-        if not user.is_admin:
+        if not is_admin(user):
             return Response(
                 {"detail": "该接口仅适用于管理员"},
                 status=status.HTTP_403_FORBIDDEN
@@ -924,7 +926,7 @@ class AdminUserSpecificAvatarUploadView(APIView):
         
         # 权限检查：租户管理员只能为其租户内的管理员上传头像
         current_user = request.user
-        if not current_user.is_super_admin and (current_user.tenant != target_user.tenant or not current_user.is_admin):
+        if not is_super_admin(current_user) and (current_user.tenant != target_user.tenant or not is_admin(current_user)):
             return Response(
                 {"detail": "您没有权限为该管理员上传头像"},
                 status=status.HTTP_403_FORBIDDEN
@@ -1054,7 +1056,7 @@ class DeactivateAdminUserView(APIView):
                 )
             
             # 检查权限：超级管理员可以停用任何管理员，租户管理员只能停用自己租户的管理员
-            if not request.user.is_super_admin and (user.is_super_admin or user.tenant != request.user.tenant):
+            if not is_super_admin(request.user) and (is_super_admin(user) or user.tenant != request.user.tenant):
                 return Response(
                     {"detail": "没有权限停用此管理员"},
                     status=status.HTTP_403_FORBIDDEN
@@ -1123,7 +1125,7 @@ class ActivateAdminUserView(APIView):
             user = get_object_or_404(User, pk=pk)
             
             # 检查权限：超级管理员可以激活任何管理员，租户管理员只能激活自己租户的管理员
-            if not request.user.is_super_admin and (user.is_super_admin or user.tenant != request.user.tenant):
+            if not is_super_admin(request.user) and (is_super_admin(user) or user.tenant != request.user.tenant):
                 return Response(
                     {"detail": "没有权限激活此管理员"},
                     status=status.HTTP_403_FORBIDDEN

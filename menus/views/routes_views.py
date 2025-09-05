@@ -6,6 +6,8 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from common.permissions import IsSuperAdmin, IsAdmin
+from common.utils.user_permissions import is_super_admin, is_admin
 from drf_spectacular.utils import extend_schema
 
 from common.models import Config
@@ -109,7 +111,7 @@ class AdminRoutesView(APIView):
         user = request.user
         
         # 判断用户是否为超级管理员
-        if user.is_super_admin:
+        if is_super_admin(user):
             try:
                 # 从配置中获取超级管理员菜单
                 config = Config.objects.get(key='super_admin_menu', is_active=True)

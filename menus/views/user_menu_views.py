@@ -5,6 +5,8 @@ import logging
 from rest_framework import viewsets, mixins
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from common.permissions import IsSuperAdmin, IsAdmin
+from common.utils.user_permissions import is_super_admin, is_admin
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiExample, OpenApiResponse
 
 from menus.models import Menu, UserMenu
@@ -86,11 +88,11 @@ class UserMenuViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         """
         user = self.request.user
         
-        if user.is_super_admin:
+        if is_super_admin(user):
             # 超级管理员可以访问所有激活的菜单
             return Menu.objects.filter(is_active=True, parent__isnull=True)
         
-        if user.is_admin:
+        if is_admin(user):
             # 管理员只能访问分配给自己的激活菜单
             user_menu_ids = UserMenu.objects.filter(
                 user=user,

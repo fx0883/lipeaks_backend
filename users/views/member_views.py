@@ -16,7 +16,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, OpenApiExample
 from common.pagination import StandardResultsSetPagination
 
-from common.permissions import IsAdmin, IsSuperAdmin
+from common.permissions import IsSuperAdmin, IsAdmin
+from common.utils.user_permissions import is_super_admin, is_admin
 from users.models import Member
 from users.serializers import (
     MemberSerializer, 
@@ -185,10 +186,10 @@ class MemberListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         
         # 超级管理员可以看到所有普通用户
-        if user.is_super_admin:
+        if is_super_admin(user):
             queryset = Member.objects.filter(is_deleted=False)
         # 租户管理员只能看到自己租户的普通用户
-        elif hasattr(user, 'is_admin') and user.is_admin and user.tenant:
+        elif is_admin(user) and user.tenant:
             queryset = Member.objects.filter(tenant=user.tenant, is_deleted=False)
         # 其他情况返回空查询集
         else:
@@ -230,7 +231,7 @@ class MemberListCreateView(generics.ListCreateAPIView):
         
         # 租户ID过滤
         tenant_id = self.request.query_params.get('tenant_id', None)
-        if tenant_id and user.is_super_admin:  # 只有超级管理员可以按租户筛选
+        if tenant_id and is_super_admin(user):  # 只有超级管理员可以按租户筛选
             try:
                 tenant_id = int(tenant_id)
                 queryset = queryset.filter(tenant_id=tenant_id)
@@ -249,7 +250,7 @@ class MemberListCreateView(generics.ListCreateAPIView):
         
         # 设置租户
         tenant = None
-        if not user.is_super_admin:
+        if not is_super_admin(user):
             # 非超级管理员只能在自己租户创建用户
             tenant = user.tenant
             if not tenant:
@@ -257,14 +258,14 @@ class MemberListCreateView(generics.ListCreateAPIView):
         
         # 如果传入了tenant_id参数并且是超级管理员
         tenant_id = self.request.data.get('tenant_id')
-        if tenant_id and user.is_super_admin:
+        if tenant_id and is_super_admin(user):
             try:
                 tenant_id = int(tenant_id)
                 tenant = get_object_or_404(Tenant, pk=tenant_id)
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {tenant_id}")
                 raise serializers.ValidationError({"tenant_id": f"无效的租户ID: {tenant_id}"})
-        elif tenant_id and not user.is_super_admin:
+        elif tenant_id and not is_super_admin(user):
             # 非超级管理员尝试指定租户ID
             try:
                 tenant_id = int(tenant_id)
@@ -365,11 +366,11 @@ class MemberRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
             return Member.objects.filter(pk=user.pk, is_deleted=False)
             
         # 超级管理员可以操作所有普通用户
-        if user.is_super_admin:
+        if is_super_admin(user):
             return Member.objects.filter(is_deleted=False)
             
         # 租户管理员只能操作自己租户的普通用户
-        if hasattr(user, 'is_admin') and user.is_admin and user.tenant:
+        if is_admin(user) and user.tenant:
             return Member.objects.filter(tenant=user.tenant, is_deleted=False)
             
         # 其他情况返回空查询集
@@ -440,7 +441,7 @@ class CurrentMemberView(APIView):
             )
         
         serializer = MemberSerializer(user, context=self.get_serializer_context())
-        return api_schema.success(data=serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
     
     @extend_schema(
         summary="更新当前登录普通用户信息",
@@ -477,7 +478,7 @@ class CurrentMemberView(APIView):
         serializer = MemberSerializer(user, data=request.data, partial=True, context=self.get_serializer_context())
         if serializer.is_valid():
             serializer.save()
-            return api_schema.success("更新成功", serializer.data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         else:
             logger.warning(f"用户 {user.username} 更新个人信息失败: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -534,7 +535,7 @@ class MemberPasswordUpdateView(APIView):
         user.save()
         
         logger.info(f"用户 {user.username} 成功更新了密码")
-        return api_schema.success("密码更新成功")
+        return Response({"message": "密码更新成功"}, status=status.HTTP_200_OK)
 
 
 class SubAccountListCreateView(generics.ListCreateAPIView):
@@ -658,11 +659,11 @@ class SubAccountListCreateView(generics.ListCreateAPIView):
             return Member.objects.filter(parent=user, is_deleted=False)
         
         # 如果是超级管理员
-        if user.is_super_admin:
+        if is_super_admin(user):
             return Member.objects.filter(parent__isnull=False, is_deleted=False)
             
         # 如果是租户管理员，可以查看本租户内的子账号
-        if hasattr(user, 'is_admin') and user.is_admin and user.tenant:
+        if is_admin(user) and user.tenant:
             return Member.objects.filter(
                 tenant=user.tenant, 
                 parent__isnull=False,
@@ -684,7 +685,7 @@ class SubAccountListCreateView(generics.ListCreateAPIView):
             return self.get_paginated_response(serializer.data)
         
         serializer = self.get_serializer(queryset, many=True)
-        return api_schema.success(data=serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
     
     def create(self, request, *args, **kwargs):
         """
@@ -694,7 +695,7 @@ class SubAccountListCreateView(generics.ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
-        return api_schema.created(data=serializer.data, headers=headers)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class SubAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -781,11 +782,11 @@ class SubAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
             return Member.objects.filter(parent=user, is_deleted=False)
         
         # 如果是超级管理员
-        if user.is_super_admin:
+        if is_super_admin(user):
             return Member.objects.filter(parent__isnull=False, is_deleted=False)
             
         # 如果是租户管理员，可以操作本租户内的子账号
-        if hasattr(user, 'is_admin') and user.is_admin and user.tenant:
+        if is_admin(user) and user.tenant:
             return Member.objects.filter(
                 tenant=user.tenant, 
                 parent__isnull=False,
@@ -1041,9 +1042,9 @@ class MemberSpecificAvatarUploadView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
         # 如果当前用户是管理员
-        elif hasattr(current_user, 'is_admin') and current_user.is_admin:
+        elif is_admin(current_user):
             # 超级管理员可以为任何普通用户上传头像
-            if not current_user.is_super_admin and current_user.tenant != target_user.tenant:
+            if not is_super_admin(current_user) and current_user.tenant != target_user.tenant:
                 return Response(
                     {"detail": "您没有权限为该普通用户上传头像"},
                     status=status.HTTP_403_FORBIDDEN

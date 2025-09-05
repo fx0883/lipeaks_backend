@@ -11,7 +11,8 @@ from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
-from common.permissions import IsAdmin
+from common.permissions import IsSuperAdmin, IsAdmin
+from common.utils.user_permissions import is_super_admin, is_admin
 from users.models import User
 from users.serializers import UserRoleSerializer
 
@@ -53,11 +54,11 @@ class UserRoleUpdateView(APIView):
         target_user = get_object_or_404(User, pk=pk)
         
         # 管理员权限检查
-        if not user.is_super_admin and user.tenant != target_user.tenant:
+        if not is_super_admin(user) and user.tenant != target_user.tenant:
             raise PermissionDenied("无权限更改其他租户的用户角色")
         
         # 不能修改超级管理员的角色
-        if target_user.is_super_admin:
+        if is_super_admin(target_user):
             return Response(
                 {"detail": "不能修改超级管理员的角色"},
                 status=status.HTTP_400_BAD_REQUEST

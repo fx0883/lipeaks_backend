@@ -11,6 +11,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiPara
 import logging
 
 from common.permissions import IsSuperAdmin, IsAdmin
+from common.utils.user_permissions import is_super_admin, is_admin
 from common.pagination import StandardResultsSetPagination
 from common.authentication.jwt_auth import JWTAuthentication
 from users.models import User
@@ -221,7 +222,7 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
             return TaskCategory.objects.all().select_related('user', 'tenant')
         
         # 租户管理员可以查看所属租户的所有任务类型
-        if user.is_admin:
+        if is_admin(user):
             return TaskCategory.objects.filter(
                 Q(is_system=True) | Q(tenant=user.tenant)
             ).select_related('user', 'tenant')
@@ -265,7 +266,7 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
         user_id = data.get('user_id') or data.get('user')
         logger.debug(f"【创建打卡类型】指定的用户ID: {user_id}")
         
-        if user.is_admin:
+        if is_admin(user):
             logger.debug(f"【创建打卡类型】用户是租户管理员，可以为租户内的任意用户创建")
             # 租户管理员：可以指定用户，但必须属于同一租户
             if user_id:
@@ -370,7 +371,7 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
         user_id = data.get('user_id') or data.get('user')
         logger.debug(f"【更新打卡类型】指定的用户ID: {user_id}")
         
-        if user.is_admin:
+        if is_admin(user):
             logger.debug(f"【更新打卡类型】用户是租户管理员，可以修改租户内的任意用户的类型")
             # 租户管理员：可以修改用户，但必须属于同一租户
             if user_id:
@@ -664,7 +665,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         if frequency_type == 'daily':
             frequency_days = []
         
-        if user.is_admin:
+        if is_admin(user):
             # 租户管理员：可以指定用户，但必须属于同一租户
             if user_id:
                 try:
@@ -758,7 +759,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         if frequency_type == 'daily':
             frequency_days = []
         
-        if user.is_admin:
+        if is_admin(user):
             # 租户管理员：可以修改用户，但必须属于同一租户
             if user_id:
                 try:
@@ -944,7 +945,7 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
             except Task.DoesNotExist:
                 raise serializers.ValidationError(_("指定的任务不存在"))
         
-        if user.is_admin:
+        if is_admin(user):
             # 租户管理员：可以指定用户，但必须属于同一租户
             if user_id:
                 try:
@@ -1013,7 +1014,7 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
             except Task.DoesNotExist:
                 raise serializers.ValidationError(_("指定的任务不存在"))
         
-        if user.is_admin:
+        if is_admin(user):
             # 租户管理员：可以修改用户，但必须属于同一租户
             if user_id:
                 try:
@@ -1206,7 +1207,7 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
         user_id = data.get('user_id') or data.get('user')
         logger.debug(f"【创建任务模板】指定的用户ID: {user_id}")
         
-        if user.is_admin:
+        if is_admin(user):
             logger.debug(f"【创建任务模板】用户是租户管理员，可以为租户内的任意用户创建")
             # 租户管理员：可以指定用户，但必须属于同一租户
             if user_id:
@@ -1311,7 +1312,7 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
         user_id = data.get('user_id') or data.get('user')
         logger.debug(f"【更新任务模板】指定的用户ID: {user_id}")
         
-        if user.is_admin:
+        if is_admin(user):
             logger.debug(f"【更新任务模板】用户是租户管理员，可以修改租户内的任意用户的模板")
             # 租户管理员：可以修改用户，但必须属于同一租户
             if user_id:

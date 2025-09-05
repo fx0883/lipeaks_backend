@@ -5,7 +5,8 @@ from rest_framework import generics, status, serializers
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample, inline_serializer
-from common.permissions import IsSuperAdminUser, IsAdminUser
+from common.permissions import IsSuperAdmin, IsAdmin, IsAdminUser
+from common.utils.user_permissions import is_super_admin, is_admin
 from common.models import APILog, Config
 from common.serializers import APILogSerializer, APILogDetailSerializer
 from rest_framework.views import APIView
@@ -75,7 +76,7 @@ class APILogListView(generics.ListAPIView):
         user = self.request.user
         
         # 基础查询集
-        if user.is_super_admin:
+        if is_super_admin(user):
             # 超级管理员可查看所有日志
             queryset = APILog.objects.all()
         else:
@@ -131,7 +132,7 @@ class APILogListView(generics.ListAPIView):
             queryset = queryset.filter(request_method=request_method)
         
         # 租户过滤 (仅超级管理员可用)
-        if self.request.user.is_super_admin:
+        if is_super_admin(self.request.user):
             tenant_id = params.get('tenant_id')
             if tenant_id:
                 queryset = queryset.filter(tenant_id=tenant_id)
@@ -182,7 +183,7 @@ class APILogDetailView(generics.RetrieveAPIView):
         user = self.request.user
         
         # 基础查询集
-        if user.is_super_admin:
+        if is_super_admin(user):
             # 超级管理员可查看所有日志
             return APILog.objects.all()
         
@@ -629,7 +630,7 @@ class FileUploadView(APIView):
             folder = folder.replace('..', '').replace('/', '').replace('\\', '')
             
             # 根据用户类型确定基础目录
-            if user.is_super_admin:
+            if is_super_admin(user):
                 # 超级管理员：默认super_admin目录，有folder则为super_admin/{folder}
                 base_dir = 'super_admin'
                 if folder:

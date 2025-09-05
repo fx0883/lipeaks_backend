@@ -9,7 +9,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, OpenApiExample
-from common.permissions import IsSuperAdminUser, IsAdminUser, TenantApiPermission
+from common.permissions import IsSuperAdmin, IsAdmin, TenantApiPermission, IsAdminUser
+from common.utils.user_permissions import is_super_admin, is_admin
 from tenants.models import Tenant, TenantQuota
 from tenants.serializers import (
     TenantSerializer, TenantCreateSerializer, TenantDetailSerializer,
@@ -369,7 +370,7 @@ class TenantQuotaUsageView(APIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             # 如果不是超级管理员，只能查看自己的租户
-            if not request.user.is_super_admin and request.user.tenant.id != tenant.id:
+            if not is_super_admin(request.user) and request.user.tenant.id != tenant.id:
                 logger.warning(f"租户管理员 {request.user.username} 尝试访问其他租户 {tenant.name} 的配额信息")
                 return Response({
                     'success': False,
@@ -632,7 +633,7 @@ class TenantUserListView(generics.ListAPIView):
             return User.objects.none()  # 返回空查询集
         
         # 如果不是超级管理员，只能查看自己的租户
-        if not self.request.user.is_super_admin and self.request.user.tenant.id != tenant.id:
+        if not is_super_admin(self.request.user) and self.request.user.tenant.id != tenant.id:
             logger.warning(f"租户管理员 {self.request.user.username} 尝试访问其他租户 {tenant.name} 的用户列表")
             return User.objects.none()  # 返回空查询集
         
@@ -672,7 +673,7 @@ class TenantUserListView(generics.ListAPIView):
         
         if not queryset.exists():
             # 如果查询集为空，则可能是无权限或没有符合条件的用户
-            if self.request.user.is_super_admin or (self.request.user.is_admin and self.request.user.tenant):
+            if is_super_admin(self.request.user) or (is_admin(self.request.user) and self.request.user.tenant):
                 # 返回空列表但不使用自定义响应格式
                 return Response({
                     'count': 0,
@@ -728,7 +729,7 @@ class TenantComprehensiveView(APIView):
         
         # 检查权限
         user = request.user
-        if not user.is_super_admin and (not user.tenant or user.tenant.id != pk):
+        if not is_super_admin(user) and (not user.tenant or user.tenant.id != pk):
             logger.warning(f"用户 {user.username} 尝试访问租户 {pk} 的信息，但没有权限")
             return Response({
                 'success': False,
