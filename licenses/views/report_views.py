@@ -1,0 +1,372 @@
+"""
+许可证报告API视图
+提供各类统计报告和数据分析功能
+"""
+
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from django.db.models import Count, Q, Avg
+from django.utils import timezone
+from datetime import datetime, timedelta
+from common.permissions import IsSuperAdminOrTenantAdmin
+from common.authentication.jwt_auth import JWTAuthentication
+from licenses.models import (
+    License, LicenseActivation, LicenseUsageLog, MachineBinding, 
+    SecurityAuditLog, SoftwareProduct
+)
+from licenses.serializers import LicenseReportSerializer
+import logging
+
+logger = logging.getLogger('licenses.reports')
+
+
+@api_view(['POST'])
+@permission_classes([IsSuperAdminOrTenantAdmin])
+def generate_report(request):
+    """
+    生成许可证报告
+    
+    POST /api/v1/licenses/reports/generate/
+    """
+    serializer = LicenseReportSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({
+            'success': False,
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # 获取请求参数
+        start_date = serializer.validated_data.get('start_date')
+        end_date = serializer.validated_data.get('end_date')
+        product_id = serializer.validated_data.get('product_id')
+        tenant_id = serializer.validated_data.get('tenant_id')
+        report_type = serializer.validated_data['report_type']
+        
+        # 设置默认日期范围（最近30天）
+        if not end_date:
+            end_date = timezone.now().date()
+        if not start_date:
+            start_date = end_date - timedelta(days=30)
+        
+        # 根据用户权限过滤数据
+        base_filter = {}
+        if not request.user.is_super_admin and hasattr(request.user, 'tenant'):
+            base_filter['license__tenant'] = request.user.tenant
+        
+        if tenant_id:
+            base_filter['license__tenant_id'] = tenant_id
+        
+        if product_id:
+            base_filter['license__product_id'] = product_id
+        
+        # 根据报告类型生成数据
+        if report_type == 'summary':
+            report_data = generate_summary_report(start_date, end_date, base_filter)
+        elif report_type == 'usage':
+            report_data = generate_usage_report(start_date, end_date, base_filter)
+        elif report_type == 'activation':
+            report_data = generate_activation_report(start_date, end_date, base_filter)
+        elif report_type == 'security':
+            report_data = generate_security_report(start_date, end_date, base_filter)
+        else:
+            return Response({
+                'success': False,
+                'error': 'Invalid report type'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({
+            'success': True,
+            'report': {
+                'type': report_type,
+                'period': {
+                    'start_date': start_date.isoformat(),
+                    'end_date': end_date.isoformat()
+                },
+                'generated_at': timezone.now().isoformat(),
+                'data': report_data
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"报告生成失败: {str(e)}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def generate_summary_report(start_date, end_date, base_filter):
+    """生成概要报告"""
+    
+    # 许可证统计
+    license_stats = License.objects.filter(
+        created_at__date__range=[start_date, end_date],
+        **{k.replace('license__', ''): v for k, v in base_filter.items() if k.startswith('license__')}
+    ).aggregate(
+        total_licenses=Count('id'),
+        active_licenses=Count('id', filter=Q(status='activated')),
+        expired_licenses=Count('id', filter=Q(expires_at__lt=timezone.now())),
+        revoked_licenses=Count('id', filter=Q(status='revoked'))
+    )
+    
+    # 激活统计
+    activation_filter = {**base_filter, 'activated_at__date__range': [start_date, end_date]}
+    activation_stats = LicenseActivation.objects.filter(**activation_filter).aggregate(
+        total_activations=Count('id'),
+        successful_activations=Count('id', filter=Q(result='success')),
+        failed_activations=Count('id', filter=Q(result='failed'))
+    )
+    
+    # 机器绑定统计
+    binding_filter = {**base_filter, 'first_seen_at__date__range': [start_date, end_date]}
+    binding_stats = MachineBinding.objects.filter(**binding_filter).aggregate(
+        new_machines=Count('id'),
+        active_machines=Count('id', filter=Q(status='active')),
+        blocked_machines=Count('id', filter=Q(status='blocked'))
+    )
+    
+    # 使用统计
+    usage_filter = {**base_filter, 'timestamp__date__range': [start_date, end_date]}
+    usage_stats = LicenseUsageLog.objects.filter(**usage_filter).aggregate(
+        total_events=Count('id'),
+        startup_events=Count('id', filter=Q(event_type='startup')),
+        heartbeat_events=Count('id', filter=Q(event_type='heartbeat'))
+    )
+    
+    return {
+        'licenses': license_stats,
+        'activations': activation_stats,
+        'machine_bindings': binding_stats,
+        'usage': usage_stats
+    }
+
+
+def generate_usage_report(start_date, end_date, base_filter):
+    """生成使用报告"""
+    
+    # 每日使用统计
+    daily_usage = []
+    current_date = start_date
+    
+    while current_date <= end_date:
+        daily_filter = {
+            **base_filter,
+            'timestamp__date': current_date
+        }
+        
+        day_stats = LicenseUsageLog.objects.filter(**daily_filter).aggregate(
+            total_events=Count('id'),
+            unique_licenses=Count('license', distinct=True),
+            unique_machines=Count('machine_binding', distinct=True)
+        )
+        
+        daily_usage.append({
+            'date': current_date.isoformat(),
+            'stats': day_stats
+        })
+        
+        current_date += timedelta(days=1)
+    
+    # 事件类型分布
+    event_distribution = LicenseUsageLog.objects.filter(
+        timestamp__date__range=[start_date, end_date],
+        **base_filter
+    ).values('event_type').annotate(
+        count=Count('id')
+    ).order_by('-count')
+    
+    # 热门产品
+    popular_products = LicenseUsageLog.objects.filter(
+        timestamp__date__range=[start_date, end_date],
+        **base_filter
+    ).values(
+        'license__product__name'
+    ).annotate(
+        usage_count=Count('id')
+    ).order_by('-usage_count')[:10]
+    
+    return {
+        'daily_usage': daily_usage,
+        'event_distribution': list(event_distribution),
+        'popular_products': list(popular_products)
+    }
+
+
+def generate_activation_report(start_date, end_date, base_filter):
+    """生成激活报告"""
+    
+    # 激活成功率趋势
+    activation_trend = []
+    current_date = start_date
+    
+    while current_date <= end_date:
+        daily_filter = {
+            **base_filter,
+            'activated_at__date': current_date
+        }
+        
+        day_activations = LicenseActivation.objects.filter(**daily_filter)
+        total = day_activations.count()
+        successful = day_activations.filter(result='success').count()
+        success_rate = (successful / total * 100) if total > 0 else 0
+        
+        activation_trend.append({
+            'date': current_date.isoformat(),
+            'total_attempts': total,
+            'successful': successful,
+            'success_rate': round(success_rate, 2)
+        })
+        
+        current_date += timedelta(days=1)
+    
+    # 失败原因分析
+    failed_activations = LicenseActivation.objects.filter(
+        activated_at__date__range=[start_date, end_date],
+        result='failed',
+        **base_filter
+    )
+    
+    failure_reasons = {}
+    for activation in failed_activations:
+        reason = activation.error_message or 'Unknown error'
+        failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+    
+    # IP地址分布
+    ip_distribution = LicenseActivation.objects.filter(
+        activated_at__date__range=[start_date, end_date],
+        **base_filter
+    ).exclude(
+        ip_address__isnull=True
+    ).values('ip_address').annotate(
+        count=Count('id')
+    ).order_by('-count')[:20]
+    
+    return {
+        'activation_trend': activation_trend,
+        'failure_reasons': failure_reasons,
+        'ip_distribution': list(ip_distribution)
+    }
+
+
+def generate_security_report(start_date, end_date, base_filter):
+    """生成安全报告"""
+    
+    # 安全事件统计
+    security_filter = {'timestamp__date__range': [start_date, end_date]}
+    if 'license__tenant' in base_filter:
+        security_filter['tenant'] = base_filter['license__tenant']
+    
+    security_events = SecurityAuditLog.objects.filter(**security_filter).values(
+        'event_type', 'severity'
+    ).annotate(count=Count('id')).order_by('-count')
+    
+    # 可疑活动检测
+    suspicious_activities = SecurityAuditLog.objects.filter(
+        event_type='suspicious_activity',
+        **security_filter
+    ).values('details').annotate(count=Count('id'))
+    
+    # 高风险IP地址
+    high_risk_ips = SecurityAuditLog.objects.filter(
+        severity__in=['HIGH', 'CRITICAL'],
+        **security_filter
+    ).exclude(
+        ip_address__isnull=True
+    ).values('ip_address').annotate(
+        incident_count=Count('id')
+    ).order_by('-incident_count')[:10]
+    
+    # 异常激活模式
+    rapid_activations = LicenseActivation.objects.filter(
+        activated_at__date__range=[start_date, end_date],
+        **base_filter
+    ).values('license').annotate(
+        activation_count=Count('id')
+    ).filter(activation_count__gt=5).order_by('-activation_count')
+    
+    return {
+        'security_events': list(security_events),
+        'suspicious_activities': list(suspicious_activities),
+        'high_risk_ips': list(high_risk_ips),
+        'rapid_activations': list(rapid_activations)
+    }
+
+
+@api_view(['GET'])
+@permission_classes([IsSuperAdminOrTenantAdmin])
+def dashboard_stats(request):
+    """
+    获取仪表板统计数据
+    
+    GET /api/v1/licenses/reports/dashboard/
+    """
+    try:
+        # 根据用户权限过滤数据
+        license_filter = {}
+        if not request.user.is_super_admin and hasattr(request.user, 'tenant'):
+            license_filter['tenant'] = request.user.tenant
+        
+        # 基础统计
+        total_licenses = License.objects.filter(**license_filter).count()
+        active_licenses = License.objects.filter(
+            status='activated', **license_filter
+        ).count()
+        
+        # 即将过期的许可证（30天内）
+        thirty_days_later = timezone.now() + timedelta(days=30)
+        expiring_soon = License.objects.filter(
+            expires_at__lte=thirty_days_later,
+            expires_at__gte=timezone.now(),
+            **license_filter
+        ).count()
+        
+        # 今日激活统计
+        today = timezone.now().date()
+        today_activations = LicenseActivation.objects.filter(
+            activated_at__date=today,
+            **{f'license__{k}': v for k, v in license_filter.items()}
+        ).count()
+        
+        # 活跃机器数
+        active_machines = MachineBinding.objects.filter(
+            status='active',
+            **{f'license__{k}': v for k, v in license_filter.items()}
+        ).count()
+        
+        # 最近7天的激活趋势
+        activation_trend = []
+        for i in range(7):
+            date = today - timedelta(days=i)
+            count = LicenseActivation.objects.filter(
+                activated_at__date=date,
+                result='success',
+                **{f'license__{k}': v for k, v in license_filter.items()}
+            ).count()
+            activation_trend.append({
+                'date': date.isoformat(),
+                'count': count
+            })
+        
+        activation_trend.reverse()  # 按时间正序
+        
+        return Response({
+            'summary': {
+                'total_licenses': total_licenses,
+                'active_licenses': active_licenses,
+                'expiring_soon': expiring_soon,
+                'today_activations': today_activations,
+                'active_machines': active_machines
+            },
+            'trends': {
+                'activation_trend': activation_trend
+            },
+            'generated_at': timezone.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error(f"仪表板统计获取失败: {str(e)}")
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

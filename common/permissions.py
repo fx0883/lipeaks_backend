@@ -254,6 +254,44 @@ class ReadOnly(permissions.BasePermission):
         return request.method in permissions.SAFE_METHODS
 
 
+class IsSuperAdminOrTenantAdmin(permissions.BasePermission):
+    """
+    检查用户是否是超级管理员或租户管理员
+    """
+    def has_permission(self, request, view):
+        """
+        检查用户是否是超级管理员或租户管理员
+        
+        Args:
+            request: HTTP请求对象
+            view: 视图对象
+            
+        Returns:
+            布尔值，指示用户是否具有权限
+        """
+        user = request.user
+        path = request.path
+        
+        # 检查用户是否是管理员（包括超级管理员和租户管理员）
+        is_authenticated = bool(user and user.is_authenticated)
+        is_admin = bool(is_authenticated and (user.is_super_admin or user.is_admin))
+        
+        logger.info(f"权限检查 [IsSuperAdminOrTenantAdmin] - 路径: {path}")
+        logger.info(f"  用户: {user.username if is_authenticated else 'Anonymous'}")
+        logger.info(f"  已认证: {is_authenticated}")
+        logger.info(f"  是超级管理员: {getattr(user, 'is_super_admin', False) if is_authenticated else False}")
+        logger.info(f"  是管理员: {getattr(user, 'is_admin', False) if is_authenticated else False}")
+        logger.info(f"  权限检查结果: {'通过' if is_admin else '拒绝'}")
+        
+        if not is_admin:
+            logger.warning(
+                f"用户 {user.username if is_authenticated else 'Anonymous'} "
+                f"尝试访问需要管理员权限的资源 {path}，但权限检查未通过"
+            )
+        
+        return is_admin
+
+
 class TenantApiPermission(permissions.BasePermission):
     """
     专门用于租户相关API的权限控制

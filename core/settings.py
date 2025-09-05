@@ -98,6 +98,7 @@ INSTALLED_APPS = [
     'charts',  # 图表应用
     'customers',  # 客户管理应用
     'orders',  # 订单管理应用
+    'licenses',  # 许可证管理应用
 ]
 
 MIDDLEWARE = [

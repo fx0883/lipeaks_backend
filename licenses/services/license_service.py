@@ -1,0 +1,641 @@
+"""
+许可证业务服务模块
+提供许可证生成、验证、激活等核心业务功能
+"""
+
+import json
+import base64
+import base58
+import time
+import uuid
+import secrets
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, Tuple
+from django.utils import timezone
+from django.db import transaction
+from django.core.exceptions import ValidationError
+from licenses.models import (
+    SoftwareProduct, LicensePlan, License, MachineBinding, 
+    LicenseActivation, SecurityAuditLog
+)
+from licenses.services.security_service import SecurityService
+from licenses.services.fingerprint_service import MachineFingerprintService
+import logging
+
+logger = logging.getLogger('licenses.business')
+
+
+class LicenseGenerationService:
+    """许可证生成服务"""
+    
+    def __init__(self):
+        self.security_service = SecurityService()
+    
+    def generate_license_key(
+        self, 
+        product: SoftwareProduct, 
+        plan: LicensePlan, 
+        customer_info: Dict[str, Any] = None
+    ) -> str:
+        """
+        生成许可证密钥
+        
+        Args:
+            product: 软件产品
+            plan: 许可证方案
+            customer_info: 客户信息
+            
+        Returns:
+            str: 格式化的许可证密钥
+        """
+        try:
+            # 1. 生成唯一标识符
+            unique_id = str(uuid.uuid4()).replace('-', '')[:16]
+            
+            # 2. 时间戳
+            timestamp = int(time.time())
+            
+            # 3. 随机因子
+            random_factor = secrets.token_hex(8)
+            
+            # 4. 构建原始数据
+            raw_data = {
+                'product': product.code,
+                'plan': plan.code,
+                'id': unique_id,
+                'timestamp': timestamp,
+                'random': random_factor,
+                'version': 1
+            }
+            
+            # 5. 添加客户信息摘要（如果提供）
+            if customer_info:
+                customer_hash = self.security_service.hash_manager.hash_data(
+                    json.dumps(customer_info, sort_keys=True)
+                )[:8]
+                raw_data['customer'] = customer_hash
+            
+            # 6. JSON序列化并签名
+            data_str = json.dumps(raw_data, separators=(',', ':'), sort_keys=True)
+            
+            # 获取产品私钥进行签名
+            private_key_pem = self._get_product_private_key(product)
+            signature = self.security_service.rsa_manager.sign_data(private_key_pem, data_str)
+            
+            # 7. 组合数据和签名
+            license_payload = {
+                'data': raw_data,
+                'signature': base64.b64encode(signature).decode()
+            }
+            
+            # 8. Base58编码生成最终许可证密钥
+            encoded_payload = base64.b64encode(
+                json.dumps(license_payload).encode()
+            ).decode()
+            
+            license_key = base58.b58encode(encoded_payload.encode()).decode()
+            
+            # 9. 格式化为用户友好的格式 (XXXX-XXXX-XXXX-XXXX-XXXX)
+            formatted_key = '-'.join([
+                license_key[i:i+4] for i in range(0, min(len(license_key), 20), 4)
+            ])
+            
+            logger.info(f"许可证密钥生成成功: {product.code}-{plan.code}")
+            return formatted_key.upper()
+            
+        except Exception as e:
+            logger.error(f"许可证密钥生成失败: {str(e)}")
+            raise Exception(f"许可证生成失败: {str(e)}")
+    
+    def verify_license_key(self, license_key: str, product: SoftwareProduct) -> Dict[str, Any]:
+        """
+        验证许可证密钥有效性
+        
+        Args:
+            license_key: 许可证密钥
+            product: 软件产品
+            
+        Returns:
+            Dict[str, Any]: 验证结果
+        """
+        try:
+            # 1. 清理格式并解码
+            clean_key = license_key.replace('-', '').upper()
+            
+            try:
+                decoded_payload = base64.b64decode(
+                    base58.b58decode(clean_key)
+                ).decode()
+                license_payload = json.loads(decoded_payload)
+            except Exception:
+                return {'valid': False, 'error': 'Invalid key format'}
+            
+            # 2. 提取数据和签名
+            if 'data' not in license_payload or 'signature' not in license_payload:
+                return {'valid': False, 'error': 'Invalid payload structure'}
+            
+            raw_data = license_payload['data']
+            signature = base64.b64decode(license_payload['signature'])
+            
+            # 3. 验证产品匹配
+            if raw_data.get('product') != product.code:
+                return {'valid': False, 'error': 'Product mismatch'}
+            
+            # 4. 验证签名
+            data_str = json.dumps(raw_data, separators=(',', ':'), sort_keys=True)
+            public_key_pem = product.public_key.encode()
+            
+            signature_valid = self.security_service.rsa_manager.verify_signature(
+                public_key_pem, data_str, signature
+            )
+            
+            if not signature_valid:
+                return {'valid': False, 'error': 'Invalid signature'}
+            
+            # 5. 检查时间戳有效性
+            license_timestamp = raw_data.get('timestamp', 0)
+            current_timestamp = int(time.time())
+            age_days = (current_timestamp - license_timestamp) / 86400
+            
+            if age_days > 3650:  # 10年最大有效期
+                return {'valid': False, 'error': 'Key too old'}
+            
+            # 6. 返回验证结果
+            return {
+                'valid': True,
+                'data': raw_data,
+                'product_code': raw_data.get('product'),
+                'plan_code': raw_data.get('plan'),
+                'generated_at': datetime.fromtimestamp(license_timestamp),
+                'age_days': age_days
+            }
+            
+        except Exception as e:
+            logger.error(f"许可证验证失败: {str(e)}")
+            return {'valid': False, 'error': f'Verification error: {str(e)}'}
+    
+    def _get_product_private_key(self, product: SoftwareProduct) -> bytes:
+        """
+        获取产品私钥（实际实现中应从安全存储获取）
+        
+        Args:
+            product: 软件产品
+            
+        Returns:
+            bytes: 私钥PEM格式
+        """
+        # TODO: 实际实现中应该从HSM或密钥管理服务获取
+        # 这里为演示目的，临时生成密钥对
+        try:
+            private_key_pem, public_key_pem = self.security_service.rsa_manager.generate_keypair()
+            logger.warning("使用临时生成的密钥对，生产环境中应使用安全密钥管理")
+            return private_key_pem
+        except Exception as e:
+            logger.error(f"私钥获取失败: {str(e)}")
+            raise Exception("无法获取签名密钥")
+
+
+class LicenseActivationService:
+    """许可证激活服务"""
+    
+    def __init__(self):
+        self.security_service = SecurityService()
+        self.fingerprint_service = MachineFingerprintService()
+    
+    @transaction.atomic
+    def activate_license(
+        self,
+        license_key: str,
+        hardware_info: Dict[str, Any],
+        client_info: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        激活许可证
+        
+        Args:
+            license_key: 许可证密钥
+            hardware_info: 硬件信息
+            client_info: 客户端信息
+            
+        Returns:
+            Dict[str, Any]: 激活结果
+        """
+        try:
+            # 1. 查找许可证记录
+            try:
+                license_hash = self.security_service.hash_manager.hash_data(license_key)
+                license_obj = License.objects.get(
+                    license_hash=license_hash,
+                    status__in=['generated', 'activated']
+                )
+            except License.DoesNotExist:
+                return {
+                    'success': False,
+                    'error': 'License not found or invalid',
+                    'code': 'LICENSE_NOT_FOUND'
+                }
+            
+            # 2. 检查许可证状态
+            if license_obj.status == 'revoked':
+                return {
+                    'success': False,
+                    'error': 'License has been revoked',
+                    'code': 'LICENSE_REVOKED'
+                }
+            
+            if license_obj.expires_at < timezone.now():
+                return {
+                    'success': False,
+                    'error': 'License has expired',
+                    'code': 'LICENSE_EXPIRED'
+                }
+            
+            # 3. 生成机器指纹
+            machine_fingerprint = self.fingerprint_service.generate_fingerprint(
+                hardware_info,
+                salt=license_obj.product.code
+            )
+            
+            machine_id = self.fingerprint_service.generate_machine_id(hardware_info)
+            
+            # 4. 检查现有绑定
+            existing_binding = MachineBinding.objects.filter(
+                license=license_obj,
+                machine_fingerprint=machine_fingerprint
+            ).first()
+            
+            if existing_binding:
+                # 更新现有绑定
+                existing_binding.last_seen_at = timezone.now()
+                existing_binding.status = 'active'
+                existing_binding.save()
+                machine_binding = existing_binding
+            else:
+                # 检查激活数量限制
+                active_bindings = MachineBinding.objects.filter(
+                    license=license_obj,
+                    status='active'
+                ).count()
+                
+                if active_bindings >= license_obj.max_activations:
+                    return {
+                        'success': False,
+                        'error': f'Maximum activations ({license_obj.max_activations}) reached',
+                        'code': 'MAX_ACTIVATIONS_REACHED'
+                    }
+                
+                # 创建新的机器绑定
+                encrypted_hardware = self.security_service.aes_manager.encrypt_data(
+                    hardware_info,
+                    self.security_service.get_encryption_password('hardware')
+                )
+                
+                machine_binding = MachineBinding.objects.create(
+                    license=license_obj,
+                    machine_id=machine_id,
+                    machine_fingerprint=machine_fingerprint,
+                    encrypted_hardware_info=json.dumps(encrypted_hardware),
+                    os_info=hardware_info.get('system_info', {}),
+                    hardware_summary=self.fingerprint_service.create_hardware_summary(hardware_info),
+                    last_ip_address=client_info.get('ip_address') if client_info else None,
+                    status='active'
+                )
+            
+            # 5. 生成激活码
+            activation_code = self.security_service.token_manager.generate_activation_code(
+                license_obj.product.code
+            )
+            
+            # 6. 创建激活记录
+            activation_record = LicenseActivation.objects.create(
+                license=license_obj,
+                machine_binding=machine_binding,
+                activation_type='online',
+                activation_code=activation_code,
+                client_version=client_info.get('version', '') if client_info else '',
+                user_agent=client_info.get('user_agent', '') if client_info else '',
+                ip_address=client_info.get('ip_address') if client_info else None,
+                result='success',
+                expires_at=license_obj.expires_at
+            )
+            
+            # 7. 更新许可证状态
+            license_obj.status = 'activated'
+            license_obj.current_activations = MachineBinding.objects.filter(
+                license=license_obj,
+                status='active'
+            ).count()
+            license_obj.last_verified_at = timezone.now()
+            license_obj.save()
+            
+            # 8. 记录安全日志
+            SecurityAuditLog.objects.create(
+                event_type='license_activated',
+                severity='LOW',
+                ip_address=client_info.get('ip_address') if client_info else None,
+                details={
+                    'license_id': license_obj.id,
+                    'machine_id': machine_id,
+                    'activation_code': activation_code,
+                    'product': license_obj.product.code
+                }
+            )
+            
+            logger.info(f"许可证激活成功: {license_obj.id} -> {machine_id}")
+            
+            return {
+                'success': True,
+                'activation_code': activation_code,
+                'machine_id': machine_id,
+                'expires_at': license_obj.expires_at.isoformat(),
+                'features': license_obj.plan.features,
+                'max_machines': license_obj.plan.max_machines,
+                'current_activations': license_obj.current_activations
+            }
+            
+        except Exception as e:
+            logger.error(f"许可证激活失败: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Activation failed: {str(e)}',
+                'code': 'ACTIVATION_ERROR'
+            }
+    
+    def verify_activation(
+        self,
+        activation_code: str,
+        machine_fingerprint: str
+    ) -> Dict[str, Any]:
+        """
+        验证激活状态
+        
+        Args:
+            activation_code: 激活码
+            machine_fingerprint: 机器指纹
+            
+        Returns:
+            Dict[str, Any]: 验证结果
+        """
+        try:
+            # 查找激活记录
+            activation = LicenseActivation.objects.filter(
+                activation_code=activation_code,
+                result='success'
+            ).select_related('license', 'machine_binding').first()
+            
+            if not activation:
+                return {
+                    'valid': False,
+                    'error': 'Activation not found',
+                    'code': 'ACTIVATION_NOT_FOUND'
+                }
+            
+            # 验证机器指纹
+            fingerprint_match = self.fingerprint_service.verify_fingerprint_match(
+                activation.machine_binding.machine_fingerprint,
+                machine_fingerprint
+            )
+            
+            if not fingerprint_match['is_match']:
+                return {
+                    'valid': False,
+                    'error': 'Machine fingerprint mismatch',
+                    'code': 'FINGERPRINT_MISMATCH',
+                    'similarity': fingerprint_match['similarity']
+                }
+            
+            # 检查许可证状态
+            license_obj = activation.license
+            if license_obj.status != 'activated':
+                return {
+                    'valid': False,
+                    'error': f'License status: {license_obj.status}',
+                    'code': 'LICENSE_INACTIVE'
+                }
+            
+            # 检查过期时间
+            if activation.expires_at and activation.expires_at < timezone.now():
+                return {
+                    'valid': False,
+                    'error': 'Activation has expired',
+                    'code': 'ACTIVATION_EXPIRED'
+                }
+            
+            # 更新最后验证时间
+            license_obj.last_verified_at = timezone.now()
+            license_obj.save()
+            
+            return {
+                'valid': True,
+                'license_id': license_obj.id,
+                'product': license_obj.product.code,
+                'plan': license_obj.plan.code,
+                'expires_at': activation.expires_at.isoformat() if activation.expires_at else None,
+                'features': license_obj.plan.features,
+                'last_verified': license_obj.last_verified_at.isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"激活验证失败: {str(e)}")
+            return {
+                'valid': False,
+                'error': f'Verification failed: {str(e)}',
+                'code': 'VERIFICATION_ERROR'
+            }
+
+
+class LicenseManagementService:
+    """许可证管理服务"""
+    
+    @transaction.atomic
+    def create_license(
+        self,
+        product_id: int,
+        plan_id: int,
+        tenant_id: int,
+        customer_info: Dict[str, Any],
+        expires_at: datetime = None,
+        max_activations: int = None
+    ) -> License:
+        """
+        创建新许可证
+        
+        Args:
+            product_id: 产品ID
+            plan_id: 方案ID
+            tenant_id: 租户ID
+            customer_info: 客户信息
+            expires_at: 过期时间
+            max_activations: 最大激活数
+            
+        Returns:
+            License: 许可证对象
+        """
+        try:
+            # 获取产品和方案
+            product = SoftwareProduct.objects.get(id=product_id)
+            plan = LicensePlan.objects.get(id=plan_id, product=product)
+            
+            # 生成许可证密钥
+            generation_service = LicenseGenerationService()
+            license_key = generation_service.generate_license_key(
+                product, plan, customer_info
+            )
+            
+            # 计算过期时间
+            if expires_at is None:
+                expires_at = timezone.now() + timedelta(days=plan.validity_days)
+            
+            # 确定最大激活数
+            if max_activations is None:
+                max_activations = plan.max_machines
+            
+            # 加密客户信息
+            security_service = SecurityService()
+            encrypted_customer_info = security_service.aes_manager.encrypt_data(
+                customer_info,
+                security_service.get_encryption_password('customer')
+            )
+            
+            # 创建许可证记录
+            license_obj = License.objects.create(
+                product=product,
+                plan=plan,
+                tenant_id=tenant_id,
+                license_key=license_key,
+                customer_name=customer_info.get('name', ''),
+                customer_email=customer_info.get('email', ''),
+                encrypted_customer_info=json.dumps(encrypted_customer_info),
+                max_activations=max_activations,
+                expires_at=expires_at,
+                status='generated',
+                metadata={'creation_source': 'api'}
+            )
+            
+            # 记录安全日志
+            SecurityAuditLog.objects.create(
+                event_type='license_generated',
+                severity='LOW',
+                tenant_id=tenant_id,
+                details={
+                    'license_id': license_obj.id,
+                    'product': product.code,
+                    'plan': plan.code,
+                    'customer_name': customer_info.get('name', '')
+                }
+            )
+            
+            logger.info(f"许可证创建成功: {license_obj.id}")
+            return license_obj
+            
+        except Exception as e:
+            logger.error(f"许可证创建失败: {str(e)}")
+            raise Exception(f"许可证创建失败: {str(e)}")
+    
+    @transaction.atomic
+    def revoke_license(
+        self,
+        license_id: int,
+        reason: str = '',
+        user_id: int = None
+    ) -> bool:
+        """
+        撤销许可证
+        
+        Args:
+            license_id: 许可证ID
+            reason: 撤销原因
+            user_id: 操作用户ID
+            
+        Returns:
+            bool: 操作结果
+        """
+        try:
+            license_obj = License.objects.get(id=license_id)
+            
+            # 更新许可证状态
+            license_obj.status = 'revoked'
+            license_obj.notes = f"撤销原因: {reason}"
+            license_obj.save()
+            
+            # 禁用所有机器绑定
+            MachineBinding.objects.filter(license=license_obj).update(
+                status='blocked'
+            )
+            
+            # 记录安全日志
+            SecurityAuditLog.objects.create(
+                event_type='license_revoked',
+                severity='MEDIUM',
+                user_id=user_id,
+                tenant_id=license_obj.tenant_id,
+                details={
+                    'license_id': license_obj.id,
+                    'reason': reason,
+                    'product': license_obj.product.code
+                }
+            )
+            
+            logger.warning(f"许可证已撤销: {license_id}, 原因: {reason}")
+            return True
+            
+        except License.DoesNotExist:
+            logger.error(f"许可证不存在: {license_id}")
+            return False
+        except Exception as e:
+            logger.error(f"许可证撤销失败: {str(e)}")
+            return False
+    
+    def get_license_usage_stats(self, license_id: int) -> Dict[str, Any]:
+        """
+        获取许可证使用统计
+        
+        Args:
+            license_id: 许可证ID
+            
+        Returns:
+            Dict[str, Any]: 使用统计
+        """
+        try:
+            license_obj = License.objects.get(id=license_id)
+            
+            # 机器绑定统计
+            bindings = MachineBinding.objects.filter(license=license_obj)
+            active_bindings = bindings.filter(status='active')
+            
+            # 激活记录统计
+            activations = LicenseActivation.objects.filter(license=license_obj)
+            successful_activations = activations.filter(result='success')
+            
+            # 使用日志统计（最近30天）
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            recent_usage = license_obj.usage_logs.filter(
+                timestamp__gte=thirty_days_ago
+            ).count()
+            
+            return {
+                'license_id': license_id,
+                'status': license_obj.status,
+                'created_at': license_obj.created_at.isoformat(),
+                'expires_at': license_obj.expires_at.isoformat(),
+                'machine_bindings': {
+                    'total': bindings.count(),
+                    'active': active_bindings.count(),
+                    'max_allowed': license_obj.max_activations
+                },
+                'activations': {
+                    'total_attempts': activations.count(),
+                    'successful': successful_activations.count(),
+                    'last_activation': successful_activations.order_by('-activated_at').first().activated_at.isoformat() if successful_activations.exists() else None
+                },
+                'usage': {
+                    'recent_events': recent_usage,
+                    'last_verified': license_obj.last_verified_at.isoformat() if license_obj.last_verified_at else None
+                }
+            }
+            
+        except License.DoesNotExist:
+            return {'error': 'License not found'}
+        except Exception as e:
+            logger.error(f"许可证统计获取失败: {str(e)}")
+            return {'error': str(e)}
