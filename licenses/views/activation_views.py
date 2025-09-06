@@ -11,6 +11,8 @@ from rest_framework.throttling import AnonRateThrottle
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.core.cache import cache
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
 from licenses.serializers import (
     ActivateLicenseSerializer, VerifyActivationSerializer, HeartbeatSerializer
 )
@@ -29,6 +31,35 @@ class ActivationRateThrottle(AnonRateThrottle):
     rate = '10/hour'  # 每小时最多10次激活请求
 
 
+@extend_schema(
+    tags=['许可证激活API'],
+    summary='激活许可证',
+    description='客户端激活许可证，验证许可证密钥并绑定硬件信息',
+    request=ActivateLicenseSerializer,
+    responses={
+        200: OpenApiResponse(
+            description='激活成功',
+            examples=[
+                OpenApiExample(
+                    'Activation Success',
+                    value={
+                        'success': True,
+                        'message': 'License activated successfully',
+                        'data': {
+                            'activation_code': 'ACT-12345678-ABCD-EFGH',
+                            'machine_id': 'MACHINE-ID-12345',
+                            'expires_at': '2024-12-31T23:59:59Z',
+                            'features': {'feature1': True, 'feature2': False}
+                        }
+                    }
+                )
+            ]
+        ),
+        400: OpenApiResponse(description='激活失败'),
+        403: OpenApiResponse(description='可疑活动被阻止'),
+        429: OpenApiResponse(description='请求频率限制')
+    }
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @csrf_exempt
@@ -126,6 +157,33 @@ def activate_license(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema(
+    tags=['许可证激活API'],
+    summary='验证激活状态',
+    description='验证许可证激活状态，检查激活码和机器指纹匹配',
+    request=VerifyActivationSerializer,
+    responses={
+        200: OpenApiResponse(
+            description='验证成功',
+            examples=[
+                OpenApiExample(
+                    'Verification Success',
+                    value={
+                        'valid': True,
+                        'license_info': {
+                            'product': 'MyProduct 1.0',
+                            'plan': 'Standard',
+                            'expires_at': '2024-12-31T23:59:59Z',
+                            'features': {'feature1': True}
+                        },
+                        'last_verified': '2024-01-15T10:30:00Z'
+                    }
+                )
+            ]
+        ),
+        400: OpenApiResponse(description='验证失败')
+    }
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @csrf_exempt
@@ -195,6 +253,29 @@ def verify_activation(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema(
+    tags=['许可证激活API'],
+    summary='许可证心跳',
+    description='发送许可证使用心跳，更新最后使用时间和状态信息',
+    request=HeartbeatSerializer,
+    responses={
+        200: OpenApiResponse(
+            description='心跳成功',
+            examples=[
+                OpenApiExample(
+                    'Heartbeat Success',
+                    value={
+                        'success': True,
+                        'message': 'Heartbeat received',
+                        'server_time': '2024-01-15T10:30:00Z',
+                        'license_status': 'active'
+                    }
+                )
+            ]
+        ),
+        400: OpenApiResponse(description='心跳失败')
+    }
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @csrf_exempt
@@ -295,37 +376,74 @@ def heartbeat(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema(
+    tags=['许可证信息查询'],
+    summary='获取许可证信息',
+    description='根据许可证密钥获取许可证详细信息（不敏感信息）',
+    parameters=[
+        OpenApiParameter(
+            name='license_key',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='许可证密钥',
+            required=True
+        )
+    ],
+    responses={
+        200: OpenApiResponse(
+            description='信息获取成功',
+            examples=[
+                OpenApiExample(
+                    'License Info Success',
+                    value={
+                        'success': True,
+                        'license_info': {
+                            'product': {'name': 'MyProduct', 'version': '1.0'},
+                            'plan': 'Standard',
+                            'expires_at': '2024-12-31T23:59:59Z',
+                            'features': {'feature1': True},
+                            'status': 'active'
+                        }
+                    }
+                )
+            ]
+        ),
+        404: OpenApiResponse(description='许可证未找到')
+    }
+)
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def license_info(request, license_key):
+def license_info(request):
     """
-    获取许可证基本信息（不敏感信息）
+    获取许可证信息
     
-    GET /api/v1/licenses/info/<license_key>/
+    GET /api/v1/licenses/info/?license_key=xxx
     """
+    license_key = request.GET.get('license_key')
+    
+    if not license_key:
+        return Response({
+            'success': False,
+            'error': 'License key is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 验证许可证密钥格式
+    if not license_key or len(license_key.replace('-', '')) < 10:
+        return Response({
+            'success': False,
+            'error': 'Invalid license key format'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 查找许可证
+    from licenses.services.license_service import LicenseGenerationService
+    from licenses.models import License, SoftwareProduct
+    
     try:
-        # 验证许可证密钥格式
-        if not license_key or len(license_key.replace('-', '')) < 10:
-            return Response({
-                'success': False,
-                'error': 'Invalid license key format'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # 查找许可证
-        from licenses.services.license_service import LicenseGenerationService
-        from licenses.models import License, SoftwareProduct
-        
-        try:
-            license_hash = SecurityService().hash_manager.hash_data(license_key)
-            license_obj = License.objects.select_related('product', 'plan').get(
-                license_hash=license_hash,
-                is_deleted=False
-            )
-        except License.DoesNotExist:
-            return Response({
-                'success': False,
-                'error': 'License not found'
-            }, status=status.HTTP_404_NOT_FOUND)
+        license_hash = SecurityService().hash_manager.hash_data(license_key)
+        license_obj = License.objects.select_related('product', 'plan').get(
+            license_hash=license_hash,
+            is_deleted=False
+        )
         
         # 验证许可证密钥有效性
         generation_service = LicenseGenerationService()
@@ -356,7 +474,12 @@ def license_info(request, license_key):
                 'max_activations': license_obj.max_activations
             }
         })
-    
+        
+    except License.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'License not found'
+        }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"许可证信息获取异常: {str(e)}")
         return Response({
@@ -365,6 +488,28 @@ def license_info(request, license_key):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema(
+    tags=['许可证服务状态'],
+    summary='获取服务器状态',
+    description='获取许可证服务器的运行状态和基本信息',
+    responses={
+        200: OpenApiResponse(
+            description='服务器状态信息',
+            examples=[
+                OpenApiExample(
+                    'Server Status',
+                    value={
+                        'status': 'online',
+                        'version': '1.0.0',
+                        'server_time': '2024-01-15T10:30:00Z',
+                        'uptime': '5 days, 2 hours',
+                        'maintenance_mode': False
+                    }
+                )
+            ]
+        )
+    }
+)
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def server_status(request):

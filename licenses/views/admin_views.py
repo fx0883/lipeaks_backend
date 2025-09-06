@@ -12,6 +12,8 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Count, Q
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 from common.permissions import IsSuperAdminOrTenantAdmin
 from common.authentication.jwt_auth import JWTAuthentication
 from licenses.models import (
@@ -32,6 +34,50 @@ import logging
 logger = logging.getLogger('licenses.admin')
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['许可证产品管理'],
+        summary='获取软件产品列表',
+        description='获取软件产品的分页列表，支持搜索和过滤'
+    ),
+    create=extend_schema(
+        tags=['许可证产品管理'],
+        summary='创建软件产品',
+        description='创建新的软件产品并生成RSA密钥对'
+    ),
+    retrieve=extend_schema(
+        tags=['许可证产品管理'],
+        summary='获取软件产品详情',
+        description='根据ID获取指定软件产品的详细信息'
+    ),
+    update=extend_schema(
+        tags=['许可证产品管理'],
+        summary='更新软件产品',
+        description='更新指定软件产品的信息'
+    ),
+    partial_update=extend_schema(
+        tags=['许可证产品管理'],
+        summary='部分更新软件产品',
+        description='部分更新指定软件产品的信息'
+    ),
+    destroy=extend_schema(
+        tags=['许可证产品管理'],
+        summary='删除软件产品',
+        description='软删除指定的软件产品'
+    ),
+    regenerate_keypair=extend_schema(
+        tags=['许可证产品管理'],
+        summary='重新生成产品密钥对',
+        description='为软件产品重新生成RSA密钥对',
+        responses={200: OpenApiResponse(description='密钥对重新生成成功')}
+    ),
+    statistics=extend_schema(
+        tags=['许可证产品管理'],
+        summary='获取产品统计信息',
+        description='获取指定产品的许可证、激活和机器绑定统计信息',
+        responses={200: OpenApiResponse(description='统计信息')}
+    )
+)
 class SoftwareProductViewSet(viewsets.ModelViewSet):
     """软件产品管理视图集"""
     
@@ -158,6 +204,44 @@ class SoftwareProductViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['许可证方案管理'],
+        summary='获取许可证方案列表',
+        description='获取许可证方案的分页列表，支持搜索和过滤'
+    ),
+    create=extend_schema(
+        tags=['许可证方案管理'],
+        summary='创建许可证方案',
+        description='为指定产品创建新的许可证方案'
+    ),
+    retrieve=extend_schema(
+        tags=['许可证方案管理'],
+        summary='获取许可证方案详情',
+        description='根据ID获取指定许可证方案的详细信息'
+    ),
+    update=extend_schema(
+        tags=['许可证方案管理'],
+        summary='更新许可证方案',
+        description='更新指定许可证方案的信息'
+    ),
+    partial_update=extend_schema(
+        tags=['许可证方案管理'],
+        summary='部分更新许可证方案',
+        description='部分更新指定许可证方案的信息'
+    ),
+    destroy=extend_schema(
+        tags=['许可证方案管理'],
+        summary='删除许可证方案',
+        description='软删除指定的许可证方案'
+    ),
+    duplicate=extend_schema(
+        tags=['许可证方案管理'],
+        summary='复制许可证方案',
+        description='复制现有的许可证方案并创建副本',
+        responses={201: OpenApiResponse(description='方案复制成功')}
+    )
+)
 class LicensePlanViewSet(viewsets.ModelViewSet):
     """许可证方案管理视图集"""
     
@@ -222,6 +306,62 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['许可证管理'],
+        summary='获取许可证列表',
+        description='获取许可证的分页列表，支持搜索和过滤'
+    ),
+    create=extend_schema(
+        tags=['许可证管理'],
+        summary='创建许可证',
+        description='为指定产品和方案创建新的许可证'
+    ),
+    retrieve=extend_schema(
+        tags=['许可证管理'],
+        summary='获取许可证详情',
+        description='根据ID获取指定许可证的详细信息'
+    ),
+    update=extend_schema(
+        tags=['许可证管理'],
+        summary='更新许可证',
+        description='更新指定许可证的信息'
+    ),
+    partial_update=extend_schema(
+        tags=['许可证管理'],
+        summary='部分更新许可证',
+        description='部分更新指定许可证的信息'
+    ),
+    destroy=extend_schema(
+        tags=['许可证管理'],
+        summary='删除许可证',
+        description='软删除指定的许可证'
+    ),
+    revoke=extend_schema(
+        tags=['许可证管理'],
+        summary='撤销许可证',
+        description='撤销指定的许可证并记录原因',
+        responses={200: OpenApiResponse(description='许可证撤销成功')}
+    ),
+    extend=extend_schema(
+        tags=['许可证管理'],
+        summary='延长许可证有效期',
+        description='延长指定许可证的有效期',
+        responses={200: OpenApiResponse(description='许可证延期成功')}
+    ),
+    usage_stats=extend_schema(
+        tags=['许可证管理'],
+        summary='获取许可证使用统计',
+        description='获取指定许可证的使用统计信息',
+        responses={200: OpenApiResponse(description='使用统计信息')}
+    ),
+    batch_operation=extend_schema(
+        tags=['许可证管理'],
+        summary='批量操作许可证',
+        description='对多个许可证执行批量操作（撤销、延期等）',
+        responses={200: OpenApiResponse(description='批量操作结果')}
+    )
+)
 class LicenseViewSet(viewsets.ModelViewSet):
     """许可证管理视图集"""
     
@@ -427,6 +567,24 @@ class LicenseViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['机器绑定管理'],
+        summary='获取机器绑定列表',
+        description='获取机器绑定的分页列表，支持搜索和过滤'
+    ),
+    retrieve=extend_schema(
+        tags=['机器绑定管理'],
+        summary='获取机器绑定详情',
+        description='根据ID获取指定机器绑定的详细信息'
+    ),
+    block=extend_schema(
+        tags=['机器绑定管理'],
+        summary='阻止机器绑定',
+        description='阻止指定的机器绑定并记录原因',
+        responses={200: OpenApiResponse(description='机器绑定已阻止')}
+    )
+)
 class MachineBindingViewSet(viewsets.ReadOnlyModelViewSet):
     """机器绑定管理视图集（只读）"""
     
@@ -489,6 +647,18 @@ class MachineBindingViewSet(viewsets.ReadOnlyModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['许可证激活记录'],
+        summary='获取许可证激活记录列表',
+        description='获取许可证激活记录的分页列表，支持搜索和过滤'
+    ),
+    retrieve=extend_schema(
+        tags=['许可证激活记录'],
+        summary='获取许可证激活记录详情',
+        description='根据ID获取指定许可证激活记录的详细信息'
+    )
+)
 class LicenseActivationViewSet(viewsets.ReadOnlyModelViewSet):
     """许可证激活记录视图集（只读）"""
     
@@ -515,6 +685,18 @@ class LicenseActivationViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset.none()
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['安全审计日志'],
+        summary='获取安全审计日志列表',
+        description='获取安全审计日志的分页列表，支持按事件类型和严重程度过滤'
+    ),
+    retrieve=extend_schema(
+        tags=['安全审计日志'],
+        summary='获取安全审计日志详情',
+        description='根据ID获取指定安全审计日志的详细信息'
+    )
+)
 class SecurityAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """安全审计日志视图集（只读）"""
     
@@ -542,6 +724,38 @@ class SecurityAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset.none()
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['租户许可证配额管理'],
+        summary='获取租户许可证配额列表',
+        description='获取租户许可证配额的分页列表，支持按租户和产品过滤'
+    ),
+    create=extend_schema(
+        tags=['租户许可证配额管理'],
+        summary='创建租户许可证配额',
+        description='为指定租户和产品创建许可证配额限制'
+    ),
+    retrieve=extend_schema(
+        tags=['租户许可证配额管理'],
+        summary='获取租户许可证配额详情',
+        description='根据ID获取指定租户许可证配额的详细信息'
+    ),
+    update=extend_schema(
+        tags=['租户许可证配额管理'],
+        summary='更新租户许可证配额',
+        description='更新指定租户许可证配额的信息'
+    ),
+    partial_update=extend_schema(
+        tags=['租户许可证配额管理'],
+        summary='部分更新租户许可证配额',
+        description='部分更新指定租户许可证配额的信息'
+    ),
+    destroy=extend_schema(
+        tags=['租户许可证配额管理'],
+        summary='删除租户许可证配额',
+        description='软删除指定的租户许可证配额'
+    )
+)
 class TenantLicenseQuotaViewSet(viewsets.ModelViewSet):
     """租户许可证配额管理视图集"""
     

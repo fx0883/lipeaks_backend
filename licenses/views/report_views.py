@@ -6,9 +6,12 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from django.db.models import Count, Q, Avg
 from django.utils import timezone
 from datetime import datetime, timedelta
+from django.db.models import Count, Q, Sum, Avg
+from django.core.cache import cache
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
 from common.permissions import IsSuperAdminOrTenantAdmin
 from common.authentication.jwt_auth import JWTAuthentication
 from licenses.models import (
@@ -21,6 +24,151 @@ import logging
 logger = logging.getLogger('licenses.reports')
 
 
+@extend_schema(
+    tags=['许可证报告'],
+    summary='获取许可证报告',
+    description='生成许可证使用和统计报告，支持多种报告类型和时间范围',
+    parameters=[
+        OpenApiParameter(
+            name='report_type',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='报告类型：overview|usage|activation|security|financial',
+            required=True
+        ),
+        OpenApiParameter(
+            name='start_date',
+            type=OpenApiTypes.DATE,
+            location=OpenApiParameter.QUERY,
+            description='开始日期 (YYYY-MM-DD)',
+            required=False
+        ),
+        OpenApiParameter(
+            name='end_date',
+            type=OpenApiTypes.DATE,
+            location=OpenApiParameter.QUERY,
+            description='结束日期 (YYYY-MM-DD)',
+            required=False
+        ),
+        OpenApiParameter(
+            name='product_id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description='产品ID过滤',
+            required=False
+        )
+    ],
+    responses={
+        200: OpenApiResponse(
+            description='报告数据',
+            examples=[
+                OpenApiExample(
+                    'Overview Report',
+                    value={
+                        'report_type': 'overview',
+                        'period': '2024-01-01 to 2024-01-31',
+                        'data': {
+                            'total_licenses': 150,
+                            'active_licenses': 120,
+                            'expired_licenses': 30,
+                            'total_activations': 450,
+                            'unique_machines': 380
+                        }
+                    }
+                )
+            ]
+        ),
+        400: OpenApiResponse(description='参数错误')
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsSuperAdminOrTenantAdmin])
+def license_reports(request):
+    """
+    生成许可证报告
+    
+    GET /api/v1/licenses/reports/
+    """
+    try:
+        # 获取请求参数
+        report_type = request.GET.get('report_type')
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        product_id = request.GET.get('product_id')
+        
+        # 设置默认日期范围（最近30天）
+        if not end_date:
+            end_date = timezone.now().date()
+        if not start_date:
+            start_date = end_date - timedelta(days=30)
+        
+        # 根据用户权限过滤数据
+        base_filter = {}
+        if not request.user.is_super_admin and hasattr(request.user, 'tenant'):
+            base_filter['license__tenant'] = request.user.tenant
+        
+        if product_id:
+            base_filter['license__product_id'] = product_id
+        
+        # 根据报告类型生成数据
+        if report_type == 'summary':
+            report_data = generate_summary_report(start_date, end_date, base_filter)
+        elif report_type == 'usage':
+            report_data = generate_usage_report(start_date, end_date, base_filter)
+        elif report_type == 'activation':
+            report_data = generate_activation_report(start_date, end_date, base_filter)
+        elif report_type == 'security':
+            report_data = generate_security_report(start_date, end_date, base_filter)
+        else:
+            return Response({
+                'success': False,
+                'error': 'Invalid report type'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({
+            'success': True,
+            'report': {
+                'type': report_type,
+                'period': {
+                    'start_date': start_date.isoformat(),
+                    'end_date': end_date.isoformat()
+                },
+                'generated_at': timezone.now().isoformat(),
+                'data': report_data
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"报告生成失败: {str(e)}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['许可证报告'],
+    summary='生成自定义报表',
+    description='根据指定参数生成自定义许可证报表，支持异步生成和导出',
+    request=LicenseReportSerializer,
+    responses={
+        200: OpenApiResponse(
+            description='报表生成成功',
+            examples=[
+                OpenApiExample(
+                    'Report Generation Success',
+                    value={
+                        'success': True,
+                        'report_id': 'REPORT-2024-001',
+                        'status': 'processing',
+                        'estimated_completion': '2024-01-15T10:35:00Z'
+                    }
+                )
+            ]
+        ),
+        400: OpenApiResponse(description='参数验证失败')
+    }
+)
 @api_view(['POST'])
 @permission_classes([IsSuperAdminOrTenantAdmin])
 def generate_report(request):
@@ -294,6 +442,38 @@ def generate_security_report(start_date, end_date, base_filter):
     }
 
 
+@extend_schema(
+    tags=['许可证仪表板'],
+    summary='获取仪表板统计数据',
+    description='获取许可证管理仪表板的统计数据和图表信息',
+    responses={
+        200: OpenApiResponse(
+            description='仪表板统计数据',
+            examples=[
+                OpenApiExample(
+                    'Dashboard Stats',
+                    value={
+                        'total_licenses': 250,
+                        'active_licenses': 200,
+                        'expired_licenses': 50,
+                        'total_activations': 1500,
+                        'unique_machines': 800,
+                        'recent_activity': {
+                            'new_licenses_this_month': 15,
+                            'new_activations_today': 25,
+                            'suspicious_activities': 3
+                        },
+                        'charts': {
+                            'license_usage_trend': [],
+                            'activation_by_product': [],
+                            'geographic_distribution': []
+                        }
+                    }
+                )
+            ]
+        )
+    }
+)
 @api_view(['GET'])
 @permission_classes([IsSuperAdminOrTenantAdmin])
 def dashboard_stats(request):
