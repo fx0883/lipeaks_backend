@@ -1,648 +1,226 @@
-# 机器绑定注册码系统 API 设计
+# 机器绑定许可证系统 REST API 设计方案
 
-## 1. API设计原则
+## 1. API架构设计理念
 
-### 1.1 设计标准
-- **RESTful架构**: 遵循REST设计原则
-- **统一响应格式**: 与现有系统保持一致
-- **版本化管理**: 使用`/api/v1/`前缀
-- **JWT认证**: 集成现有认证体系
-- **权限控制**: 基于RBAC权限管理
+### 1.1 设计哲学与原则
 
-### 1.2 响应格式标准
-```json
-{
-    "success": true/false,
-    "code": 2000/4xxx/5xxx,
-    "message": "操作结果描述",
-    "data": {} // 实际数据或null
-}
-```
+机器绑定许可证系统的API设计遵循现代RESTful架构原则，与现有Django REST Framework基础设施深度集成。API设计强调简洁性、可扩展性和安全性，为多种客户端类型提供统一的服务接口。
 
-### 1.3 状态码规范
-- `2000`: 操作成功
-- `4000`: 请求参数错误
-- `4001`: 认证失败
-- `4002`: 登录失败
-- `4003`: 权限不足
-- `4004`: 资源不存在
-- `4005`: 资源冲突
-- `5000`: 服务器内部错误
+**核心设计原则**:
 
-## 2. API路由设计
+- **资源导向设计**: 每个API端点代表特定的业务资源或操作
+- **状态无关性**: API请求间无依赖关系，提升系统可伸缩性
+- **统一接口规范**: 继承现有系统的响应格式和错误处理机制
+- **分层架构**: 清晰的权限层次和访问控制边界
 
-### 2.1 路由结构
-```
-/api/v1/licenses/
-├── products/                    # 软件产品管理
-├── plans/                      # 许可方案管理
-├── licenses/                   # 许可证管理
-├── activations/               # 激活验证
-├── bindings/                  # 机器绑定管理
-└── reports/                   # 统计报告
-```
+### 1.2 API版本化策略
 
-### 2.2 URL配置
-```python
-# licenses/urls.py
-from django.urls import path, include
-from . import views
+**版本管理机制**:
 
-app_name = 'licenses'
+系统采用URL路径版本化策略，所有API端点使用`/api/v1/licenses/`前缀，为未来功能扩展和向后兼容提供基础支撑。版本化设计确保客户端升级的平滑过渡和API演进的灵活性。
 
-urlpatterns = [
-    # 软件产品管理
-    path('products/', include([
-        path('', views.ProductListCreateView.as_view(), name='product-list'),
-        path('<int:pk>/', views.ProductDetailView.as_view(), name='product-detail'),
-        path('<int:pk>/plans/', views.ProductPlanListView.as_view(), name='product-plans'),
-        path('<int:pk>/generate-keypair/', views.ProductGenerateKeypairView.as_view(), name='product-keypair'),
-    ])),
+### 1.3 响应格式标准化
+
+**统一响应结构**:
+
+API响应采用标准化的JSON格式，包含操作状态、状态码、描述信息和实际数据载荷。这种设计模式与现有系统保持一致，简化了客户端的响应处理逻辑。
+
+## 2. API资源架构设计
+
+### 2.1 资源层次结构
+
+**核心资源分类**:
+
+API设计围绕六个主要资源类别构建，每个类别代表许可证管理生命周期中的关键业务实体。资源设计遵循RESTful原则，通过HTTP动词和资源路径的组合实现完整的CRUD操作支持。
+
+**资源映射关系**:
+
+```mermaid
+graph TD
+    A[/api/v1/licenses/] --> B[products/]
+    A --> C[plans/]
+    A --> D[licenses/]
+    A --> E[activations/]
+    A --> F[bindings/]
+    A --> G[reports/]
     
-    # 许可方案管理
-    path('plans/', include([
-        path('', views.PlanListCreateView.as_view(), name='plan-list'),
-        path('<int:pk>/', views.PlanDetailView.as_view(), name='plan-detail'),
-    ])),
-    
-    # 许可证管理
-    path('licenses/', include([
-        path('', views.LicenseListCreateView.as_view(), name='license-list'),
-        path('<int:pk>/', views.LicenseDetailView.as_view(), name='license-detail'),
-        path('generate/', views.LicenseGenerateView.as_view(), name='license-generate'),
-        path('batch-generate/', views.LicenseBatchGenerateView.as_view(), name='license-batch-generate'),
-        path('verify/', views.LicenseVerifyView.as_view(), name='license-verify'),
-    ])),
-    
-    # 激活验证
-    path('activations/', include([
-        path('activate/', views.ActivationCreateView.as_view(), name='activation-create'),
-        path('verify/', views.ActivationVerifyView.as_view(), name='activation-verify'),
-        path('heartbeat/', views.ActivationHeartbeatView.as_view(), name='activation-heartbeat'),
-        path('deactivate/', views.ActivationDeactivateView.as_view(), name='activation-deactivate'),
-    ])),
-    
-    # 机器绑定管理
-    path('bindings/', include([
-        path('', views.BindingListView.as_view(), name='binding-list'),
-        path('<int:pk>/', views.BindingDetailView.as_view(), name='binding-detail'),
-        path('<int:pk>/unbind/', views.BindingUnbindView.as_view(), name='binding-unbind'),
-    ])),
-    
-    # 统计报告
-    path('reports/', include([
-        path('dashboard/', views.ReportDashboardView.as_view(), name='report-dashboard'),
-        path('usage/', views.ReportUsageView.as_view(), name='report-usage'),
-        path('activations/', views.ReportActivationView.as_view(), name='report-activations'),
-    ])),
-]
+    B --> B1[产品管理]
+    B --> B2[密钥生成]
+    C --> C1[方案配置]
+    C --> C2[定价策略]
+    D --> D1[许可证发放]
+    D --> D2[批量操作]
+    E --> E1[激活验证]
+    E --> E2[离线支持]
+    F --> F1[设备绑定]
+    F --> F2[解绑管理]
+    G --> G1[使用统计]
+    G --> G2[业务报告]
 ```
 
-## 3. 管理端API接口
+### 2.2 RESTful操作映射
 
-### 3.1 软件产品管理
+**HTTP动词与业务操作对应**:
 
-#### 3.1.1 创建软件产品
-```http
-POST /api/v1/licenses/products/
-Authorization: Bearer <token>
-Content-Type: application/json
+- **GET操作**: 资源查询、列表获取、状态检查
+- **POST操作**: 资源创建、批量生成、激活验证
+- **PUT/PATCH操作**: 资源更新、状态变更、配置修改
+- **DELETE操作**: 资源删除、解绑操作、撤销许可
 
-{
-    "name": "MyMacApp",
-    "code": "MMA",
-    "version": "1.0.0",
-    "description": "一款优秀的macOS应用程序",
-    "platform": "macos"
-}
-```
+## 3. 管理端API功能架构
 
-**响应示例**:
-```json
-{
-    "success": true,
-    "code": 2000,
-    "message": "产品创建成功",
-    "data": {
-        "id": 1,
-        "name": "MyMacApp",
-        "code": "MMA",
-        "version": "1.0.0",
-        "description": "一款优秀的macOS应用程序",
-        "platform": "macos",
-        "status": "active",
-        "public_key": "-----BEGIN PUBLIC KEY-----\n...",
-        "created_at": "2025-09-05T10:00:00Z"
-    }
-}
-```
+### 3.1 软件产品生命周期管理
 
-#### 3.1.2 生成产品密钥对
-```http
-POST /api/v1/licenses/products/1/generate-keypair/
-Authorization: Bearer <token>
-```
+**产品管理核心功能**:
 
-**响应示例**:
-```json
-{
-    "success": true,
-    "code": 2000,
-    "message": "密钥对生成成功",
-    "data": {
-        "public_key": "-----BEGIN PUBLIC KEY-----\n...",
-        "private_key": "-----BEGIN PRIVATE KEY-----\n...",
-        "warning": "请妥善保存私钥，系统不会存储私钥明文"
-    }
-}
-```
+软件产品管理API提供完整的产品生命周期管理能力，包括产品信息维护、密钥对管理、版本控制和平台支持配置。管理员可以通过统一接口创建和维护多个软件产品，每个产品都具有独立的RSA密钥对用于许可证签名验证。
 
-### 3.2 许可方案管理
+**密钥管理安全机制**:
 
-#### 3.2.1 创建许可方案
-```http
-POST /api/v1/licenses/plans/
-Authorization: Bearer <token>
-Content-Type: application/json
+系统采用非对称加密体系，为每个软件产品生成独立的RSA密钥对。公钥存储在数据库中用于客户端验证，私钥仅在生成时返回给管理员，系统仅保存私钥的哈希值用于完整性校验。这种设计确保了即使数据库泄露，攻击者也无法伪造有效的许可证。
 
-{
-    "product_id": 1,
-    "name": "专业版",
-    "code": "PRO",
-    "plan_type": "professional",
-    "max_activations": 3,
-    "validity_days": 365,
-    "features": {
-        "advanced_features": true,
-        "cloud_sync": true,
-        "priority_support": true
-    },
-    "price": 299.99
-}
-```
+### 3.2 许可方案策略管理
 
-**响应示例**:
-```json
-{
-    "success": true,
-    "code": 2000,
-    "message": "许可方案创建成功",
-    "data": {
-        "id": 1,
-        "product": {
-            "id": 1,
-            "name": "MyMacApp",
-            "code": "MMA"
-        },
-        "name": "专业版",
-        "code": "PRO",
-        "plan_type": "professional",
-        "max_activations": 3,
-        "validity_days": 365,
-        "features": {
-            "advanced_features": true,
-            "cloud_sync": true,
-            "priority_support": true
-        },
-        "price": "299.99",
-        "status": "active"
-    }
-}
-```
+**多层次方案体系**:
 
-### 3.3 许可证管理
+许可方案管理API支持灵活的分层定价策略，包括试用版、标准版、专业版和企业版等不同层次。每个方案可以独立配置激活限制、有效期、功能特性和定价信息。功能特性采用JSON格式存储，支持动态扩展和个性化配置。
 
-#### 3.3.1 生成许可证
-```http
-POST /api/v1/licenses/licenses/generate/
-Authorization: Bearer <token>
-Content-Type: application/json
+**定价与特性关联**:
 
-{
-    "plan_id": 1,
-    "quantity": 1,
-    "customer_info": {
-        "name": "张三",
-        "email": "zhangsan@example.com",
-        "company": "示例公司"
-    },
-    "validity_days": 365,
-    "notes": "企业客户订单"
-}
-```
+方案设计支持基于特性的差异化定价模式，管理员可以为不同方案配置不同的功能集合和价格策略。系统自动处理方案间的功能继承关系，确保高级方案包含低级方案的所有功能。
 
-**响应示例**:
-```json
-{
-    "success": true,
-    "code": 2000,
-    "message": "许可证生成成功",
-    "data": {
-        "licenses": [
-            {
-                "id": 1,
-                "license_key": "MMA1-PRO2-5F8A-9B3C-7E2D",
-                "plan": {
-                    "name": "专业版",
-                    "max_activations": 3,
-                    "validity_days": 365
-                },
-                "customer_info": {
-                    "name": "张三",
-                    "email": "zhangsan@example.com",
-                    "company": "示例公司"
-                },
-                "issued_at": "2025-09-05T10:00:00Z",
-                "expires_at": "2026-09-05T10:00:00Z",
-                "status": "active",
-                "activation_count": 0,
-                "remaining_activations": 3
-            }
-        ]
-    }
-}
-```
+### 3.3 许可证发放与管理
 
-#### 3.3.2 批量生成许可证
-```http
-POST /api/v1/licenses/licenses/batch-generate/
-Authorization: Bearer <token>
-Content-Type: application/json
+**智能许可证生成**:
 
-{
-    "plan_id": 1,
-    "quantity": 10,
-    "batch_info": {
-        "batch_name": "企业批次001",
-        "customer_company": "示例企业集团"
-    }
-}
-```
+许可证生成系统采用智能算法生成唯一且安全的许可证密钥，密钥格式包含产品标识、方案类型和随机组件，确保密钥的可识别性和安全性。系统支持单个生成和批量生成模式，满足不同业务场景的需求。
 
-#### 3.3.3 许可证列表查询
-```http
-GET /api/v1/licenses/licenses/?page=1&size=20&status=active&plan_id=1
-Authorization: Bearer <token>
-```
+**客户信息关联管理**:
 
-**响应示例**:
-```json
-{
-    "success": true,
-    "code": 2000,
-    "message": "查询成功",
-    "data": {
-        "count": 50,
-        "next": "http://api.example.com/api/v1/licenses/licenses/?page=2",
-        "previous": null,
-        "results": [
-            {
-                "id": 1,
-                "license_key": "MMA1-****-****-****-7E2D",
-                "plan_name": "专业版",
-                "customer_name": "张三",
-                "status": "active",
-                "activation_count": 1,
-                "remaining_activations": 2,
-                "issued_at": "2025-09-05T10:00:00Z",
-                "expires_at": "2026-09-05T10:00:00Z"
-            }
-        ]
-    }
-}
-```
+每个许可证都可以关联详细的客户信息，包括联系方式、公司信息和业务备注。这些信息采用加密存储，为后续的客户服务和许可证管理提供数据支撑。系统还支持客户信息的脱敏显示，保护客户隐私。
 
-## 4. 客户端激活API
+## 4. 客户端激活系统架构
 
-### 4.1 许可证激活
+### 4.1 激活流程设计哲学
 
-#### 4.1.1 初始激活
-```http
-POST /api/v1/licenses/activations/activate/
-Content-Type: application/json
+**双阶段验证机制**:
 
-{
-    "license_key": "MMA1-PRO2-5F8A-9B3C-7E2D",
-    "machine_info": {
-        "hardware_uuid": "550e8400-e29b-41d4-a716-446655440000",
-        "serial_number": "C02XG0FDH7JY",
-        "mac_addresses": ["aa:bb:cc:dd:ee:ff"],
-        "os_version": "macOS 14.5",
-        "cpu_info": "Apple M1 Pro",
-        "memory_size": 16384
-    },
-    "client_version": "1.0.0"
-}
-```
+客户端激活系统采用双阶段验证架构，将初始激活和持续验证分离处理。初始激活阶段进行许可证有效性检查、机器绑定创建和激活证书生成；持续验证阶段则专注于许可证状态监控和使用数据收集。
 
-**响应示例**:
-```json
-{
-    "success": true,
-    "code": 2000,
-    "message": "激活成功",
-    "data": {
-        "activation_certificate": {
-            "license_id": 1,
-            "machine_fingerprint": "abc123...",
-            "activated_at": "2025-09-05T10:00:00Z",
-            "expires_at": "2026-09-05T10:00:00Z",
-            "features": {
-                "advanced_features": true,
-                "cloud_sync": true,
-                "priority_support": true
-            },
-            "signature": "def456..."
-        },
-        "verification_interval": 86400,
-        "offline_grace_period": 259200
-    }
-}
-```
+**机器指纹技术**:
 
-#### 4.1.2 激活验证
-```http
-POST /api/v1/licenses/activations/verify/
-Content-Type: application/json
+系统使用先进的机器指纹技术确保许可证与特定设备的强绑定关系。指纹算法综合考虑硬件UUID、序列号、网卡地址、操作系统信息等多维度标识，生成唯一且相对稳定的设备标识符。
 
-{
-    "license_key": "MMA1-PRO2-5F8A-9B3C-7E2D",
-    "machine_fingerprint": "abc123...",
-    "client_version": "1.0.0"
-}
-```
+### 4.2 激活证书与安全机制
 
-**响应示例**:
-```json
-{
-    "success": true,
-    "code": 2000,
-    "message": "验证成功",
-    "data": {
-        "status": "valid",
-        "expires_at": "2026-09-05T10:00:00Z",
-        "features": {
-            "advanced_features": true,
-            "cloud_sync": true,
-            "priority_support": true
-        },
-        "next_verification": "2025-09-06T10:00:00Z"
-    }
-}
-```
+**数字证书体系**:
 
-#### 4.1.3 心跳验证
-```http
-POST /api/v1/licenses/activations/heartbeat/
-Content-Type: application/json
+激活成功后，系统生成加密的激活证书，包含许可证信息、机器绑定数据、有效期限和数字签名。证书采用RSA算法签名，确保无法被篡改或伪造。客户端可以通过验证证书签名来确认激活状态的真实性。
 
-{
-    "license_key": "MMA1-PRO2-5F8A-9B3C-7E2D",
-    "machine_fingerprint": "abc123...",
-    "session_info": {
-        "start_time": "2025-09-05T09:00:00Z",
-        "feature_usage": {
-            "advanced_features": 15,
-            "cloud_sync": 3
-        }
-    }
-}
-```
+**动态验证策略**:
 
-### 4.2 离线验证支持
+系统支持多种验证模式，包括实时在线验证、定期心跳检查和离线宽限期验证。验证间隔和离线宽限期可根据许可证类型和安全策略动态调整，平衡用户体验和安全控制。
 
-#### 4.2.1 离线验证证书
-```http
-POST /api/v1/licenses/activations/offline-certificate/
-Content-Type: application/json
+### 4.3 离线使用支持机制
 
-{
-    "license_key": "MMA1-PRO2-5F8A-9B3C-7E2D",
-    "machine_fingerprint": "abc123...",
-    "requested_duration": 604800  // 7天
-}
-```
+**离线证书技术**:
 
-**响应示例**:
-```json
-{
-    "success": true,
-    "code": 2000,
-    "message": "离线证书生成成功",
-    "data": {
-        "offline_certificate": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...",
-        "valid_until": "2025-09-12T10:00:00Z",
-        "certificate_id": "offline_cert_123"
-    }
-}
-```
+为了支持网络受限环境下的软件使用，系统提供离线验证证书功能。离线证书是预签名的时效性令牌，允许客户端在指定期间内无需网络连接即可验证许可证有效性。
 
-## 5. 管理统计API
+**安全期限控制**:
 
-### 5.1 仪表板数据
+离线证书具有严格的时间限制和使用范围限制，防止长期脱机使用导致的安全风险。证书过期后，客户端必须重新联网获取新的离线证书或进行在线验证。
 
-#### 5.1.1 概览统计
-```http
-GET /api/v1/licenses/reports/dashboard/
-Authorization: Bearer <token>
-```
+## 5. 数据分析与报告系统
 
-**响应示例**:
-```json
-{
-    "success": true,
-    "code": 2000,
-    "message": "查询成功",
-    "data": {
-        "summary": {
-            "total_licenses": 1250,
-            "active_licenses": 980,
-            "total_activations": 2340,
-            "active_machines": 1890
-        },
-        "recent_activations": [
-            {
-                "license_key": "MMA1-****-****-****-7E2D",
-                "customer_name": "张三",
-                "activated_at": "2025-09-05T10:00:00Z",
-                "machine_info": "MacBook Pro (M1)"
-            }
-        ],
-        "expiring_soon": [
-            {
-                "license_key": "MMA1-****-****-****-8F3E",
-                "customer_name": "李四",
-                "expires_at": "2025-09-15T10:00:00Z",
-                "days_remaining": 10
-            }
-        ]
-    }
-}
-```
+### 5.1 业务智能仪表板
 
-### 5.2 使用情况报告
+**实时监控体系**:
 
-#### 5.2.1 激活统计
-```http
-GET /api/v1/licenses/reports/activations/?start_date=2025-09-01&end_date=2025-09-30
-Authorization: Bearer <token>
-```
+管理统计API构建了全面的业务智能仪表板，提供许可证系统运营状况的实时洞察。仪表板整合了许可证发放、激活趋势、用户行为和系统性能等多维度数据，为业务决策提供数据支撑。
 
-**响应示例**:
-```json
-{
-    "success": true,
-    "code": 2000,
-    "message": "查询成功",
-    "data": {
-        "period": {
-            "start_date": "2025-09-01",
-            "end_date": "2025-09-30"
-        },
-        "statistics": {
-            "total_activations": 156,
-            "successful_activations": 145,
-            "failed_activations": 11,
-            "success_rate": 92.9
-        },
-        "daily_stats": [
-            {
-                "date": "2025-09-05",
-                "activations": 8,
-                "verifications": 245,
-                "unique_machines": 128
-            }
-        ],
-        "top_products": [
-            {
-                "product_name": "MyMacApp",
-                "activations": 98,
-                "percentage": 62.8
-            }
-        ]
-    }
-}
-```
+**关键业务指标**:
 
-## 6. 错误处理
+- **许可证生命周期指标**: 发放数量、激活率、到期预警
+- **用户活跃度分析**: 设备使用频率、功能使用偏好
+- **收入相关指标**: 方案销售分布、续费率统计
+- **系统健康指标**: API响应时间、错误率监控
 
-### 6.1 常见错误响应
+### 5.2 高级数据分析功能
 
-#### 6.1.1 无效注册码
-```json
-{
-    "success": false,
-    "code": 4004,
-    "message": "注册码不存在或已失效",
-    "data": {
-        "error_type": "INVALID_LICENSE_KEY",
-        "details": "The provided license key is not found in our system"
-    }
-}
-```
+**趋势分析与预测**:
 
-#### 6.1.2 激活次数超限
-```json
-{
-    "success": false,
-    "code": 4005,
-    "message": "激活次数已达上限",
-    "data": {
-        "error_type": "ACTIVATION_LIMIT_EXCEEDED",
-        "max_activations": 3,
-        "current_activations": 3,
-        "details": "This license has reached its maximum activation limit"
-    }
-}
-```
+系统提供深度的数据分析功能，包括激活趋势分析、用户行为模式识别和业务增长预测。分析引擎可以识别季节性变化、产品偏好变化和潜在的业务风险点。
 
-#### 6.1.3 机器绑定冲突
-```json
-{
-    "success": false,
-    "code": 4005,
-    "message": "该注册码已绑定到其他设备",
-    "data": {
-        "error_type": "MACHINE_BINDING_CONFLICT",
-        "bound_machine": "MacBook Pro (Partial: C02XG***H7JY)",
-        "details": "This license is already bound to a different machine"
-    }
-}
-```
+**自定义报告生成**:
 
-### 6.2 服务器错误处理
-```json
-{
-    "success": false,
-    "code": 5000,
-    "message": "服务器内部错误",
-    "data": {
-        "error_id": "ERR_20250905_001",
-        "timestamp": "2025-09-05T10:00:00Z",
-        "details": "An unexpected error occurred. Please contact support with error ID."
-    }
-}
-```
+支持灵活的报告定制功能，管理员可以根据业务需求创建特定时间范围、特定产品或特定客户群体的专项报告。报告支持多种格式导出，便于进一步分析和分享。
 
-## 7. API安全机制
+## 6. 异常处理与容错机制
 
-### 7.1 认证授权
-- **管理端API**: 需要JWT认证 + 管理员权限
-- **客户端激活API**: 公开接口，但有频率限制
-- **敏感操作**: 需要额外的操作确认
+### 6.1 分层错误处理架构
 
-### 7.2 请求限制
-```python
-# 激活API限制
-ACTIVATION_RATE_LIMIT = "10/hour"  # 每小时10次激活请求
-VERIFICATION_RATE_LIMIT = "60/hour"  # 每小时60次验证请求
-HEARTBEAT_RATE_LIMIT = "1440/day"  # 每天1440次心跳（每分钟1次）
+**业务逻辑错误处理**:
 
-# 管理端API限制  
-ADMIN_RATE_LIMIT = "1000/hour"  # 每小时1000次管理操作
-```
+系统采用分层的错误处理架构，将业务逻辑错误、系统运行错误和网络通信错误进行分类处理。每种错误类型都有对应的处理策略和用户反馈机制，确保系统在各种异常情况下的稳定运行。
 
-### 7.3 数据脱敏
-- 许可证列表中的注册码部分掩码显示
-- 机器信息中的敏感硬件信息脱敏
-- 客户信息按权限级别显示
+**智能错误恢复机制**:
 
-## 8. API文档生成
+对于可恢复的错误，系统提供智能重试机制和备选方案建议。例如，当设备激活数量达到限制时，系统会提供设备管理建议和方案升级选项，帮助用户快速解决问题。
 
-### 8.1 drf-spectacular配置
-```python
-# licenses/views/base_views.py
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+### 6.2 用户友好的错误反馈
 
-@extend_schema(
-    summary="激活许可证",
-    description="使用注册码激活软件许可证并绑定到当前设备",
-    request=ActivationSerializer,
-    responses={
-        200: OpenApiResponse(
-            description="激活成功",
-            examples=[OpenApiExample(
-                name="激活成功示例",
-                value={
-                    "success": True,
-                    "code": 2000,
-                    "message": "激活成功",
-                    "data": {"activation_certificate": "..."}
-                }
-            )]
-        ),
-        400: OpenApiResponse(description="请求参数错误"),
-        404: OpenApiResponse(description="注册码不存在"),
-        409: OpenApiResponse(description="激活冲突")
-    },
-    tags=["许可证激活"]
-)
-def post(self, request):
-    # 实现激活逻辑
-    pass
-```
+**多语言错误信息**:
 
-这个API设计充分考虑了与现有系统的集成，遵循了RESTful设计原则，并提供了完整的错误处理和安全机制。所有接口都支持OpenAPI文档自动生成，便于前端开发和测试。
+所有错误信息都支持国际化处理，根据用户的语言偏好提供相应的错误描述。错误信息不仅包含问题描述，还提供具体的解决建议和后续操作指导。
+
+**错误上下文信息**:
+
+系统在返回错误信息时，会包含相关的上下文信息，如许可证状态、剩余配额、到期时间等，帮助用户理解当前状况和采取相应行动。
+
+## 7. API安全架构
+
+### 7.1 多层认证授权体系
+
+**分层访问控制**:
+
+API安全架构采用分层的认证授权机制，根据接口类型和操作敏感度实施不同级别的安全控制。管理端API要求JWT认证和相应的管理员权限，确保只有授权用户才能执行系统管理操作。
+
+**客户端接口安全策略**:
+
+客户端激活API采用公开访问模式，但通过严格的频率限制和行为分析防止滥用。系统对每个IP地址和设备指纹实施独立的请求限制，确保正常用户不受影响的同时有效防止恶意攻击。
+
+### 7.2 智能防护与限流机制
+
+**动态频率控制**:
+
+系统实施智能的动态频率控制策略，根据用户行为模式和系统负载情况自动调整请求限制。正常用户享有更宽松的限制，而检测到异常行为的请求将面临更严格的限制。
+
+**数据隐私保护**:
+
+所有API响应都经过数据脱敏处理，许可证密钥、机器信息和客户数据按照权限级别进行显示控制。敏感信息采用掩码显示或完全隐藏，确保数据隐私安全。
+
+## 8. 自动化文档与集成
+
+### 8.1 OpenAPI文档体系
+
+**自动化文档生成**:
+
+系统使用drf-spectacular框架实现OpenAPI 3.0标准的自动化文档生成。每个API端点都配置了详细的元数据信息，包括参数说明、响应示例和错误代码说明，确保文档的完整性和准确性。
+
+**开发者友好的集成**:
+
+API设计充分考虑了开发者的使用体验，提供丰富的示例代码、错误处理指南和最佳实践建议。文档支持交互式测试功能，开发者可以直接在文档界面中测试API调用。
+
+### 8.2 系统集成特性
+
+**与现有架构的无缝集成**:
+
+API设计严格遵循现有系统的架构模式和编码规范，确保与Django多租户后端的完美集成。所有接口都支持租户隔离和统一的响应格式，保持系统的一致性和可维护性。
+
+**扩展性与向后兼容**:
+
+API架构支持版本控制和功能扩展，新功能的添加不会影响现有客户端的使用。系统设计考虑了未来的业务发展需求，为功能扩展和性能优化预留了充足的空间。
 
 ---
 
