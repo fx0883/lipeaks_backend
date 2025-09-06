@@ -104,22 +104,18 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',  # 静态文件优化
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # CORS中间件提前
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',  # 保持CSRF中间件位置
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    # 添加API认证中间件在AuthenticationMiddleware之后,TenantMiddleware之前
-    'common.middleware.api_auth_middleware.APIAuthMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # 自定义租户中间件
+    # 自定义中间件放在Django核心中间件之后
+    'common.middleware.api_auth_middleware.APIAuthMiddleware',
     'common.middleware.tenant_middleware.TenantMiddleware',
-    # 增强型API日志中间件（替换旧版）
     'common.middleware.enhanced_api_logging_middleware.EnhancedAPILoggingMiddleware',
-    # 浏览器控制台日志中间件（用于调试）
     'common.middleware.browser_console_logging_middleware.BrowserConsoleLoggingMiddleware',
-    # 响应格式标准化中间件(放在最后以确保处理所有其他中间件后的响应)
     'common.middleware.response_standardization_middleware.ResponseStandardizationMiddleware',
 ]
 
@@ -266,10 +262,47 @@ JWT_AUTH = {
 # ]
 
 # CORS 配置
-CORS_ALLOW_ALL_ORIGINS = True  # 允许所有源
+CORS_ALLOW_ALL_ORIGINS = False  # 改为False使用白名单模式
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",  # 前端应用
+    "http://127.0.0.1:3000",
+    "http://espressox.online",
+    "https://espressox.online",
+]
 CORS_ALLOW_CREDENTIALS = True  # 允许携带凭证（如 cookies）
 
-CORS_ALLOW_HEADERS = ["*"]
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",  # 明确允许CSRF token头
+    "x-requested-with",
+    "x-tenant-id",
+]
+
+# CSRF 安全配置
+CSRF_COOKIE_AGE = 31449600  # 1年
+CSRF_COOKIE_DOMAIN = None
+CSRF_COOKIE_HTTPONLY = False  # 允许JavaScript访问CSRF cookie
+CSRF_COOKIE_NAME = 'csrftoken'
+CSRF_COOKIE_PATH = '/'
+CSRF_COOKIE_SAMESITE = 'Lax'  # 重要：设置为Lax而不是Strict
+CSRF_COOKIE_SECURE = False if DEBUG else True  # 开发环境设为False
+CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'
+CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://espressox.online',
+    'https://espressox.online'
+]  # 添加受信任的源
+CSRF_USE_SESSIONS = False
 
 # Spectacular API 文档设置
 SPECTACULAR_SETTINGS = {
