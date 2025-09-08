@@ -286,9 +286,9 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
             queryset = queryset.filter(status=status_filter)
         
         # 超级管理员过滤
-        is_super_admin = self.request.query_params.get('is_super_admin', None)
-        if is_super_admin is not None:
-            is_super = is_super_admin.lower() == 'true'
+        is_super_admin_param = self.request.query_params.get('is_super_admin', None)
+        if is_super_admin_param is not None:
+            is_super = is_super_admin_param.lower() == 'true'
             queryset = queryset.filter(is_super_admin=is_super)
         
         # 租户ID过滤

@@ -38,6 +38,7 @@ urlpatterns = [
     # 报告和统计API
     path('reports/generate/', report_views.generate_report, name='generate_report'),
     path('reports/dashboard/', report_views.dashboard_stats, name='dashboard_stats'),
+    path('statistics/', report_views.license_statistics, name='license_statistics'),
 ]
 
 # 为了向后兼容，也可以通过 'api/v1/licenses/' 前缀访问

@@ -550,3 +550,192 @@ def dashboard_stats(request):
         return Response({
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['许可证统计'],
+    summary='获取许可证统计数据',
+    description='获取许可证系统的综合统计数据，包括许可证状态、激活情况、机器绑定等统计信息',
+    responses={
+        200: OpenApiResponse(
+            description='许可证统计数据',
+            examples=[
+                OpenApiExample(
+                    'License Statistics',
+                    value={
+                        'success': True,
+                        'data': {
+                            'overview': {
+                                'total_licenses': 250,
+                                'active_licenses': 200,
+                                'expired_licenses': 30,
+                                'revoked_licenses': 20,
+                                'activation_rate': 80.0
+                            },
+                            'products': {
+                                'total_products': 5,
+                                'active_products': 4
+                            },
+                            'activations': {
+                                'total_activations': 1500,
+                                'successful_activations': 1350,
+                                'failed_activations': 150,
+                                'success_rate': 90.0
+                            },
+                            'machines': {
+                                'total_machines': 800,
+                                'active_machines': 750,
+                                'blocked_machines': 50
+                            },
+                            'usage': {
+                                'total_events': 50000,
+                                'recent_events_24h': 2500
+                            }
+                        }
+                    }
+                )
+            ]
+        )
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsSuperAdminOrTenantAdmin])
+def license_statistics(request):
+    """
+    获取许可证统计数据
+    
+    GET /api/v1/licenses/statistics/
+    """
+    try:
+        # 根据用户权限过滤数据
+        license_filter = {}
+        activation_filter = {}
+        machine_filter = {}
+        usage_filter = {}
+        
+        if not request.user.is_super_admin and hasattr(request.user, 'tenant'):
+            license_filter['tenant'] = request.user.tenant
+            activation_filter['license__tenant'] = request.user.tenant
+            machine_filter['license__tenant'] = request.user.tenant
+            usage_filter['license__tenant'] = request.user.tenant
+        
+        # 许可证概览统计
+        license_overview = License.objects.filter(**license_filter).aggregate(
+            total_licenses=Count('id'),
+            active_licenses=Count('id', filter=Q(status='activated')),
+            generated_licenses=Count('id', filter=Q(status='generated')),  
+            suspended_licenses=Count('id', filter=Q(status='suspended')),
+            revoked_licenses=Count('id', filter=Q(status='revoked')),
+            expired_licenses=Count('id', filter=Q(expires_at__lt=timezone.now()))
+        )
+        
+        # 计算激活率
+        total = license_overview['total_licenses'] or 0
+        active = license_overview['active_licenses'] or 0
+        activation_rate = (active / total * 100) if total > 0 else 0
+        
+        # 产品统计
+        product_stats = SoftwareProduct.objects.aggregate(
+            total_products=Count('id'),
+            active_products=Count('id', filter=Q(status='active')),
+            inactive_products=Count('id', filter=Q(status='inactive'))
+        )
+        
+        # 激活统计
+        activation_stats = LicenseActivation.objects.filter(**activation_filter).aggregate(
+            total_activations=Count('id'),
+            successful_activations=Count('id', filter=Q(result='success')),
+            failed_activations=Count('id', filter=Q(result='failed')),
+            pending_activations=Count('id', filter=Q(result='pending'))
+        )
+        
+        # 计算激活成功率
+        total_attempts = activation_stats['total_activations'] or 0
+        successful = activation_stats['successful_activations'] or 0
+        success_rate = (successful / total_attempts * 100) if total_attempts > 0 else 0
+        
+        # 机器绑定统计
+        machine_stats = MachineBinding.objects.filter(**machine_filter).aggregate(
+            total_machines=Count('id'),
+            active_machines=Count('id', filter=Q(status='active')),
+            inactive_machines=Count('id', filter=Q(status='inactive')),
+            blocked_machines=Count('id', filter=Q(status='blocked'))
+        )
+        
+        # 使用统计
+        now = timezone.now()
+        today = now.date()
+        yesterday = today - timedelta(days=1)
+        
+        usage_stats = LicenseUsageLog.objects.filter(**usage_filter).aggregate(
+            total_events=Count('id'),
+            recent_events_24h=Count('id', filter=Q(timestamp__gte=now - timedelta(hours=24))),
+            heartbeat_events=Count('id', filter=Q(event_type='heartbeat')),
+            startup_events=Count('id', filter=Q(event_type='startup'))
+        )
+        
+        # 租户统计（仅超级管理员可见）
+        tenant_stats = {}
+        if request.user.is_super_admin:
+            from tenants.models import Tenant
+            tenant_stats = {
+                'total_tenants': Tenant.objects.count(),
+                'active_tenants': Tenant.objects.filter(status='active').count(),
+                'tenants_with_licenses': License.objects.values('tenant').distinct().count()
+            }
+        
+        # 时间范围统计
+        this_month_start = today.replace(day=1)
+        last_month_start = (this_month_start - timedelta(days=1)).replace(day=1)
+        
+        time_stats = {
+            'licenses_this_month': License.objects.filter(
+                created_at__date__gte=this_month_start,
+                **license_filter
+            ).count(),
+            'licenses_last_month': License.objects.filter(
+                created_at__date__gte=last_month_start,
+                created_at__date__lt=this_month_start,
+                **license_filter
+            ).count(),
+            'activations_today': LicenseActivation.objects.filter(
+                activated_at__date=today,
+                **activation_filter
+            ).count(),
+            'activations_yesterday': LicenseActivation.objects.filter(
+                activated_at__date=yesterday,
+                **activation_filter
+            ).count()
+        }
+        
+        response_data = {
+            'overview': {
+                **license_overview,
+                'activation_rate': round(activation_rate, 2)
+            },
+            'products': product_stats,
+            'activations': {
+                **activation_stats,
+                'success_rate': round(success_rate, 2)
+            },
+            'machines': machine_stats,
+            'usage': usage_stats,
+            'time_based': time_stats
+        }
+        
+        # 添加租户统计（仅超级管理员）
+        if tenant_stats:
+            response_data['tenants'] = tenant_stats
+        
+        return Response({
+            'success': True,
+            'data': response_data,
+            'generated_at': timezone.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error(f"许可证统计获取失败: {str(e)}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

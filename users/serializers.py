@@ -30,10 +30,10 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'phone', 'nick_name', 'first_name', 
             'last_name', 'is_active', 'avatar', 'tenant', 'tenant_name', 
-            'is_admin', 'is_member', 'role', 'date_joined',
+            'is_admin', 'is_super_admin', 'is_member', 'role', 'date_joined',
             'wechat_id'
         ]
-        read_only_fields = ['id', 'date_joined', 'role', 'tenant_name', 'is_member']
+        read_only_fields = ['id', 'date_joined', 'role', 'tenant_name', 'is_member', 'is_super_admin']
         extra_kwargs = {
             'is_admin': {'read_only': True},
             'is_super_admin': {'read_only': True},

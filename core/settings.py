@@ -270,6 +270,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://espressox.online",
     "https://espressox.online",
+    "http://localhost:8848",
 ]
 CORS_ALLOW_CREDENTIALS = True  # 允许携带凭证（如 cookies）
 
