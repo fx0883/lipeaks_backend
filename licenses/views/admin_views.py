@@ -96,12 +96,9 @@ class SoftwareProductViewSet(viewsets.ModelViewSet):
         if self.request.user.is_super_admin:
             return queryset
         
-        # 租户管理员只能看到有权限的产品
-        if hasattr(self.request.user, 'tenant'):
-            return queryset.filter(
-                tenant_quotas__tenant=self.request.user.tenant,
-                tenant_quotas__is_active=True
-            ).distinct()
+        # 租户管理员只能看到自己租户的产品
+        if hasattr(self.request.user, 'tenant') and self.request.user.tenant:
+            return queryset.filter(tenant=self.request.user.tenant)
         
         return queryset.none()
     
@@ -110,6 +107,28 @@ class SoftwareProductViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return SoftwareProductCreateSerializer
         return SoftwareProductSerializer
+    
+    def perform_create(self, serializer):
+        """创建产品时自动设置租户信息"""
+        # 从中间件获取当前租户信息
+        tenant_id = getattr(self.request, 'tenant_id', None)
+        if tenant_id:
+            from tenants.models import Tenant
+            try:
+                tenant = Tenant.objects.get(id=int(tenant_id))
+                serializer.save(tenant=tenant)
+                logger.info(f"产品创建成功，关联租户: {tenant.name} (ID: {tenant_id})")
+            except Tenant.DoesNotExist:
+                logger.error(f"指定的租户ID不存在: {tenant_id}")
+                serializer.save()
+        else:
+            # 如果没有租户信息但用户已认证，尝试使用用户关联的租户
+            if hasattr(self.request.user, 'tenant') and self.request.user.tenant:
+                serializer.save(tenant=self.request.user.tenant)
+                logger.info(f"产品创建成功，使用用户关联租户: {self.request.user.tenant.name}")
+            else:
+                serializer.save()
+                logger.warning("产品创建时未设置租户信息")
     
     @action(detail=True, methods=['post'])
     def regenerate_keypair(self, request, pk=None):

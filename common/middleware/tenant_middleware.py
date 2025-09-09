@@ -55,7 +55,7 @@ class TenantMiddleware(MiddlewareMixin):
             return False
         
         # 只对真正的业务API路径进行租户验证
-        api_prefixes = ['/api/v1/cms/', '/api/v1/customers/', '/api/v1/orders/']
+        api_prefixes = ['/api/v1/cms/', '/api/v1/customers/', '/api/v1/orders/', '/api/v1/licenses/']
         return any(path.startswith(prefix) for prefix in api_prefixes)
     
     def process_request(self, request):
