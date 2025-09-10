@@ -49,31 +49,24 @@ TENANT_MIDDLEWARE_ENABLE_FALLBACK = True
 
 ## 🚀 使用方法
 
-### 1. 默认使用（旧实现）
+### ✅ 已完成重构 - 直接使用新架构
+
+重构已完成，旧实现已移除。现在默认使用基于服务类的新架构：
+
 ```python
-# 不需要任何配置更改，继续使用原有实现
-# 确保功能完全不受影响
+# 新架构组件
+├── TenantIdResolver (租户ID解析服务)
+├── TenantPermissionChecker (权限检查服务)  
+├── TenantValidator (租户验证服务)
+└── TenantErrorResponseBuilder (错误响应构建器)
 ```
 
-### 2. 启用新实现测试
+### 配置选项
+
 ```python
-# 在settings.py中
-TENANT_MIDDLEWARE_USE_NEW_IMPL = True
-
-# 或通过环境变量
-# TENANT_MIDDLEWARE_USE_NEW_IMPL=true
-```
-
-### 3. A/B测试配置
-```python
-# 可以基于用户或请求百分比进行灰度测试
-import random
-
-class CustomTenantMiddleware(TenantMiddleware):
-    def __init__(self, get_response):
-        super().__init__(get_response)
-        # 只对5%的请求使用新实现
-        self.use_new_implementation = random.random() < 0.05
+# 可用的配置选项
+TENANT_MIDDLEWARE_DEBUG = True/False  # 调试模式
+TENANT_MIDDLEWARE_PERFORMANCE_MONITORING = True/False  # 性能监控
 ```
 
 ## ✅ 安全保证

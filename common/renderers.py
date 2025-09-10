@@ -118,10 +118,21 @@ class StandardJSONRenderer(JSONRenderer):
                 return data
             
             # 移除可能存在的消息字段，避免重复
+            # 注意：不要移除业务数据中的'code'字段，只移除顶层的元信息字段
             result = data.copy()
-            for key in ['success', 'code', 'message', 'detail']:
-                if key in result:
-                    result.pop(key)
+            
+            # 只有在数据明确包含标准响应结构时才移除这些字段
+            # 通过检查是否同时包含success和message来判断
+            if 'success' in result and 'message' in result:
+                for key in ['success', 'code', 'message', 'detail']:
+                    if key in result:
+                        result.pop(key)
+            else:
+                # 对于普通的业务数据，只移除明确的错误信息字段，保留业务字段
+                for key in ['detail']:
+                    if key in result:
+                        result.pop(key)
+            
             return result
         else:
             return data 

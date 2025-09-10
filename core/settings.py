@@ -445,23 +445,13 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 WHITENOISE_USE_FINDERS = True
 WHITENENOISE_AUTOREFRESH = DEBUG
 
-# 租户中间件配置
-# 是否启用新的租户中间件实现（默认False，使用旧实现确保稳定性）
-TENANT_MIDDLEWARE_USE_NEW_IMPL = get_env_with_validation(
-    'TENANT_MIDDLEWARE_USE_NEW_IMPL', lambda x: x.lower() == 'true', False
-)
-
+# 租户中间件配置（已完成重构，使用新架构）
 # 租户中间件调试模式（启用详细日志）
 TENANT_MIDDLEWARE_DEBUG = get_env_with_validation(
-    'TENANT_MIDDLEWARE_DEBUG', lambda x: x.lower() == 'true', DEBUG
+    'TENANT_MIDDLEWARE_DEBUG', lambda x: x.lower() == 'true', 'True' if DEBUG else 'False'
 )
 
 # 租户中间件性能监控（记录处理时间）
 TENANT_MIDDLEWARE_PERFORMANCE_MONITORING = get_env_with_validation(
-    'TENANT_MIDDLEWARE_PERFORMANCE_MONITORING', lambda x: x.lower() == 'true', False
-)
-
-# 租户中间件回退策略（新实现异常时是否回退到旧实现）
-TENANT_MIDDLEWARE_ENABLE_FALLBACK = get_env_with_validation(
-    'TENANT_MIDDLEWARE_ENABLE_FALLBACK', lambda x: x.lower() == 'true', True
+    'TENANT_MIDDLEWARE_PERFORMANCE_MONITORING', lambda x: x.lower() == 'true', 'False'
 )
