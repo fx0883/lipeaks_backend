@@ -1,9 +1,12 @@
 """
 租户中间件，用于处理请求中的租户上下文
+
+重构后的版本支持新旧实现并行，确保功能不受影响
 """
 import logging
 import time
 import json
+from django.conf import settings
 from django.utils.deprecation import MiddlewareMixin
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework import status
@@ -11,11 +14,21 @@ from django.http import JsonResponse
 from common.utils.tenant_context import get_current_tenant, set_current_tenant, clear_current_tenant
 from django.contrib.auth.models import AnonymousUser
 
+# 新版本服务类导入
+from common.services.tenant_resolver import TenantIdResolver
+from common.services.permission_checker import TenantPermissionChecker
+from common.services.tenant_validator import TenantValidator, TenantPathChecker
+
 logger = logging.getLogger(__name__)
 
 class TenantMiddleware(MiddlewareMixin):
     """
     租户中间件，用于从请求中提取租户信息并设置租户上下文
+    
+    重构后支持新旧实现并行：
+    - 默认使用旧实现，确保功能不受影响
+    - 可通过配置切换到新实现进行测试
+    - 支持A/B测试和灰度发布
     
     处理以下租户信息来源:
     1. X-Tenant-ID 请求头
@@ -27,6 +40,27 @@ class TenantMiddleware(MiddlewareMixin):
     - 超级管理员可以通过X-Tenant-ID请求头指定租户进行操作
     - 只有真正的API路径才需要进行租户ID验证，Admin路径不需要
     """
+    
+    def __init__(self, get_response):
+        """
+        初始化中间件
+        
+        Args:
+            get_response: Django中间件响应函数
+        """
+        super().__init__(get_response)
+        
+        # 检查是否启用新实现
+        self.use_new_implementation = getattr(
+            settings, 'TENANT_MIDDLEWARE_USE_NEW_IMPL', False
+        )
+        
+        # 初始化新版本的服务类
+        if self.use_new_implementation:
+            self.path_checker = TenantPathChecker()
+            logger.info("租户中间件：已启用新实现")
+        else:
+            logger.info("租户中间件：使用旧实现（默认）")
     
     def requires_tenant_verification(self, path):
         """
@@ -62,11 +96,103 @@ class TenantMiddleware(MiddlewareMixin):
         """
         处理请求，设置当前租户
         
+        根据配置选择使用新实现或旧实现
+        
         Args:
             request: HTTP请求对象
         
         Returns:
             None
+        """
+        # 根据配置选择实现
+        if self.use_new_implementation:
+            return self._process_request_new(request)
+        else:
+            return self._process_request_legacy(request)
+    
+    def _process_request_new(self, request):
+        """
+        新版本的请求处理逻辑，使用服务类架构
+        
+        Args:
+            request: HTTP请求对象
+        
+        Returns:
+            JsonResponse|None: 处理失败时返回错误响应，成功时返回None
+        """
+        logger.info(f"[新实现] TenantMiddleware - 处理请求: {request.path}")
+        
+        # 清除之前的租户上下文
+        clear_current_tenant()
+        
+        # 检查路径是否需要租户验证
+        if not self.path_checker.requires_tenant_verification(request.path):
+            logger.debug(f"路径不需要租户验证，跳过: {request.path}")
+            return None
+        
+        logger.info(f"开始处理需要租户验证的路径: {request.path}, 方法: {request.method}")
+        
+        try:
+            # 1. 解析租户ID
+            resolver = TenantIdResolver(request)
+            tenant_info = resolver.resolve_tenant_ids()
+            
+            # 2. 验证用户对租户的访问权限
+            user = getattr(request, 'user', None)
+            if user and user.is_authenticated:
+                error_response = resolver.validate_tenant_access(
+                    tenant_info['effective_tenant_id'],
+                    tenant_info['header_tenant_id'], 
+                    tenant_info['user_tenant_id'],
+                    user
+                )
+                if error_response:
+                    return error_response
+            
+            # 3. 检查权限
+            permission_checker = TenantPermissionChecker(request)
+            error_response = permission_checker.check_permissions(
+                tenant_info['effective_tenant_id'],
+                tenant_info['user_tenant_id']
+            )
+            if error_response:
+                return error_response
+            
+            # 4. 验证租户并设置上下文
+            validator = TenantValidator(request)
+            user_tenant = getattr(user, 'tenant', None) if user and user.is_authenticated else None
+            error_response = validator.validate_and_set_tenant_context(
+                tenant_info['effective_tenant_id'],
+                user_tenant
+            )
+            if error_response:
+                return error_response
+            
+            # 5. 设置请求属性
+            validator.set_request_attributes(tenant_info)
+            
+            logger.info(f"[新实现] 租户验证成功: {request.path}")
+            return None
+            
+        except ValidationError as e:
+            logger.warning(f"[新实现] 租户验证失败: {str(e)}")
+            # ValidationError会被后续中间件处理
+            raise
+        except Exception as e:
+            logger.error(f"[新实现] 租户中间件处理异常: {str(e)}", exc_info=True)
+            # 异常情况下回退到旧实现
+            logger.warning("由于异常，回退到旧实现")
+            return self._process_request_legacy(request)
+    
+    def _process_request_legacy(self, request):
+        """
+        旧版本的请求处理逻辑（原始实现），作为备份
+        
+        Args:
+            request: HTTP请求对象
+        
+        Returns:
+            JsonResponse|None: 处理失败时返回错误响应，成功时返回None
         """
         logger.info(f"[进入中间件] TenantMiddleware - 处理请求: {request.path}")
         # 清除之前的租户上下文
