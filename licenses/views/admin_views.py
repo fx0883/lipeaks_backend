@@ -446,6 +446,41 @@ class LicenseViewSet(viewsets.ModelViewSet):
             return LicenseDetailSerializer
         return LicenseSerializer
     
+    def perform_create(self, serializer):
+        """创建许可证时自动填充缺失的字段"""
+        save_kwargs = {}
+        
+        # 自动获取product字段
+        if not serializer.validated_data.get('product') and serializer.validated_data.get('plan'):
+            plan = serializer.validated_data['plan']
+            save_kwargs['product'] = plan.product
+            logger.info(f"自动从plan获取product: {plan.product.name}")
+        
+        # 自动获取tenant字段
+        if not serializer.validated_data.get('tenant'):
+            # 尝试从中间件获取当前租户信息
+            tenant_id = getattr(self.request, 'tenant_id', None)
+            if tenant_id:
+                from tenants.models import Tenant
+                try:
+                    tenant = Tenant.objects.get(id=int(tenant_id))
+                    save_kwargs['tenant'] = tenant
+                    logger.info(f"从中间件获取租户: {tenant.name} (ID: {tenant_id})")
+                except Tenant.DoesNotExist:
+                    logger.error(f"指定的租户ID不存在: {tenant_id}")
+            
+            # 如果仍然没有租户信息，尝试使用用户关联的租户
+            if 'tenant' not in save_kwargs and hasattr(self.request.user, 'tenant') and self.request.user.tenant:
+                save_kwargs['tenant'] = self.request.user.tenant
+                logger.info(f"使用用户关联租户: {self.request.user.tenant.name}")
+            
+            # 如果还是没有租户信息，记录警告
+            if 'tenant' not in save_kwargs:
+                logger.warning("许可证创建时未能自动获取租户信息")
+        
+        # 调用serializer.save()，传入额外的字段
+        return serializer.save(**save_kwargs)
+    
     @action(detail=True, methods=['post'])
     def revoke(self, request, pk=None):
         """撤销许可证"""

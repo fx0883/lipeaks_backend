@@ -228,11 +228,27 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
     
     customer_info = serializers.JSONField(write_only=True)
     validity_days = serializers.IntegerField(required=False, write_only=True)
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=SoftwareProduct.objects.filter(is_deleted=False),
+        required=False,
+        help_text="产品ID，如果未提供将从plan字段自动获取"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 动态添加tenant字段
+        from tenants.models import Tenant
+        self.fields['tenant'] = serializers.PrimaryKeyRelatedField(
+            queryset=Tenant.objects.filter(is_deleted=False),
+            required=False,
+            allow_null=True,
+            help_text="租户ID，如果未提供将从当前用户自动获取"
+        )
     
     class Meta:
         model = License
         fields = [
-            'product', 'plan', 'tenant', 'customer_info',
+            'product', 'plan', 'tenant',
             'max_activations', 'validity_days', 'notes'
         ]
     
@@ -268,6 +284,19 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
         customer_info = validated_data.pop('customer_info')
         validity_days = validated_data.pop('validity_days', None)
         
+        # 从validated_data中获取必要字段（这些字段可能通过perform_create自动填充）
+        product = validated_data.get('product')
+        plan = validated_data.get('plan')  
+        tenant = validated_data.get('tenant')
+        
+        # 验证必要字段是否存在
+        if not product:
+            raise serializers.ValidationError("product字段是必需的")
+        if not plan:
+            raise serializers.ValidationError("plan字段是必需的") 
+        if not tenant:
+            raise serializers.ValidationError("tenant字段是必需的")
+        
         # 计算过期时间
         expires_at = None
         if validity_days:
@@ -276,9 +305,9 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
         # 使用服务创建许可证
         management_service = LicenseManagementService()
         license_obj = management_service.create_license(
-            product_id=validated_data['product'].id,
-            plan_id=validated_data['plan'].id,
-            tenant_id=validated_data['tenant'].id,
+            product_id=product.id,
+            plan_id=plan.id,
+            tenant_id=tenant.id,
             customer_info=customer_info,
             expires_at=expires_at,
             max_activations=validated_data.get('max_activations')
