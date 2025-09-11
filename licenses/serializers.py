@@ -248,7 +248,7 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = License
         fields = [
-            'product', 'plan', 'tenant',
+            'product', 'plan', 'tenant', 'customer_info',
             'max_activations', 'validity_days', 'notes'
         ]
     
