@@ -147,8 +147,29 @@ class License(BaseModel):
             models.Index(fields=['status', 'created_at']),
         ]
     
+    def clean(self):
+        """数据验证"""
+        super().clean()
+        
+        # 验证plan和product的一致性
+        if self.plan and self.product:
+            if self.plan.product != self.product:
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'product': f'所选产品({self.product.name})与方案所属产品({self.plan.product.name})不一致',
+                    'plan': f'方案({self.plan.name})属于产品({self.plan.product.name})，不能用于产品({self.product.name})'
+                })
+        
+        # 如果只有plan没有product，自动设置product
+        if self.plan and not self.product:
+            self.product = self.plan.product
+
     def save(self, *args, **kwargs):
-        """保存时自动生成许可证哈希"""
+        """保存时自动生成许可证哈希并验证数据"""
+        # 先进行数据验证
+        self.clean()
+        
+        # 生成许可证哈希
         if self.license_key and not self.license_hash:
             self.license_hash = hashlib.sha256(self.license_key.encode()).hexdigest()
         super().save(*args, **kwargs)

@@ -164,6 +164,30 @@ class LicenseSerializer(serializers.ModelSerializer):
             delta = obj.expires_at - timezone.now()
             return delta.days
         return None
+    
+    def validate(self, data):
+        """验证product和plan的一致性"""
+        product = data.get('product')
+        plan = data.get('plan')
+        
+        # 对于更新操作，如果没有提供某个字段，使用实例的现有值
+        if self.instance:
+            if not product:
+                product = self.instance.product
+            if not plan:
+                plan = self.instance.plan
+        
+        if product and plan:
+            if plan.product != product:
+                raise serializers.ValidationError({
+                    'plan': f'所选方案({plan.name})属于产品({plan.product.name})，与所选产品({product.name})不一致，请重新选择正确的方案。'
+                })
+        
+        # 如果只有plan没有product，自动设置product
+        if plan and not product:
+            data['product'] = plan.product
+        
+        return data
 
 
 class LicenseDetailSerializer(LicenseSerializer):
@@ -219,6 +243,23 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
             if field not in value:
                 raise serializers.ValidationError(f"客户信息缺少必要字段: {field}")
         return value
+    
+    def validate(self, data):
+        """验证product和plan的一致性"""
+        product = data.get('product')
+        plan = data.get('plan')
+        
+        if product and plan:
+            if plan.product != product:
+                raise serializers.ValidationError({
+                    'plan': f'所选方案({plan.name})属于产品({plan.product.name})，与所选产品({product.name})不一致，请重新选择正确的方案。'
+                })
+        
+        # 如果只有plan没有product，自动设置product
+        if plan and not product:
+            data['product'] = plan.product
+        
+        return data
     
     def create(self, validated_data):
         """创建许可证"""
