@@ -573,6 +573,266 @@ class LicenseViewSet(viewsets.ModelViewSet):
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+    @extend_schema(
+        tags=['许可证管理'],
+        summary='下载许可证',
+        description='下载许可证文件，包含许可证密钥、客户信息、产品信息和使用说明',
+        parameters=[
+            OpenApiParameter(
+                name='format',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='下载格式：json(默认)、txt、xml',
+                enum=['json', 'txt', 'xml'],
+                default='json'
+            )
+        ],
+        responses={
+            200: OpenApiResponse(
+                description='许可证下载成功',
+                examples=[
+                    {
+                        'application/json': {
+                            'license_key': 'XXXX-XXXX-XXXX-XXXX',
+                            'customer_info': {'name': 'Customer Name', 'email': 'email@example.com'},
+                            'product_info': {'name': 'Product Name', 'version': '1.0.0'},
+                            'activation_info': {'max_activations': 5, 'current_activations': 2},
+                            'validity_info': {'issued_at': '2023-01-01T00:00:00Z', 'expires_at': '2024-01-01T00:00:00Z'},
+                            'instructions': 'License usage instructions...'
+                        }
+                    }
+                ]
+            ),
+            404: OpenApiResponse(description='许可证不存在'),
+            403: OpenApiResponse(description='无权限访问该许可证')
+        }
+    )
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """下载许可证"""
+        try:
+            license_obj = self.get_object()
+            download_format = request.query_params.get('format', 'json').lower()
+            
+            # 构建许可证信息
+            license_data = {
+                'license_key': license_obj.license_key,
+                'customer_info': {
+                    'name': license_obj.customer_name,
+                    'email': license_obj.customer_email,
+                },
+                'product_info': {
+                    'name': license_obj.product.name,
+                    'code': license_obj.product.code,
+                    'version': license_obj.product.version,
+                    'description': license_obj.product.description
+                },
+                'plan_info': {
+                    'name': license_obj.plan.name,
+                    'type': license_obj.plan.plan_type,
+                    'features': license_obj.plan.features,
+                    'max_machines': license_obj.plan.max_machines
+                },
+                'activation_info': {
+                    'max_activations': license_obj.max_activations,
+                    'current_activations': license_obj.current_activations,
+                    'status': license_obj.status
+                },
+                'validity_info': {
+                    'issued_at': license_obj.issued_at.isoformat(),
+                    'expires_at': license_obj.expires_at.isoformat(),
+                    'last_verified_at': license_obj.last_verified_at.isoformat() if license_obj.last_verified_at else None
+                },
+                'instructions': self._generate_license_instructions(license_obj),
+                'generated_at': timezone.now().isoformat(),
+                'download_by': request.user.username if request.user else 'Unknown'
+            }
+            
+            # 记录下载日志
+            SecurityAuditLog.objects.create(
+                event_type='data_access',
+                severity='LOW',
+                user=request.user,
+                tenant=license_obj.tenant,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                details={
+                    'license_id': license_obj.id,
+                    'operation': 'download_license',
+                    'format': download_format
+                }
+            )
+            
+            # 根据格式返回不同的响应
+            if download_format == 'json':
+                response = Response(license_data)
+                response['Content-Disposition'] = f'attachment; filename="license_{license_obj.id}.json"'
+                return response
+                
+            elif download_format == 'txt':
+                txt_content = self._format_license_as_text(license_data)
+                response = Response(
+                    txt_content,
+                    content_type='text/plain; charset=utf-8'
+                )
+                response['Content-Disposition'] = f'attachment; filename="license_{license_obj.id}.txt"'
+                return response
+                
+            elif download_format == 'xml':
+                xml_content = self._format_license_as_xml(license_data)
+                response = Response(
+                    xml_content,
+                    content_type='application/xml; charset=utf-8'
+                )
+                response['Content-Disposition'] = f'attachment; filename="license_{license_obj.id}.xml"'
+                return response
+                
+            else:
+                return Response({
+                    'success': False,
+                    'error': f'不支持的下载格式: {download_format}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"许可证下载失败: {str(e)}")
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _generate_license_instructions(self, license_obj):
+        """生成许可证使用说明"""
+        instructions = f"""
+许可证使用说明
+=============
+
+产品名称: {license_obj.product.name}
+许可方案: {license_obj.plan.name}
+许可证密钥: {license_obj.license_key}
+
+安装说明:
+1. 下载并安装 {license_obj.product.name} 软件
+2. 启动软件后，在许可证激活界面输入上述许可证密钥
+3. 按照软件提示完成激活流程
+
+重要信息:
+- 最大激活设备数: {license_obj.max_activations}
+- 当前已激活设备数: {license_obj.current_activations}
+- 许可证过期时间: {license_obj.expires_at.strftime('%Y年%m月%d日 %H:%M:%S')}
+- 许可证状态: {license_obj.get_status_display()}
+
+注意事项:
+- 请妥善保管许可证密钥，避免泄露
+- 如需在新设备激活，请先在原设备解除激活
+- 如遇激活问题，请联系技术支持
+
+技术支持:
+如有任何问题，请联系我们的技术支持团队。
+
+生成时间: {timezone.now().strftime('%Y年%m月%d日 %H:%M:%S')}
+"""
+        return instructions.strip()
+    
+    def _format_license_as_text(self, license_data):
+        """将许可证信息格式化为文本"""
+        text = f"""
+许可证信息
+=========
+
+许可证密钥: {license_data['license_key']}
+
+客户信息:
+--------
+姓名: {license_data['customer_info']['name']}
+邮箱: {license_data['customer_info']['email']}
+
+产品信息:
+--------
+产品名称: {license_data['product_info']['name']}
+产品代码: {license_data['product_info']['code']}
+产品版本: {license_data['product_info']['version']}
+产品描述: {license_data['product_info']['description']}
+
+方案信息:
+--------
+方案名称: {license_data['plan_info']['name']}
+方案类型: {license_data['plan_info']['type']}
+最大设备数: {license_data['plan_info']['max_machines']}
+
+激活信息:
+--------
+最大激活数: {license_data['activation_info']['max_activations']}
+当前激活数: {license_data['activation_info']['current_activations']}
+许可证状态: {license_data['activation_info']['status']}
+
+有效期信息:
+----------
+签发时间: {license_data['validity_info']['issued_at']}
+过期时间: {license_data['validity_info']['expires_at']}
+最后验证: {license_data['validity_info']['last_verified_at'] or '未验证'}
+
+{license_data['instructions']}
+
+下载信息:
+--------
+下载时间: {license_data['generated_at']}
+下载用户: {license_data['download_by']}
+"""
+        return text.strip()
+    
+    def _format_license_as_xml(self, license_data):
+        """将许可证信息格式化为XML"""
+        from xml.etree.ElementTree import Element, SubElement, tostring
+        from xml.dom import minidom
+        
+        root = Element('license')
+        
+        # 许可证密钥
+        key_elem = SubElement(root, 'license_key')
+        key_elem.text = license_data['license_key']
+        
+        # 客户信息
+        customer_elem = SubElement(root, 'customer_info')
+        SubElement(customer_elem, 'name').text = license_data['customer_info']['name']
+        SubElement(customer_elem, 'email').text = license_data['customer_info']['email']
+        
+        # 产品信息
+        product_elem = SubElement(root, 'product_info')
+        SubElement(product_elem, 'name').text = license_data['product_info']['name']
+        SubElement(product_elem, 'code').text = license_data['product_info']['code']
+        SubElement(product_elem, 'version').text = license_data['product_info']['version']
+        SubElement(product_elem, 'description').text = license_data['product_info']['description']
+        
+        # 方案信息
+        plan_elem = SubElement(root, 'plan_info')
+        SubElement(plan_elem, 'name').text = license_data['plan_info']['name']
+        SubElement(plan_elem, 'type').text = license_data['plan_info']['type']
+        SubElement(plan_elem, 'max_machines').text = str(license_data['plan_info']['max_machines'])
+        
+        # 激活信息
+        activation_elem = SubElement(root, 'activation_info')
+        SubElement(activation_elem, 'max_activations').text = str(license_data['activation_info']['max_activations'])
+        SubElement(activation_elem, 'current_activations').text = str(license_data['activation_info']['current_activations'])
+        SubElement(activation_elem, 'status').text = license_data['activation_info']['status']
+        
+        # 有效期信息
+        validity_elem = SubElement(root, 'validity_info')
+        SubElement(validity_elem, 'issued_at').text = license_data['validity_info']['issued_at']
+        SubElement(validity_elem, 'expires_at').text = license_data['validity_info']['expires_at']
+        SubElement(validity_elem, 'last_verified_at').text = license_data['validity_info']['last_verified_at'] or ''
+        
+        # 使用说明
+        SubElement(root, 'instructions').text = license_data['instructions']
+        
+        # 下载信息
+        download_elem = SubElement(root, 'download_info')
+        SubElement(download_elem, 'generated_at').text = license_data['generated_at']
+        SubElement(download_elem, 'download_by').text = license_data['download_by']
+        
+        # 格式化XML
+        rough_string = tostring(root, 'utf-8')
+        reparsed = minidom.parseString(rough_string)
+        return reparsed.toprettyxml(indent="  ", encoding='utf-8').decode('utf-8')
+    
     @action(detail=False, methods=['post'])
     def batch_operation(self, request):
         """批量操作许可证"""
