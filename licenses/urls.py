@@ -9,6 +9,7 @@ from licenses.views.admin_views import (
     MachineBindingViewSet, LicenseActivationViewSet, SecurityAuditLogViewSet,
     TenantLicenseQuotaViewSet
 )
+from licenses.views.assignment_views import LicenseAssignmentViewSet
 from licenses.views import activation_views, report_views
 
 # 创建DRF路由器
@@ -18,6 +19,7 @@ router = DefaultRouter()
 router.register(r'products', SoftwareProductViewSet, basename='softwareproduct')
 router.register(r'plans', LicensePlanViewSet, basename='licenseplan')
 router.register(r'licenses', LicenseViewSet, basename='license')
+router.register(r'assignments', LicenseAssignmentViewSet, basename='licenseassignment')
 router.register(r'machine-bindings', MachineBindingViewSet, basename='machinebinding')
 router.register(r'activations', LicenseActivationViewSet, basename='licenseactivation')
 router.register(r'audit-logs', SecurityAuditLogViewSet, basename='securityauditlog')

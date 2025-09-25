@@ -414,3 +414,382 @@ class SecurityAuditLog(BaseModel):
     
     def __str__(self):
         return f"{self.event_type} - {self.severity} ({self.timestamp})"
+
+
+class LicenseAssignment(BaseModel):
+    """
+    许可证分配关联模型，管理Member和License之间的分配关系
+    
+    这是一个多对多关联表，实现了许可证与用户的分配管理，支持多租户权限检查，
+    确保与现有的License和Member模型完全解耦，不修改任何现有代码
+    """
+    
+    ASSIGNMENT_TYPE_CHOICES = [
+        ('direct', '直接分配'),
+        ('inherited', '继承分配'),
+        ('shared', '共享分配'),
+        ('temporary', '临时分配'),
+    ]
+    
+    ASSIGNMENT_STATUS_CHOICES = [
+        ('active', '有效'),
+        ('suspended', '已挂起'),
+        ('revoked', '已撤销'),
+        ('expired', '已过期'),
+        ('pending', '待激活'),
+    ]
+    
+    PRIORITY_CHOICES = [
+        ('low', '低'),
+        ('normal', '普通'),
+        ('high', '高'),
+        ('urgent', '紧急'),
+    ]
+    
+    # 核心关联 - 保持与现有模型完全解耦
+    member = models.ForeignKey(
+        'users.Member', 
+        on_delete=models.CASCADE,
+        related_name='license_assignments',
+        verbose_name=_("分配成员")
+    )
+    license = models.ForeignKey(
+        License, 
+        on_delete=models.CASCADE,
+        related_name='member_assignments',
+        verbose_name=_("分配许可证")
+    )
+    tenant = models.ForeignKey(
+        'tenants.Tenant', 
+        on_delete=models.CASCADE,
+        verbose_name=_("关联租户")  # 冗余字段，确保租户隔离
+    )
+    
+    # 分配配置
+    assignment_type = models.CharField(_("分配类型"), max_length=20, choices=ASSIGNMENT_TYPE_CHOICES, default='direct')
+    assignment_reason = models.TextField(_("分配原因"), blank=True)
+    priority = models.CharField(_("优先级"), max_length=10, choices=PRIORITY_CHOICES, default='normal')
+    
+    # 权限级别设置
+    can_activate = models.BooleanField(_("允许激活"), default=True)
+    can_deactivate = models.BooleanField(_("允许停用"), default=False)
+    can_share = models.BooleanField(_("允许共享"), default=False)
+    max_devices_per_user = models.PositiveIntegerField(_("用户最大设备数"), default=1)
+    
+    # 时间控制
+    assigned_at = models.DateTimeField(_("分配时间"), auto_now_add=True)
+    activated_at = models.DateTimeField(_("激活时间"), null=True, blank=True)
+    expires_at = models.DateTimeField(_("分配过期时间"), null=True, blank=True)
+    last_used_at = models.DateTimeField(_("最后使用时间"), null=True, blank=True)
+    
+    # 状态管理
+    status = models.CharField(_("分配状态"), max_length=20, choices=ASSIGNMENT_STATUS_CHOICES, default='active')
+    is_primary = models.BooleanField(_("是否主要分配"), default=False)  # 一个许可证可以有一个主要分配者
+    
+    # 使用统计
+    usage_count = models.PositiveIntegerField(_("使用次数"), default=0)
+    last_heartbeat = models.DateTimeField(_("最后心跳时间"), null=True, blank=True)
+    
+    # 操作审计
+    assigned_by = models.ForeignKey(
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_licenses',
+        verbose_name=_("分配操作员")
+    )
+    revoked_by = models.ForeignKey(
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='revoked_license_assignments',
+        verbose_name=_("撤销操作员")
+    )
+    revoked_at = models.DateTimeField(_("撤销时间"), null=True, blank=True)
+    revoke_reason = models.TextField(_("撤销原因"), blank=True)
+    
+    # 扩展配置
+    assignment_metadata = models.JSONField(_("分配元数据"), default=dict, blank=True)
+    
+    class Meta:
+        db_table = 'licenses_license_assignment'
+        verbose_name = _('许可证分配')
+        verbose_name_plural = _('许可证分配')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['member', 'license'],
+                name='unique_member_license_assignment'
+            ),
+            models.CheckConstraint(
+                check=models.Q(max_devices_per_user__gte=1),
+                name='valid_max_devices'
+            ),
+            models.CheckConstraint(
+                check=models.Q(usage_count__gte=0),
+                name='valid_usage_count'
+            ),
+            models.CheckConstraint(
+                check=models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=models.F('assigned_at')),
+                name='valid_assignment_expiry'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['member', 'status'], name='la_member_status'),
+            models.Index(fields=['license', 'status'], name='la_license_status'),
+            models.Index(fields=['tenant', 'status'], name='la_tenant_status'),
+            models.Index(fields=['tenant', 'member', 'status'], name='la_tenant_member'),
+            models.Index(fields=['assigned_at'], name='la_assigned_at'),
+            models.Index(fields=['expires_at'], name='la_expires_at',
+                        condition=models.Q(expires_at__isnull=False)),
+            models.Index(fields=['is_primary', 'license'], name='la_primary'),
+            models.Index(fields=['last_used_at'], name='la_last_used',
+                        condition=models.Q(last_used_at__isnull=False)),
+        ]
+    
+    def __str__(self):
+        member_name = self.member.username if self.member else "Unknown"
+        license_key = self.license.license_key[-8:] if self.license and self.license.license_key else "Unknown"
+        status_display = self.get_status_display()
+        return f"{member_name} → {license_key}*** ({status_display})"
+    
+    def clean(self):
+        """数据验证"""
+        super().clean()
+        
+        # 验证租户一致性
+        if self.member and self.license:
+            if self.member.tenant_id != self.license.tenant_id:
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'tenant': f'成员所属租户({self.member.tenant_id})与许可证租户({self.license.tenant_id})不一致'
+                })
+        
+        # 设置租户ID（确保一致性）
+        if self.member and not self.tenant_id:
+            self.tenant = self.member.tenant
+        
+        # 验证过期时间
+        if self.expires_at and self.license and self.license.expires_at:
+            if self.expires_at > self.license.expires_at:
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'expires_at': '分配过期时间不能超过许可证过期时间'
+                })
+    
+    def save(self, *args, **kwargs):
+        """保存时进行数据验证和业务逻辑处理"""
+        # 先进行数据验证
+        self.clean()
+        
+        is_new = self.pk is None
+        
+        # 新建分配时的处理
+        if is_new:
+            # 检查License的激活配额
+            if self.license:
+                current_assignments = LicenseAssignment.objects.filter(
+                    license=self.license,
+                    status='active'
+                ).exclude(pk=self.pk).count()
+                
+                if current_assignments >= self.license.max_activations:
+                    raise ValueError(f"许可证激活配额已满，最大支持 {self.license.max_activations} 个激活")
+                
+                # 自动更新License的current_activations计数
+                self.license.current_activations = current_assignments + 1
+                self.license.save(update_fields=['current_activations'])
+        
+        super().save(*args, **kwargs)
+    
+    def activate(self):
+        """激活分配"""
+        if self.status != 'pending':
+            raise ValueError(f"只能激活待激活状态的分配，当前状态: {self.get_status_display()}")
+        
+        if not self.can_activate:
+            raise ValueError("当前分配不允许激活")
+        
+        # 检查许可证状态
+        if self.license.status not in ['generated', 'activated']:
+            raise ValueError(f"许可证状态不允许激活: {self.license.get_status_display()}")
+        
+        # 检查过期时间
+        from django.utils import timezone
+        now = timezone.now()
+        if self.expires_at and now > self.expires_at:
+            raise ValueError("分配已过期，无法激活")
+        
+        if self.license.expires_at and now > self.license.expires_at:
+            raise ValueError("许可证已过期，无法激活")
+        
+        # 执行激活
+        self.status = 'active'
+        self.activated_at = now
+        self.save()
+        
+        return True
+    
+    def revoke(self, reason="", operator=None):
+        """撤销分配"""
+        if self.status in ['revoked', 'expired']:
+            raise ValueError(f"无法撤销已撤销或已过期的分配，当前状态: {self.get_status_display()}")
+        
+        from django.utils import timezone
+        
+        self.status = 'revoked'
+        self.revoked_at = timezone.now()
+        self.revoke_reason = reason
+        if operator:
+            self.revoked_by = operator
+        
+        # 更新License的current_activations计数
+        if self.license:
+            active_assignments = LicenseAssignment.objects.filter(
+                license=self.license,
+                status='active'
+            ).exclude(pk=self.pk).count()
+            
+            self.license.current_activations = active_assignments
+            self.license.save(update_fields=['current_activations'])
+        
+        self.save()
+        
+        return True
+    
+    def record_usage(self):
+        """记录使用情况"""
+        from django.utils import timezone
+        
+        self.usage_count += 1
+        self.last_used_at = timezone.now()
+        self.last_heartbeat = timezone.now()
+        
+        self.save(update_fields=['usage_count', 'last_used_at', 'last_heartbeat'])
+    
+    def is_expired(self):
+        """检查是否已过期"""
+        from django.utils import timezone
+        now = timezone.now()
+        
+        # 检查分配过期时间
+        if self.expires_at and now > self.expires_at:
+            return True
+        
+        # 检查许可证过期时间
+        if self.license and self.license.expires_at and now > self.license.expires_at:
+            return True
+        
+        return False
+    
+    def get_effective_permissions(self):
+        """
+        获取有效权限（结合用户等级和VIP标签的权限增强）
+        
+        Returns:
+            dict: 有效权限配置
+        """
+        base_permissions = {
+            'can_activate': self.can_activate,
+            'can_deactivate': self.can_deactivate,
+            'can_share': self.can_share,
+            'max_devices_per_user': self.max_devices_per_user,
+        }
+        
+        try:
+            # 尝试获取用户的积分档案（需要points app）
+            from points.models import TenantUserProfile
+            
+            profile = TenantUserProfile.objects.filter(
+                member=self.member,
+                tenant=self.tenant
+            ).first()
+            
+            if profile:
+                # 应用等级权限增强
+                if profile.current_level:
+                    level_permissions = profile.current_level.permissions or {}
+                    for key, modifier in level_permissions.items():
+                        if key in base_permissions:
+                            if isinstance(modifier, (int, float)) and isinstance(base_permissions[key], (int, float)):
+                                # 数值类型应用倍数
+                                base_permissions[key] = int(base_permissions[key] * modifier)
+                            elif isinstance(modifier, bool):
+                                # 布尔类型直接覆盖
+                                base_permissions[key] = modifier
+                
+                # 应用VIP标签权限增强
+                for user_tag in profile.user_tags.filter(is_active=True, status='active'):
+                    tag_permissions = user_tag.tag.permission_modifiers or {}
+                    for key, modifier in tag_permissions.items():
+                        if key in base_permissions:
+                            if isinstance(modifier, (int, float)) and isinstance(base_permissions[key], (int, float)):
+                                # VIP标签通常提供额外的倍数增强
+                                base_permissions[key] = int(base_permissions[key] * modifier)
+                            elif isinstance(modifier, bool):
+                                # VIP通常解锁更多权限
+                                base_permissions[key] = base_permissions[key] or modifier
+        
+        except ImportError:
+            # points app未安装，使用基础权限
+            pass
+        
+        return base_permissions
+    
+    @classmethod
+    def create_assignment(cls, member, license, assignment_type='direct', reason="", operator=None, **kwargs):
+        """
+        创建许可证分配的工厂方法
+        
+        Args:
+            member: Member实例
+            license: License实例  
+            assignment_type: 分配类型
+            reason: 分配原因
+            operator: 操作员
+            **kwargs: 其他配置参数
+            
+        Returns:
+            LicenseAssignment: 创建的分配实例
+        """
+        # 验证租户一致性
+        if member.tenant_id != license.tenant_id:
+            raise ValueError(f"成员租户({member.tenant_id})与许可证租户({license.tenant_id})不一致")
+        
+        # 检查是否已存在分配
+        existing = cls.objects.filter(member=member, license=license).first()
+        if existing and existing.status == 'active':
+            raise ValueError(f"成员 {member.username} 已分配许可证 {license.license_key}")
+        
+        # 创建分配
+        assignment = cls.objects.create(
+            member=member,
+            license=license,
+            tenant=member.tenant,
+            assignment_type=assignment_type,
+            assignment_reason=reason,
+            assigned_by=operator,
+            **kwargs
+        )
+        
+        return assignment
+    
+    @classmethod
+    def get_tenant_assignments(cls, tenant, include_inactive=False):
+        """
+        获取租户下的所有分配
+        
+        Args:
+            tenant: Tenant实例
+            include_inactive: 是否包含非活跃分配
+            
+        Returns:
+            QuerySet: 分配查询集
+        """
+        queryset = cls.objects.filter(tenant=tenant)
+        
+        if not include_inactive:
+            queryset = queryset.filter(status='active')
+        
+        return queryset.select_related('member', 'license', 'assigned_by')

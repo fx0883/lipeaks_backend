@@ -99,6 +99,7 @@ INSTALLED_APPS = [
     'customers',  # 客户管理应用
     'orders',  # 订单管理应用
     'licenses',  # 许可证管理应用
+    'points',  # 多租户积分系统
 ]
 
 MIDDLEWARE = [

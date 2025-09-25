@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from licenses.models import (
     SoftwareProduct, LicensePlan, License, MachineBinding, 
     LicenseActivation, LicenseUsageLog, TenantLicenseQuota, 
-    SecurityAuditLog
+    SecurityAuditLog, LicenseAssignment
 )
 import json
 
@@ -535,3 +535,196 @@ class BatchOperationSerializer(serializers.Serializer):
             )
         
         return value
+
+
+class LicenseAssignmentSerializer(serializers.ModelSerializer):
+    """许可证分配序列化器"""
+    
+    # 关联对象信息
+    member_info = serializers.SerializerMethodField()
+    license_info = serializers.SerializerMethodField()
+    tenant_info = serializers.SerializerMethodField()
+    assigned_by_info = serializers.SerializerMethodField()
+    revoked_by_info = serializers.SerializerMethodField()
+    
+    # 计算字段
+    is_expired = serializers.SerializerMethodField()
+    days_until_expiry = serializers.SerializerMethodField()
+    effective_permissions = serializers.SerializerMethodField()
+    usage_summary = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = LicenseAssignment
+        fields = [
+            'id', 'member', 'license', 'tenant', 'assignment_type',
+            'assignment_reason', 'priority', 'can_activate', 'can_deactivate',
+            'can_share', 'max_devices_per_user', 'assigned_at', 'activated_at',
+            'expires_at', 'last_used_at', 'status', 'is_primary', 'usage_count',
+            'last_heartbeat', 'revoked_at', 'revoke_reason', 'assignment_metadata',
+            'assigned_by', 'revoked_by', 'created_at', 'updated_at',
+            # 计算字段
+            'member_info', 'license_info', 'tenant_info', 'assigned_by_info',
+            'revoked_by_info', 'is_expired', 'days_until_expiry',
+            'effective_permissions', 'usage_summary'
+        ]
+        read_only_fields = [
+            'id', 'assigned_at', 'activated_at', 'last_used_at', 'usage_count',
+            'last_heartbeat', 'revoked_at', 'created_at', 'updated_at',
+            'member_info', 'license_info', 'tenant_info', 'assigned_by_info',
+            'revoked_by_info', 'is_expired', 'days_until_expiry',
+            'effective_permissions', 'usage_summary'
+        ]
+    
+    def get_member_info(self, obj):
+        """获取成员基本信息"""
+        if obj.member:
+            return {
+                'id': obj.member.id,
+                'username': obj.member.username,
+                'email': obj.member.email,
+                'is_active': obj.member.is_active,
+            }
+        return None
+    
+    def get_license_info(self, obj):
+        """获取许可证基本信息"""
+        if obj.license:
+            return {
+                'id': obj.license.id,
+                'license_key': obj.license.license_key[-8:] if obj.license.license_key else None,  # 只显示后8位
+                'product_name': obj.license.product.name if obj.license.product else None,
+                'plan_name': obj.license.plan.name if obj.license.plan else None,
+                'status': obj.license.status,
+                'max_activations': obj.license.max_activations,
+                'current_activations': obj.license.current_activations,
+                'expires_at': obj.license.expires_at,
+            }
+        return None
+    
+    def get_tenant_info(self, obj):
+        """获取租户基本信息"""
+        if obj.tenant:
+            return {
+                'id': obj.tenant.id,
+                'name': obj.tenant.name,
+                'is_active': obj.tenant.is_active,
+            }
+        return None
+    
+    def get_assigned_by_info(self, obj):
+        """获取分配操作员信息"""
+        if obj.assigned_by:
+            return {
+                'id': obj.assigned_by.id,
+                'username': obj.assigned_by.username,
+            }
+        return None
+    
+    def get_revoked_by_info(self, obj):
+        """获取撤销操作员信息"""
+        if obj.revoked_by:
+            return {
+                'id': obj.revoked_by.id,
+                'username': obj.revoked_by.username,
+            }
+        return None
+    
+    def get_is_expired(self, obj):
+        """检查分配是否已过期"""
+        return obj.is_expired()
+    
+    def get_days_until_expiry(self, obj):
+        """计算距离过期的天数"""
+        if obj.expires_at and obj.status == 'active':
+            days = (obj.expires_at - timezone.now()).days
+            return max(0, days)
+        return None
+    
+    def get_effective_permissions(self, obj):
+        """获取分配的有效权限"""
+        return obj.get_effective_permissions()
+    
+    def get_usage_summary(self, obj):
+        """获取使用情况摘要"""
+        return {
+            'usage_count': obj.usage_count,
+            'last_used_at': obj.last_used_at,
+            'last_heartbeat': obj.last_heartbeat,
+            'is_primary': obj.is_primary,
+            'can_activate': obj.can_activate,
+            'can_deactivate': obj.can_deactivate,
+            'can_share': obj.can_share,
+            'max_devices_per_user': obj.max_devices_per_user,
+        }
+
+
+class LicenseAssignmentCreateSerializer(serializers.ModelSerializer):
+    """许可证分配创建序列化器"""
+    
+    member_id = serializers.IntegerField(write_only=True, help_text="成员ID")
+    license_id = serializers.IntegerField(write_only=True, help_text="许可证ID")
+    
+    class Meta:
+        model = LicenseAssignment
+        fields = [
+            'member_id', 'license_id', 'assignment_type', 'assignment_reason',
+            'priority', 'can_activate', 'can_deactivate', 'can_share',
+            'max_devices_per_user', 'expires_at', 'assignment_metadata'
+        ]
+    
+    def validate(self, data):
+        """验证分配数据"""
+        from users.models import Member
+        
+        # 获取当前用户的租户
+        request = self.context.get('request')
+        if not request or not hasattr(request.user, 'tenant'):
+            raise serializers.ValidationError("无法确定当前用户的租户")
+        
+        user_tenant = request.user.tenant
+        
+        # 验证成员存在且属于同一租户
+        try:
+            member = Member.objects.get(id=data['member_id'], tenant=user_tenant)
+            data['member'] = member
+        except Member.DoesNotExist:
+            raise serializers.ValidationError("指定的成员不存在或不属于当前租户")
+        
+        # 验证许可证存在且属于同一租户
+        try:
+            license_obj = License.objects.get(id=data['license_id'], tenant=user_tenant)
+            data['license'] = license_obj
+        except License.DoesNotExist:
+            raise serializers.ValidationError("指定的许可证不存在或不属于当前租户")
+        
+        # 设置租户
+        data['tenant'] = user_tenant
+        
+        # 检查是否已存在活跃分配
+        existing = LicenseAssignment.objects.filter(
+            member=member,
+            license=license_obj,
+            status='active'
+        ).exists()
+        
+        if existing:
+            raise serializers.ValidationError("该成员已拥有此许可证的活跃分配")
+        
+        # 检查许可证激活配额
+        if license_obj.current_activations >= license_obj.max_activations:
+            raise serializers.ValidationError("许可证激活配额已满")
+        
+        return data
+    
+    def create(self, validated_data):
+        """创建许可证分配"""
+        # 移除辅助字段
+        validated_data.pop('member_id', None)
+        validated_data.pop('license_id', None)
+        
+        # 设置分配操作员
+        request = self.context.get('request')
+        if request and request.user:
+            validated_data['assigned_by'] = request.user
+        
+        return super().create(validated_data)

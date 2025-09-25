@@ -108,6 +108,9 @@ urlpatterns = [
         # 许可证系统路由
         path('licenses/', include('licenses.urls', namespace='licenses')),
         
+        # 多租户积分系统路由
+        path('points/', include('points.api.urls', namespace='points')),
+        
         # 图表数据API
         path('admin/charts/', include('charts.urls', namespace='charts')),
         
