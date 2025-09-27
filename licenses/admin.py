@@ -48,7 +48,7 @@ class SoftwareProductAdmin(admin.ModelAdmin):
 @admin.register(LicensePlan)
 class LicensePlanAdmin(admin.ModelAdmin):
     """许可证方案管理"""
-    list_display = ['name', 'plan_type', 'max_machines', 'validity_days', 'price', 'status', 'product']
+    list_display = ['name', 'plan_type', 'default_max_activations', 'default_validity_days', 'price', 'status', 'product']
     list_filter = ['plan_type', 'status', 'product', 'created_at']
     search_fields = ['name', 'description']
     readonly_fields = ['created_at', 'updated_at']
@@ -57,8 +57,8 @@ class LicensePlanAdmin(admin.ModelAdmin):
         ('基本信息', {
             'fields': ('name', 'code', 'product', 'plan_type', 'status')
         }),
-        ('限制配置', {
-            'fields': ('max_machines', 'validity_days')
+        ('模板配置', {
+            'fields': ('default_max_activations', 'default_validity_days')
         }),
         ('功能配置', {
             'fields': ('features',)

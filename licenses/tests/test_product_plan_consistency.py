@@ -45,8 +45,8 @@ class ProductPlanConsistencyModelTest(TestCase):
             name="产品A专业版",
             code="PLAN_A_PRO",
             plan_type="professional",
-            max_machines=5,
-            validity_days=365,
+            default_max_activations=5,
+            default_validity_days=365,
             price=999.00
         )
         
@@ -56,8 +56,8 @@ class ProductPlanConsistencyModelTest(TestCase):
             name="产品B基础版",
             code="PLAN_B_BASIC",
             plan_type="basic",
-            max_machines=1,
-            validity_days=365,
+            default_max_activations=1,
+            default_validity_days=365,
             price=299.00
         )
     
@@ -164,8 +164,8 @@ class ProductPlanConsistencyAPITest(APITestCase):
             name="产品A专业版",
             code="PLAN_A_PRO",
             plan_type="professional",
-            max_machines=5,
-            validity_days=365,
+            default_max_activations=5,
+            default_validity_days=365,
             price=999.00
         )
         
@@ -174,8 +174,8 @@ class ProductPlanConsistencyAPITest(APITestCase):
             name="产品B基础版", 
             code="PLAN_B_BASIC",
             plan_type="basic",
-            max_machines=1,
-            validity_days=365,
+            default_max_activations=1,
+            default_validity_days=365,
             price=299.00
         )
         

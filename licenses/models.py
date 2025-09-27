@@ -61,9 +61,9 @@ class LicensePlan(BaseModel):
     code = models.CharField(_("方案代码"), max_length=50)
     plan_type = models.CharField(_("方案类型"), max_length=20, choices=PLAN_TYPES)
     
-    # 许可证限制
-    max_machines = models.PositiveIntegerField(_("最大机器数"), default=1)
-    validity_days = models.PositiveIntegerField(_("有效天数"), default=365)
+    # 许可证模板配置（默认值）
+    default_max_activations = models.PositiveIntegerField(_("默认最大激活数"), default=1)
+    default_validity_days = models.PositiveIntegerField(_("默认有效天数"), default=365)
     
     # 功能配置
     features = models.JSONField(_("功能配置"), default=dict, blank=True)
@@ -176,6 +176,94 @@ class License(BaseModel):
     
     def __str__(self):
         return f"{self.product.name} - {self.customer_name or 'Unknown'} ({self.status})"
+    
+    def update_from_plan(self, force=False):
+        """
+        从计划更新配置（仅在必要时）
+        
+        Args:
+            force (bool): 是否强制更新，无论值是否相同
+        
+        Returns:
+            bool: 是否进行了更新
+        """
+        from django.utils import timezone
+        
+        updated = False
+        update_fields = []
+        
+        # 检查并更新最大激活数
+        if force or self.max_activations != self.plan.default_max_activations:
+            self.max_activations = self.plan.default_max_activations
+            update_fields.append('max_activations')
+            updated = True
+        
+        # 如果有更新，保存并记录
+        if updated:
+            update_fields.append('updated_at')
+            self.save(update_fields=update_fields)
+            
+            # 记录更新日志
+            import logging
+            logger = logging.getLogger('licenses.business')
+            logger.info(f"许可证 {self.id} 从计划 {self.plan.id} 更新配置: {update_fields}")
+        
+        return updated
+    
+    def extend_validity(self, days):
+        """
+        延长有效期
+        
+        Args:
+            days (int): 延长的天数
+        """
+        from datetime import timedelta
+        
+        if days <= 0:
+            raise ValueError("延长天数必须大于0")
+        
+        old_expires_at = self.expires_at
+        self.expires_at += timedelta(days=days)
+        self.save(update_fields=['expires_at', 'updated_at'])
+        
+        # 记录延期日志
+        import logging
+        logger = logging.getLogger('licenses.business')
+        logger.info(f"许可证 {self.id} 延期 {days} 天: {old_expires_at} -> {self.expires_at}")
+    
+    def upgrade_to_plan(self, new_plan):
+        """
+        升级到新计划
+        
+        Args:
+            new_plan (LicensePlan): 新的许可证计划
+        """
+        if new_plan.product != self.product:
+            raise ValueError(f"新计划 {new_plan.id} 不属于当前产品 {self.product.id}")
+        
+        old_plan = self.plan
+        self.plan = new_plan
+        
+        # 更新相关配置
+        self.max_activations = new_plan.default_max_activations
+        self.save(update_fields=['plan', 'max_activations', 'updated_at'])
+        
+        # 记录升级日志
+        import logging
+        logger = logging.getLogger('licenses.business')
+        logger.info(f"许可证 {self.id} 从计划 {old_plan.id} 升级到 {new_plan.id}")
+    
+    def is_outdated_config(self):
+        """
+        检查许可证配置是否过时（与计划不一致）
+        
+        Returns:
+            bool: 配置是否过时
+        """
+        return (
+            self.max_activations != self.plan.default_max_activations or
+            self.updated_at < self.plan.updated_at
+        )
 
 
 class MachineBinding(BaseModel):

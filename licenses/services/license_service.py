@@ -95,9 +95,9 @@ class LicenseGenerationService:
             
             license_key = base58.b58encode(encoded_payload.encode()).decode()
             
-            # 9. 格式化为用户友好的格式 (XXXX-XXXX-XXXX-XXXX-XXXX)
+            # 9. 格式化为用户友好的格式 (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)
             formatted_key = '-'.join([
-                license_key[i:i+4] for i in range(0, min(len(license_key), 20), 4)
+                license_key[i:i+5] for i in range(0, min(len(license_key), 25), 5)
             ])
             
             logger.info(f"许可证密钥生成成功: {product.code}-{plan.code}")
@@ -349,7 +349,7 @@ class LicenseActivationService:
                 'machine_id': machine_id,
                 'expires_at': license_obj.expires_at.isoformat(),
                 'features': license_obj.plan.features,
-                'max_machines': license_obj.plan.max_machines,
+                'default_max_activations': license_obj.plan.default_max_activations,
                 'current_activations': license_obj.current_activations
             }
             
@@ -484,11 +484,11 @@ class LicenseManagementService:
             
             # 计算过期时间
             if expires_at is None:
-                expires_at = timezone.now() + timedelta(days=plan.validity_days)
+                expires_at = timezone.now() + timedelta(days=plan.default_validity_days)
             
             # 确定最大激活数
             if max_activations is None:
-                max_activations = plan.max_machines
+                max_activations = plan.default_max_activations
             
             # 加密客户信息
             security_service = SecurityService()

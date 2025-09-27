@@ -234,9 +234,8 @@ GET /api/v1/license-assignments/{id}/
     "assignment_reason": "申请使用专业版功能",
     "assignment_notes": "用于开发项目使用",
     "license_limits": {
-      "max_activations": 10,
-      "current_activations": 3,
-      "max_machines_per_license": 5
+      "max_activations": 5,
+      "current_activations": 3
     },
     "device_bindings": [
       {

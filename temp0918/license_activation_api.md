@@ -4,6 +4,81 @@
 
 许可证激活API为软件客户端提供了完整的许可证生命周期管理功能，包括许可证激活、状态验证和使用监控。这些API专为软件客户端设计，用于实现软件授权验证、使用统计和安全监控。
 
+### 🔄 重要变更说明 (v1.3)
+
+**字段名称更新**: 为了明确区分许可证方案的模板配置与实际许可证的使用值，已对相关字段进行重命名：
+
+| 旧字段名 | 新字段名 | 含义说明 |
+|---------|---------|----------|
+| `max_machines` | `default_max_activations` | 许可证方案的默认最大激活设备数（模板值） |
+| `validity_days` | `default_validity_days` | 许可证方案的默认有效天数（模板值） |
+
+**注意**: License对象的实际使用字段（`max_activations`、`expires_at`）保持不变。
+
+### 📊 数据结构对比
+
+#### 许可证方案 (LicensePlan) - 模板配置
+```json
+{
+  "id": 1,
+  "name": "专业版",
+  "code": "PRO",
+  "plan_type": "professional",
+  "default_max_activations": 5,    // 新字段：模板默认最大激活数
+  "default_validity_days": 365,    // 新字段：模板默认有效天数
+  "price": "999.00",
+  "status": "active"
+}
+```
+
+#### 许可证实例 (License) - 实际使用值（无变更）
+```json
+{
+  "id": 123,
+  "license_key": "SAPP-PRO-2024-ABCD-EFGH-1234",
+  "max_activations": 5,            // 实际最大激活数（从模板继承或自定义）
+  "expires_at": "2025-09-26T10:00:00Z",  // 实际过期时间
+  "status": "activated",
+  "plan": {
+    "name": "专业版",
+    "default_max_activations": 5    // 引用方案的模板值
+  }
+}
+```
+
+### 🔄 客户端迁移指南
+
+如果您的客户端代码之前使用了许可证方案信息，请按照以下步骤进行迁移：
+
+#### 1. 更新字段引用
+```python
+# 旧代码 (需要更新)
+max_devices = license_plan['max_machines']
+validity_period = license_plan['validity_days']
+
+# 新代码 (推荐)
+max_devices = license_plan['default_max_activations']
+validity_period = license_plan['default_validity_days']
+```
+
+#### 2. 兼容性处理
+```python
+def get_max_activations(license_plan):
+    """获取最大激活数，兼容新旧字段名"""
+    return (license_plan.get('default_max_activations') or 
+            license_plan.get('max_machines', 1))
+
+def get_validity_days(license_plan):
+    """获取有效期天数，兼容新旧字段名"""
+    return (license_plan.get('default_validity_days') or 
+            license_plan.get('validity_days', 365))
+```
+
+#### 3. 语义理解
+- **方案字段**（`default_max_activations`）：表示该方案的默认模板值
+- **许可证字段**（`max_activations`）：表示具体许可证实例的实际使用值
+- 许可证创建时通常从方案模板继承，但可以被个性化覆盖
+
 ### 🎯 核心功能
 - **许可证激活** - 将许可证与特定设备绑定并激活
 - **激活状态验证** - 定期验证许可证激活状态是否有效
@@ -1348,7 +1423,7 @@ curl -X GET "http://localhost:8000/api/v1/licenses/info/SAPP-PRO-2024-ABCD-EFGH-
     "plan": {
       "name": "专业版",
       "type": "professional",
-      "max_machines": 5
+      "default_max_activations": 5
     },
     "status": "generated",
     "issued_at": "2024-09-01T10:00:00Z",
@@ -1536,22 +1611,22 @@ def check_activation_limit(license_key, hardware_info):
         {
             "name": "试用版",
             "type": "trial",
-            "max_machines": 1
+            "default_max_activations": 1
         },
         {
             "name": "基础版", 
             "type": "basic",
-            "max_machines": 3
+            "default_max_activations": 3
         },
         {
             "name": "专业版",
             "type": "professional", 
-            "max_machines": 10
+            "default_max_activations": 10
         },
         {
             "name": "企业版",
             "type": "enterprise",
-            "max_machines": 50
+            "default_max_activations": 50
         }
     ]
 }
@@ -1565,7 +1640,7 @@ def check_activation_limit(license_key, hardware_info):
 {
     "license": {
         "license_key": "SAPP-PRO-2024-ABCD-EFGH-1234",
-        "plan_default_max_machines": 10,
+        "plan_default_max_activations": 10,
         "custom_max_activations": 15,  // 个性化设置
         "reason": "客户特殊需求"
     }
@@ -2502,15 +2577,25 @@ class DebuggingLicenseClient(LicenseClient):
 3. **最佳实践指导** - 安全性和可靠性建议
 4. **故障排除指南** - 常见问题的解决方案
 
+### 🆕 v1.3 更新要点
+
+本次更新主要针对RIPER-5方案A重构进行字段名称调整：
+
+- **语义明确化**: 区分方案模板配置与许可证实际使用值
+- **字段重命名**: `max_machines` → `default_max_activations`、`validity_days` → `default_validity_days`
+- **向后兼容**: 提供迁移指南和兼容性处理方案
+- **数据结构说明**: 增加详细的对比和解释
+
 通过遵循本文档的指导，您可以构建一个稳定、安全、用户友好的许可证管理系统。
 
 ---
 
-*文档版本: 1.2 - 设备绑定数量控制*  
-*最后更新: 2024年9月18日*
+*文档版本: 1.3 - 方案A重构字段更新*  
+*最后更新: 2024年9月26日*
 
 ### 📝 更新记录
 
+- **v1.3** (2024-09-26): 更新字段名称以匹配RIPER-5方案A重构（max_machines → default_max_activations）
 - **v1.2** (2024-09-18): 添加详细的设备绑定数量控制机制说明
 - **v1.1** (2024-09-18): 完整的macOS跨平台支持和Python实现
 - **v1.0** (2024-09-15): 初始版本，基础API文档

@@ -335,8 +335,8 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
                 name=f"{original_plan.name} (副本)",
                 code=new_code,
                 plan_type=original_plan.plan_type,
-                max_machines=original_plan.max_machines,
-                validity_days=original_plan.validity_days,
+                default_max_activations=original_plan.default_max_activations,
+                default_validity_days=original_plan.default_validity_days,
                 features=original_plan.features.copy(),
                 price=original_plan.price,
                 currency=original_plan.currency,
@@ -367,7 +367,157 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
     create=extend_schema(
         tags=['许可证管理'],
         summary='创建许可证',
-        description='为指定产品和方案创建新的许可证'
+        description='''
+        为指定的产品和方案创建新的许可证。
+
+        ## 业务逻辑
+        
+        1. **产品与方案关联**: product字段可选，如未提供将从plan自动获取
+        2. **租户自动关联**: tenant字段可选，如未提供将从当前用户的租户自动获取  
+        3. **许可证密钥生成**: 系统自动生成25字符格式的许可证密钥 (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)
+        4. **过期时间计算**: 可通过validity_days指定有效期，否则使用方案的default_validity_days
+        5. **激活限制**: max_activations可自定义，否则使用方案的default_max_activations
+        6. **客户信息必需**: 必须提供包含name和email的customer_info对象
+
+        ## 权限要求
+        - 需要JWT认证
+        - 需要超级管理员或租户管理员权限
+        - 租户管理员只能为自己的租户创建许可证
+
+        ## 字段说明 (RIPER-5方案A重构版)
+        - 方案字段使用 `default_max_activations`、`default_validity_days` (模板配置)
+        - 许可证字段使用 `max_activations`、`expires_at` (实际使用值)
+        ''',
+        request=LicenseCreateSerializer,
+        responses={
+            201: OpenApiResponse(
+                response=LicenseDetailSerializer,
+                description='许可证创建成功',
+                examples={
+                    'application/json': {
+                        'id': 123,
+                        'product': 1,
+                        'product_name': 'SuperApp Pro',
+                        'plan': 2, 
+                        'plan_name': '企业版',
+                        'tenant': 1,
+                        'tenant_name': '示例公司',
+                        'license_key': 'ABC12-DEF34-GHI56-JKL78-MNO90',
+                        'customer_name': '张三',
+                        'customer_email': 'zhangsan@example.com',
+                        'max_activations': 10,
+                        'current_activations': 0,
+                        'issued_at': '2024-09-26T10:30:00Z',
+                        'expires_at': '2025-09-26T10:30:00Z',
+                        'last_verified_at': None,
+                        'status': 'active',
+                        'machine_bindings_count': 0,
+                        'days_until_expiry': 365,
+                        'notes': '为重要客户创建的企业版许可证',
+                        'machine_bindings': [],
+                        'recent_activations': [],
+                        'usage_stats': {
+                            'total_usage_logs': 0,
+                            'recent_usage_logs': 0
+                        },
+                        'metadata': {
+                            'created_by': 'admin',
+                            'creation_source': 'admin_panel',
+                            'ip_address': '192.168.1.100'
+                        }
+                    }
+                }
+            ),
+            400: OpenApiResponse(
+                description='请求参数错误',
+                examples={
+                    'application/json': {
+                        'detail': '验证失败',
+                        'errors': {
+                            'customer_info': ['客户信息缺少必要字段: name'],
+                            'plan': ['所选方案(基础版)属于产品(AppStandard)，与所选产品(AppPro)不一致，请重新选择正确的方案。']
+                        }
+                    }
+                }
+            ),
+            401: OpenApiResponse(
+                description='认证失败',
+                examples={
+                    'application/json': {
+                        'detail': '身份验证凭据无效。'
+                    }
+                }
+            ),
+            403: OpenApiResponse(
+                description='权限不足',
+                examples={
+                    'application/json': {
+                        'detail': '您没有权限执行此操作。'
+                    }
+                }
+            ),
+            500: OpenApiResponse(
+                description='服务器内部错误',
+                examples={
+                    'application/json': {
+                        'detail': '许可证创建失败，请联系系统管理员。'
+                    }
+                }
+            )
+        },
+        examples=[
+            {
+                'name': '基础创建示例',
+                'description': '使用最少必需字段创建许可证',
+                'value': {
+                    'plan': 2,
+                    'customer_info': {
+                        'name': '李四',
+                        'email': 'lisi@example.com',
+                        'company': '科技有限公司',
+                        'phone': '+86-138-0013-8000'
+                    },
+                    'notes': '客户申请的标准版许可证'
+                }
+            },
+            {
+                'name': '完整创建示例',
+                'description': '包含所有可选字段的完整创建示例',
+                'value': {
+                    'product': 1,
+                    'plan': 3,
+                    'tenant': 2,
+                    'customer_info': {
+                        'name': '王五',
+                        'email': 'wangwu@enterprise.com',
+                        'company': '大型企业集团',
+                        'phone': '+86-139-0013-9000',
+                        'address': '北京市朝阳区XXX街道123号',
+                        'contact_person': '技术部-王经理'
+                    },
+                    'max_activations': 50,
+                    'validity_days': 730,
+                    'notes': '企业客户专属版本，支持高并发和集群部署'
+                }
+            },
+            {
+                'name': '批量用户场景',
+                'description': '为组织用户创建许可证的典型场景',
+                'value': {
+                    'plan': 4,
+                    'customer_info': {
+                        'name': '教育机构-计算机学院',
+                        'email': 'admin@university.edu.cn',
+                        'company': '某某大学',
+                        'department': '计算机科学与技术学院',
+                        'phone': '+86-010-12345678'
+                    },
+                    'max_activations': 200,
+                    'validity_days': 365,
+                    'notes': '教育版许可证，用于学生实验和教学'
+                }
+            }
+        ]
     ),
     retrieve=extend_schema(
         tags=['许可证管理'],
@@ -631,7 +781,7 @@ class LicenseViewSet(viewsets.ModelViewSet):
                     'name': license_obj.plan.name,
                     'type': license_obj.plan.plan_type,
                     'features': license_obj.plan.features,
-                    'max_machines': license_obj.plan.max_machines
+                    'default_max_activations': license_obj.plan.default_max_activations
                 },
                 'activation_info': {
                     'max_activations': license_obj.max_activations,
@@ -756,7 +906,7 @@ class LicenseViewSet(viewsets.ModelViewSet):
 --------
 方案名称: {license_data['plan_info']['name']}
 方案类型: {license_data['plan_info']['type']}
-最大设备数: {license_data['plan_info']['max_machines']}
+默认最大激活数: {license_data['plan_info']['default_max_activations']}
 
 激活信息:
 --------
@@ -806,7 +956,7 @@ class LicenseViewSet(viewsets.ModelViewSet):
         plan_elem = SubElement(root, 'plan_info')
         SubElement(plan_elem, 'name').text = license_data['plan_info']['name']
         SubElement(plan_elem, 'type').text = license_data['plan_info']['type']
-        SubElement(plan_elem, 'max_machines').text = str(license_data['plan_info']['max_machines'])
+        SubElement(plan_elem, 'default_max_activations').text = str(license_data['plan_info']['default_max_activations'])
         
         # 激活信息
         activation_elem = SubElement(root, 'activation_info')

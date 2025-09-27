@@ -95,7 +95,7 @@ class LicensePlanSerializer(serializers.ModelSerializer):
         model = LicensePlan
         fields = [
             'id', 'product', 'product_name', 'name', 'code', 'plan_type',
-            'max_machines', 'validity_days', 'features', 'price', 'currency',
+            'default_max_activations', 'default_validity_days', 'features', 'price', 'currency',
             'status', 'licenses_count', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']

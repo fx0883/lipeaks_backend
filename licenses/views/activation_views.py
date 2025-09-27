@@ -466,7 +466,7 @@ def license_info(request):
                 'plan': {
                     'name': license_obj.plan.name,
                     'type': license_obj.plan.plan_type,
-                    'max_machines': license_obj.plan.max_machines
+                    'default_max_activations': license_obj.plan.default_max_activations
                 },
                 'status': license_obj.status,
                 'issued_at': license_obj.issued_at.isoformat(),
