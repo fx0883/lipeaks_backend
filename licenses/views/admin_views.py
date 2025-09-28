@@ -12,7 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Count, Q
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiParameter
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 from common.permissions import IsSuperAdminOrTenantAdmin
 from common.authentication.jwt_auth import JWTAuthentication
@@ -372,7 +372,7 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
 
         ## 业务逻辑
         
-        1. **产品与方案关联**: product字段可选，如未提供将从plan自动获取
+        1. **产品自动关联**: product字段不需要提供，系统会从plan自动获取对应的产品
         2. **租户自动关联**: tenant字段可选，如未提供将从当前用户的租户自动获取  
         3. **许可证密钥生成**: 系统自动生成25字符格式的许可证密钥 (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)
         4. **过期时间计算**: 可通过validity_days指定有效期，否则使用方案的default_validity_days
@@ -392,84 +392,26 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
         responses={
             201: OpenApiResponse(
                 response=LicenseDetailSerializer,
-                description='许可证创建成功',
-                examples={
-                    'application/json': {
-                        'id': 123,
-                        'product': 1,
-                        'product_name': 'SuperApp Pro',
-                        'plan': 2, 
-                        'plan_name': '企业版',
-                        'tenant': 1,
-                        'tenant_name': '示例公司',
-                        'license_key': 'ABC12-DEF34-GHI56-JKL78-MNO90',
-                        'customer_name': '张三',
-                        'customer_email': 'zhangsan@example.com',
-                        'max_activations': 10,
-                        'current_activations': 0,
-                        'issued_at': '2024-09-26T10:30:00Z',
-                        'expires_at': '2025-09-26T10:30:00Z',
-                        'last_verified_at': None,
-                        'status': 'active',
-                        'machine_bindings_count': 0,
-                        'days_until_expiry': 365,
-                        'notes': '为重要客户创建的企业版许可证',
-                        'machine_bindings': [],
-                        'recent_activations': [],
-                        'usage_stats': {
-                            'total_usage_logs': 0,
-                            'recent_usage_logs': 0
-                        },
-                        'metadata': {
-                            'created_by': 'admin',
-                            'creation_source': 'admin_panel',
-                            'ip_address': '192.168.1.100'
-                        }
-                    }
-                }
+                description='许可证创建成功'
             ),
             400: OpenApiResponse(
-                description='请求参数错误',
-                examples={
-                    'application/json': {
-                        'detail': '验证失败',
-                        'errors': {
-                            'customer_info': ['客户信息缺少必要字段: name'],
-                            'plan': ['所选方案(基础版)属于产品(AppStandard)，与所选产品(AppPro)不一致，请重新选择正确的方案。']
-                        }
-                    }
-                }
+                description='请求参数错误'
             ),
             401: OpenApiResponse(
-                description='认证失败',
-                examples={
-                    'application/json': {
-                        'detail': '身份验证凭据无效。'
-                    }
-                }
+                description='认证失败'
             ),
             403: OpenApiResponse(
-                description='权限不足',
-                examples={
-                    'application/json': {
-                        'detail': '您没有权限执行此操作。'
-                    }
-                }
+                description='权限不足'
             ),
             500: OpenApiResponse(
-                description='服务器内部错误',
-                examples={
-                    'application/json': {
-                        'detail': '许可证创建失败，请联系系统管理员。'
-                    }
-                }
+                description='服务器内部错误'
             )
         },
         examples=[
-            {
-                'name': '基础创建示例',
-                'description': '使用最少必需字段创建许可证',
-                'value': {
+            OpenApiExample(
+                name='基础创建示例',
+                description='使用最少必需字段创建许可证',
+                value={
                     'plan': 2,
                     'customer_info': {
                         'name': '李四',
@@ -478,13 +420,13 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
                         'phone': '+86-138-0013-8000'
                     },
                     'notes': '客户申请的标准版许可证'
-                }
-            },
-            {
-                'name': '完整创建示例',
-                'description': '包含所有可选字段的完整创建示例',
-                'value': {
-                    'product': 1,
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                name='完整创建示例',
+                description='包含所有可选字段的完整创建示例',
+                value={
                     'plan': 3,
                     'tenant': 2,
                     'customer_info': {
@@ -498,12 +440,13 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
                     'max_activations': 50,
                     'validity_days': 730,
                     'notes': '企业客户专属版本，支持高并发和集群部署'
-                }
-            },
-            {
-                'name': '批量用户场景',
-                'description': '为组织用户创建许可证的典型场景',
-                'value': {
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                name='批量用户场景',
+                description='为组织用户创建许可证的典型场景',
+                value={
                     'plan': 4,
                     'customer_info': {
                         'name': '教育机构-计算机学院',
@@ -515,8 +458,9 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
                     'max_activations': 200,
                     'validity_days': 365,
                     'notes': '教育版许可证，用于学生实验和教学'
-                }
-            }
+                },
+                request_only=True
+            )
         ]
     ),
     retrieve=extend_schema(
@@ -577,6 +521,10 @@ class LicenseViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """根据用户权限返回许可证列表"""
+        # OpenAPI schema 生成时跳过权限检查
+        if getattr(self, 'swagger_fake_view', False):
+            return License.objects.none()
+            
         queryset = License.objects.filter(is_deleted=False)
         
         if self.request.user.is_super_admin:

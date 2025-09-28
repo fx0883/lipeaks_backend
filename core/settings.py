@@ -65,10 +65,16 @@ FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER = get_env_with_validation(
 )
 
 # 从环境变量读取ALLOWED_HOSTS，并添加espressox.online
-allowed_hosts_from_env = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-ALLOWED_HOSTS = allowed_hosts_from_env + ['espressox.online']
+# allowed_hosts_from_env = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1',).split(',')
+# ALLOWED_HOSTS = allowed_hosts_from_env + ['espressox.online', '*.localhost.charlesproxy.com']
 
-
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1', 
+    'myapp.localhost.charlesproxy.com',
+    '*.localhost.charlesproxy.com',  # 支持Charles Proxy的所有子域名
+    'espressox.online'
+]
 # Application definition
 
 INSTALLED_APPS = [

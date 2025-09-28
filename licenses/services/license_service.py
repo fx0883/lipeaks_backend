@@ -38,7 +38,7 @@ class LicenseGenerationService:
         customer_info: Dict[str, Any] = None
     ) -> str:
         """
-        生成许可证密钥
+        生成许可证密钥 - 使用纯UUID确保唯一性
         
         Args:
             product: 软件产品
@@ -49,59 +49,18 @@ class LicenseGenerationService:
             str: 格式化的许可证密钥
         """
         try:
-            # 1. 生成唯一标识符
-            unique_id = str(uuid.uuid4()).replace('-', '')[:16]
+            # 使用UUID4生成完全唯一的许可证密钥
+            license_uuid = str(uuid.uuid4()).upper()
             
-            # 2. 时间戳
-            timestamp = int(time.time())
-            
-            # 3. 随机因子
-            random_factor = secrets.token_hex(8)
-            
-            # 4. 构建原始数据
-            raw_data = {
-                'product': product.code,
-                'plan': plan.code,
-                'id': unique_id,
-                'timestamp': timestamp,
-                'random': random_factor,
-                'version': 1
-            }
-            
-            # 5. 添加客户信息摘要（如果提供）
-            if customer_info:
-                customer_hash = self.security_service.hash_manager.hash_data(
-                    json.dumps(customer_info, sort_keys=True)
-                )[:8]
-                raw_data['customer'] = customer_hash
-            
-            # 6. JSON序列化并签名
-            data_str = json.dumps(raw_data, separators=(',', ':'), sort_keys=True)
-            
-            # 获取产品私钥进行签名
-            private_key_pem = self._get_product_private_key(product)
-            signature = self.security_service.rsa_manager.sign_data(private_key_pem, data_str)
-            
-            # 7. 组合数据和签名
-            license_payload = {
-                'data': raw_data,
-                'signature': base64.b64encode(signature).decode()
-            }
-            
-            # 8. Base58编码生成最终许可证密钥
-            encoded_payload = base64.b64encode(
-                json.dumps(license_payload).encode()
-            ).decode()
-            
-            license_key = base58.b58encode(encoded_payload.encode()).decode()
-            
-            # 9. 格式化为用户友好的格式 (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)
+            # 格式化为用户友好的格式 (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)
+            # 移除连字符并取前25个字符，然后重新格式化
+            clean_uuid = license_uuid.replace('-', '')[:25]
             formatted_key = '-'.join([
-                license_key[i:i+5] for i in range(0, min(len(license_key), 25), 5)
+                clean_uuid[i:i+5] for i in range(0, min(len(clean_uuid), 25), 5)
             ])
             
-            logger.info(f"许可证密钥生成成功: {product.code}-{plan.code}")
-            return formatted_key.upper()
+            logger.info(f"许可证密钥生成成功: {formatted_key} (产品: {product.code}, 方案: {plan.code})")
+            return formatted_key
             
         except Exception as e:
             logger.error(f"许可证密钥生成失败: {str(e)}")

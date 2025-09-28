@@ -384,7 +384,7 @@ def heartbeat(request):
         OpenApiParameter(
             name='license_key',
             type=OpenApiTypes.STR,
-            location=OpenApiParameter.QUERY,
+            location=OpenApiParameter.PATH,
             description='许可证密钥',
             required=True
         )
@@ -413,47 +413,28 @@ def heartbeat(request):
 )
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def license_info(request):
+def license_info(request, license_key):
     """
     获取许可证信息
     
-    GET /api/v1/licenses/info/?license_key=xxx
+    GET /api/v1/licenses/info/<license_key>/
     """
-    license_key = request.GET.get('license_key')
-    
-    if not license_key:
-        return Response({
-            'success': False,
-            'error': 'License key is required'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
     # 验证许可证密钥格式
-    if not license_key or len(license_key.replace('-', '')) < 10:
+    if len(license_key.replace('-', '')) < 10:
         return Response({
             'success': False,
             'error': 'Invalid license key format'
         }, status=status.HTTP_400_BAD_REQUEST)
     
     # 查找许可证
-    from licenses.services.license_service import LicenseGenerationService
-    from licenses.models import License, SoftwareProduct
+    from licenses.models import License
     
     try:
-        license_hash = SecurityService().hash_manager.hash_data(license_key)
+        # 通过许可证密钥直接查找（UUID格式不需要复杂验证）
         license_obj = License.objects.select_related('product', 'plan').get(
-            license_hash=license_hash,
+            license_key=license_key,
             is_deleted=False
         )
-        
-        # 验证许可证密钥有效性
-        generation_service = LicenseGenerationService()
-        verification_result = generation_service.verify_license_key(license_key, license_obj.product)
-        
-        if not verification_result['valid']:
-            return Response({
-                'success': False,
-                'error': verification_result['error']
-            }, status=status.HTTP_400_BAD_REQUEST)
         
         # 返回基本信息
         return Response({
