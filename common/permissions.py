@@ -292,6 +292,132 @@ class IsSuperAdminOrTenantAdmin(permissions.BasePermission):
         return is_admin
 
 
+class IsMemberUser(permissions.BasePermission):
+    """
+    检查用户是否是Member用户（普通成员）
+    """
+    def has_permission(self, request, view):
+        """
+        检查用户是否是Member用户
+        
+        Args:
+            request: HTTP请求对象
+            view: 视图对象
+            
+        Returns:
+            布尔值，指示用户是否具有权限
+        """
+        user = request.user
+        path = request.path
+        
+        # 检查用户是否已认证
+        is_authenticated = bool(user and user.is_authenticated)
+        
+        # 检查用户是否是Member类型
+        is_member_user = False
+        if is_authenticated:
+            # 通过检查用户类型来判断是否是Member
+            # Member用户的特征：不是管理员，且属于Member表
+            try:
+                from users.models import Member
+                is_member_user = (
+                    isinstance(user, Member) or 
+                    Member.objects.filter(id=user.id).exists()
+                ) and not getattr(user, 'is_admin', False) and not getattr(user, 'is_super_admin', False)
+            except ImportError:
+                # 如果Member模型不存在，回退到基本检查
+                is_member_user = (
+                    not getattr(user, 'is_admin', False) and 
+                    not getattr(user, 'is_super_admin', False) and
+                    not getattr(user, 'is_staff', False)
+                )
+        
+        # 检查用户状态
+        is_active = bool(is_member_user and user.is_active and getattr(user, 'status', 'active') == 'active')
+        
+        # 检查租户状态
+        has_valid_tenant = False
+        if is_active and hasattr(user, 'tenant') and user.tenant:
+            has_valid_tenant = user.tenant.is_active
+        
+        # 最终权限检查结果
+        has_permission = is_authenticated and is_member_user and is_active and has_valid_tenant
+        
+        logger.info(f"权限检查 [IsMemberUser] - 路径: {path}")
+        logger.info(f"  用户: {user.username if is_authenticated else 'Anonymous'}")
+        logger.info(f"  已认证: {is_authenticated}")
+        logger.info(f"  是Member用户: {is_member_user}")
+        logger.info(f"  用户状态活跃: {is_active}")
+        logger.info(f"  租户有效: {has_valid_tenant}")
+        logger.info(f"  权限检查结果: {'通过' if has_permission else '拒绝'}")
+        
+        if not has_permission:
+            if not is_authenticated:
+                reason = "用户未认证"
+            elif not is_member_user:
+                reason = "不是Member用户"
+            elif not is_active:
+                reason = "用户状态非活跃"
+            elif not has_valid_tenant:
+                reason = "租户无效"
+            else:
+                reason = "未知原因"
+            
+            logger.warning(
+                f"用户 {user.username if is_authenticated else 'Anonymous'} "
+                f"尝试访问需要Member权限的资源 {path}，被拒绝，原因: {reason}"
+            )
+        
+        return has_permission
+
+
+class CanApplyTrialLicense(permissions.BasePermission):
+    """
+    检查Member用户是否可以申请试用许可证
+    """
+    def has_permission(self, request, view):
+        """
+        检查用户是否可以申请试用许可证
+        
+        Args:
+            request: HTTP请求对象
+            view: 视图对象
+            
+        Returns:
+            布尔值，指示用户是否具有权限
+        """
+        user = request.user
+        path = request.path
+        
+        # 首先检查是否是Member用户
+        member_permission = IsMemberUser()
+        if not member_permission.has_permission(request, view):
+            return False
+        
+        # 检查用户是否被禁止申请许可证
+        is_application_allowed = True
+        if hasattr(user, 'license_application_banned') and user.license_application_banned:
+            is_application_allowed = False
+            logger.warning(f"用户 {user.username} 被禁止申请许可证")
+        
+        # 检查租户许可证申请状态
+        tenant_allows_application = True
+        if hasattr(user, 'tenant') and user.tenant:
+            # 这里可以添加租户级别的许可证申请控制逻辑
+            # 例如：检查租户是否达到配额上限等
+            pass
+        
+        has_permission = is_application_allowed and tenant_allows_application
+        
+        logger.info(f"权限检查 [CanApplyTrialLicense] - 路径: {path}")
+        logger.info(f"  用户: {user.username}")
+        logger.info(f"  申请权限允许: {is_application_allowed}")
+        logger.info(f"  租户允许申请: {tenant_allows_application}")
+        logger.info(f"  权限检查结果: {'通过' if has_permission else '拒绝'}")
+        
+        return has_permission
+
+
 class TenantApiPermission(permissions.BasePermission):
     """
     专门用于租户相关API的权限控制

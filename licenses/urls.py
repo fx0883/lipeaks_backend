@@ -10,7 +10,7 @@ from licenses.views.admin_views import (
     TenantLicenseQuotaViewSet
 )
 from licenses.views.assignment_views import LicenseAssignmentViewSet
-from licenses.views import activation_views, report_views
+from licenses.views import activation_views, report_views, member_views
 
 # 创建DRF路由器
 router = DefaultRouter()
@@ -37,6 +37,11 @@ urlpatterns = [
     path('unbind/', activation_views.unbind_license, name='unbind_license'),
     path('info/<str:license_key>/', activation_views.license_info, name='license_info'),
     path('status/', activation_views.server_status, name='server_status'),
+    
+    # Member用户API
+    path('member/available-products/', member_views.available_products, name='member_available_products'),
+    path('member/apply/', member_views.apply_trial_license, name='member_apply_trial_license'),
+    path('member/my-licenses/', member_views.my_licenses, name='member_my_licenses'),
     
     # 报告和统计API
     path('reports/generate/', report_views.generate_report, name='generate_report'),
