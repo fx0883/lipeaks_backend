@@ -401,6 +401,135 @@ class LicenseActivationService:
                 'error': f'Verification failed: {str(e)}',
                 'code': 'VERIFICATION_ERROR'
             }
+    
+    @transaction.atomic
+    def unbind_license(
+        self,
+        activation_code: str,
+        license_key: str,
+        machine_fingerprint: str,
+        hardware_info: Dict[str, Any] = None,
+        reason: str = "用户主动解绑",
+        client_info: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        解绑许可证
+        
+        Args:
+            activation_code: 激活码
+            license_key: 许可证密钥
+            machine_fingerprint: 机器指纹
+            hardware_info: 硬件信息（可选）
+            reason: 解绑原因
+            client_info: 客户端信息（IP、User-Agent等）
+            
+        Returns:
+            Dict[str, Any]: 解绑结果
+        """
+        try:
+            # 1. 查找激活记录
+            activation = LicenseActivation.objects.filter(
+                activation_code=activation_code,
+                result='success'
+            ).select_related('license', 'machine_binding').first()
+            
+            if not activation:
+                return {
+                    'success': False,
+                    'error': 'Activation record not found',
+                    'code': 'ACTIVATION_NOT_FOUND'
+                }
+            
+            # 2. 验证许可证密钥匹配
+            license_obj = activation.license
+            if license_obj.license_key != license_key:
+                logger.warning(f"解绑请求许可证密钥不匹配: {activation_code}")
+                return {
+                    'success': False,
+                    'error': 'License key mismatch',
+                    'code': 'LICENSE_KEY_MISMATCH'
+                }
+            
+            # 3. 验证机器指纹匹配
+            fingerprint_match = self.fingerprint_service.verify_fingerprint_match(
+                activation.machine_binding.machine_fingerprint,
+                machine_fingerprint,
+                similarity_threshold=0.8  # 稍微宽松一些，防止硬件微小变化导致无法解绑
+            )
+            
+            if not fingerprint_match['is_match']:
+                logger.warning(f"解绑请求机器指纹不匹配: {activation_code}, 相似度: {fingerprint_match['similarity']}")
+                return {
+                    'success': False,
+                    'error': 'Machine fingerprint mismatch',
+                    'code': 'FINGERPRINT_MISMATCH',
+                    'similarity': fingerprint_match['similarity']
+                }
+            
+            # 4. 检查机器绑定状态
+            machine_binding = activation.machine_binding
+            if machine_binding.status != 'active':
+                return {
+                    'success': False,
+                    'error': f'Machine binding is not active (current: {machine_binding.status})',
+                    'code': 'BINDING_NOT_ACTIVE'
+                }
+            
+            # 5. 执行解绑操作
+            # 更新机器绑定状态为非活跃
+            machine_binding.status = 'inactive'
+            machine_binding.save()
+            
+            # 更新许可证的当前激活数
+            active_bindings_count = MachineBinding.objects.filter(
+                license=license_obj,
+                status='active'
+            ).count()
+            
+            license_obj.current_activations = active_bindings_count
+            license_obj.save()
+            
+            # 6. 记录安全审计日志
+            SecurityAuditLog.objects.create(
+                event_type='license_deactivated',
+                severity='LOW',
+                tenant_id=license_obj.tenant_id,
+                ip_address=client_info.get('ip_address') if client_info else None,
+                user_agent=client_info.get('user_agent', '') if client_info else '',
+                details={
+                    'license_id': license_obj.id,
+                    'activation_code': activation_code,
+                    'machine_id': machine_binding.machine_id,
+                    'machine_fingerprint': machine_fingerprint[:8] + '...',  # 部分指纹
+                    'reason': reason,
+                    'product': license_obj.product.code,
+                    'similarity_score': fingerprint_match['similarity'],
+                    'remaining_activations': active_bindings_count
+                }
+            )
+            
+            logger.info(f"许可证解绑成功: {license_obj.id} -> {machine_binding.machine_id}, 原因: {reason}")
+            
+            return {
+                'success': True,
+                'message': 'License unbound successfully',
+                'data': {
+                    'license_id': license_obj.id,
+                    'machine_id': machine_binding.machine_id,
+                    'unbound_at': timezone.now().isoformat(),
+                    'remaining_activations': active_bindings_count,
+                    'max_activations': license_obj.max_activations,
+                    'reason': reason
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"许可证解绑失败: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Unbind failed: {str(e)}',
+                'code': 'UNBIND_ERROR'
+            }
 
 
 class LicenseManagementService:

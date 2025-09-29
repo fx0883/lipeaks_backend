@@ -34,6 +34,7 @@ urlpatterns = [
     path('activate/', activation_views.activate_license, name='activate_license'),
     path('verify/', activation_views.verify_activation, name='verify_activation'),
     path('heartbeat/', activation_views.heartbeat, name='heartbeat'),
+    path('unbind/', activation_views.unbind_license, name='unbind_license'),
     path('info/<str:license_key>/', activation_views.license_info, name='license_info'),
     path('status/', activation_views.server_status, name='server_status'),
     

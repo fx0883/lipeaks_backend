@@ -440,6 +440,55 @@ class HeartbeatSerializer(serializers.Serializer):
     system_status = serializers.JSONField(required=False, default=dict)
 
 
+class UnbindLicenseSerializer(serializers.Serializer):
+    """许可证解绑请求序列化器"""
+    
+    activation_code = serializers.CharField(
+        max_length=100,
+        help_text="激活码，格式：XXXX-XXXX-XXXX-XXXX"
+    )
+    license_key = serializers.CharField(
+        max_length=200,
+        help_text="许可证密钥，格式：XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+    )
+    machine_fingerprint = serializers.CharField(
+        max_length=64,
+        help_text="机器指纹，用于验证设备身份"
+    )
+    hardware_info = serializers.JSONField(
+        required=False,
+        help_text="机器硬件信息，用于额外验证"
+    )
+    reason = serializers.CharField(
+        max_length=500,
+        required=False,
+        default="用户主动解绑",
+        help_text="解绑原因"
+    )
+    
+    def validate_activation_code(self, value):
+        """验证激活码格式"""
+        # 移除格式化字符
+        clean_code = value.replace('-', '').replace(' ', '')
+        if len(clean_code) < 8:
+            raise serializers.ValidationError("激活码格式无效")
+        return value
+    
+    def validate_license_key(self, value):
+        """验证许可证密钥格式"""
+        # 移除格式化字符
+        clean_key = value.replace('-', '').replace(' ', '')
+        if len(clean_key) < 10:
+            raise serializers.ValidationError("许可证密钥格式无效")
+        return value
+    
+    def validate_machine_fingerprint(self, value):
+        """验证机器指纹格式"""
+        if len(value) != 64:
+            raise serializers.ValidationError("机器指纹长度必须为64位")
+        return value
+
+
 class TenantLicenseQuotaSerializer(serializers.ModelSerializer):
     """租户许可证配额序列化器"""
     
