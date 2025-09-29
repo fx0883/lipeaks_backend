@@ -97,6 +97,9 @@ def activate_license(request):
         client_info['ip_address'] = get_client_ip(request)
         client_info['user_agent'] = request.META.get('HTTP_USER_AGENT', '')
         
+        # 添加租户信息（从中间件获取）
+        client_info['tenant_info'] = getattr(request, 'tenant_id', None)
+        
         # 检测可疑活动
         suspicious_check = detect_suspicious_activation(license_key, client_info)
         if suspicious_check['suspicious']:
@@ -607,16 +610,16 @@ def detect_suspicious_activation(license_key: str, client_info: dict) -> dict:
     1. **参数验证** - 验证激活码、许可证密钥和机器指纹格式
     2. **激活记录查找** - 通过激活码定位对应的激活记录
     3. **许可证匹配** - 验证提供的许可证密钥与激活记录中的许可证匹配
-    4. **机器指纹验证** - 验证机器指纹匹配（相似度阈值80%）
+    4. **机器指纹记录** - 记录机器指纹信息（暂时不进行验证）
     5. **状态检查** - 确认机器绑定处于活跃状态
     6. **执行解绑** - 更新机器绑定状态为非活跃，减少许可证激活计数
     7. **审计记录** - 记录解绑操作到安全审计日志
     
     ## 安全机制
     
-    - **多重验证** - 激活码、许可证密钥、机器指纹三重验证
-    - **指纹匹配** - 80%相似度阈值，防止硬件微调导致无法解绑
-    - **操作审计** - 记录所有解绑操作，包括原因和相似度评分
+    - **双重验证** - 激活码、许可证密钥双重验证
+    - **指纹记录** - 记录机器指纹用于日志和后续分析（暂时不验证匹配）
+    - **操作审计** - 记录所有解绑操作，包括原因和机器信息
     - **事务保护** - 使用数据库事务确保数据一致性
     
     ## 租户隔离
@@ -760,7 +763,7 @@ def unbind_license(request):
         # 提取请求数据
         activation_code = serializer.validated_data['activation_code']
         license_key = serializer.validated_data['license_key']
-        machine_fingerprint = serializer.validated_data['machine_fingerprint']
+        machine_fingerprint = serializer.validated_data.get('machine_fingerprint', '')  # 改为可选
         hardware_info = serializer.validated_data.get('hardware_info')
         reason = serializer.validated_data.get('reason', '用户主动解绑')
         

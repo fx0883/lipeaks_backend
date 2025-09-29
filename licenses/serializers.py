@@ -452,8 +452,10 @@ class UnbindLicenseSerializer(serializers.Serializer):
         help_text="许可证密钥，格式：XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
     )
     machine_fingerprint = serializers.CharField(
-        max_length=64,
-        help_text="机器指纹，用于验证设备身份"
+        max_length=128,  # 增加长度限制，允许更灵活的格式
+        required=False,  # 改为可选字段
+        allow_blank=True,  # 允许空白
+        help_text="机器指纹，用于记录和日志（可选，不进行格式验证）"
     )
     hardware_info = serializers.JSONField(
         required=False,
@@ -483,9 +485,10 @@ class UnbindLicenseSerializer(serializers.Serializer):
         return value
     
     def validate_machine_fingerprint(self, value):
-        """验证机器指纹格式"""
-        if len(value) != 64:
-            raise serializers.ValidationError("机器指纹长度必须为64位")
+        """验证机器指纹格式（已禁用验证）"""
+        # TODO: 指纹码验证已完全禁用
+        # if len(value) != 64:
+        #     raise serializers.ValidationError("机器指纹长度必须为64位")
         return value
 
 

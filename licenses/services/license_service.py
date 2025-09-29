@@ -180,6 +180,18 @@ class LicenseActivationService:
             Dict[str, Any]: 激活结果
         """
         try:
+            # 0. 获取租户对象（从client_info中提取）
+            tenant_obj = None
+            if client_info and client_info.get('tenant_info'):
+                try:
+                    from tenants.models import Tenant
+                    tenant_obj = Tenant.objects.get(id=client_info['tenant_info'])
+                    logger.info(f"激活许可证 - 使用租户: {tenant_obj.name} (ID: {tenant_obj.id})")
+                except Tenant.DoesNotExist:
+                    logger.warning(f"租户ID {client_info['tenant_info']} 不存在，使用许可证关联的租户")
+                except Exception as e:
+                    logger.warning(f"获取租户对象失败: {str(e)}，使用许可证关联的租户")
+            
             # 1. 查找许可证记录
             try:
                 license_hash = self.security_service.hash_manager.hash_data(license_key)
@@ -257,7 +269,8 @@ class LicenseActivationService:
                     os_info=hardware_info.get('system_info', {}),
                     hardware_summary=self.fingerprint_service.create_hardware_summary(hardware_info),
                     last_ip_address=client_info.get('ip_address') if client_info else None,
-                    status='active'
+                    status='active',
+                    tenant=tenant_obj or license_obj.tenant  # 使用解析的租户或许可证关联的租户
                 )
             
             # 5. 生成激活码
@@ -275,7 +288,8 @@ class LicenseActivationService:
                 user_agent=client_info.get('user_agent', '') if client_info else '',
                 ip_address=client_info.get('ip_address') if client_info else None,
                 result='success',
-                expires_at=license_obj.expires_at
+                expires_at=license_obj.expires_at,
+                tenant=tenant_obj or license_obj.tenant  # 使用解析的租户或许可证关联的租户
             )
             
             # 7. 更新许可证状态
@@ -450,21 +464,26 @@ class LicenseActivationService:
                     'code': 'LICENSE_KEY_MISMATCH'
                 }
             
-            # 3. 验证机器指纹匹配
-            fingerprint_match = self.fingerprint_service.verify_fingerprint_match(
-                activation.machine_binding.machine_fingerprint,
-                machine_fingerprint,
-                similarity_threshold=0.8  # 稍微宽松一些，防止硬件微小变化导致无法解绑
-            )
+            # 3. 验证机器指纹匹配（暂时禁用）
+            # TODO: 指纹码验证暂时不启用，后续根据需要重新开启
+            # fingerprint_match = self.fingerprint_service.verify_fingerprint_match(
+            #     activation.machine_binding.machine_fingerprint,
+            #     machine_fingerprint,
+            #     similarity_threshold=0.8  # 稍微宽松一些，防止硬件微小变化导致无法解绑
+            # )
+            # 
+            # if not fingerprint_match['is_match']:
+            #     logger.warning(f"解绑请求机器指纹不匹配: {activation_code}, 相似度: {fingerprint_match['similarity']}")
+            #     return {
+            #         'success': False,
+            #         'error': 'Machine fingerprint mismatch',
+            #         'code': 'FINGERPRINT_MISMATCH',
+            #         'similarity': fingerprint_match['similarity']
+            #     }
             
-            if not fingerprint_match['is_match']:
-                logger.warning(f"解绑请求机器指纹不匹配: {activation_code}, 相似度: {fingerprint_match['similarity']}")
-                return {
-                    'success': False,
-                    'error': 'Machine fingerprint mismatch',
-                    'code': 'FINGERPRINT_MISMATCH',
-                    'similarity': fingerprint_match['similarity']
-                }
+            # 记录指纹信息用于日志（但不进行验证）
+            fingerprint_preview = machine_fingerprint[:8] + '...' if machine_fingerprint else 'NOT_PROVIDED'
+            logger.info(f"解绑请求 - 激活码: {activation_code}, 指纹: {fingerprint_preview}")
             
             # 4. 检查机器绑定状态
             machine_binding = activation.machine_binding
@@ -500,10 +519,10 @@ class LicenseActivationService:
                     'license_id': license_obj.id,
                     'activation_code': activation_code,
                     'machine_id': machine_binding.machine_id,
-                    'machine_fingerprint': machine_fingerprint[:8] + '...',  # 部分指纹
+                    'machine_fingerprint': fingerprint_preview,  # 部分指纹或NOT_PROVIDED
                     'reason': reason,
                     'product': license_obj.product.code,
-                    'similarity_score': fingerprint_match['similarity'],
+                    'fingerprint_verification': 'SKIPPED',  # 指纹验证已禁用
                     'remaining_activations': active_bindings_count
                 }
             )
