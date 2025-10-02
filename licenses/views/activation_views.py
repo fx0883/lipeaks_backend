@@ -26,11 +26,42 @@ from typing import Dict, Any
 
 logger = logging.getLogger('licenses.activation')
 
+# ========================== 安全阈值环境变量配置 ==========================
+import os
+
+# API请求频率限制配置
+# 控制激活API的总体请求频率，防止系统过载
+ACTIVATION_API_RATE_LIMIT = os.environ.get('ACTIVATION_API_RATE_LIMIT', '100/hour')
+
+# 可疑活动检测 - IP频率限制配置
+# 控制同一IP地址的激活频率，防止恶意批量激活
+SUSPICIOUS_IP_ACTIVATION_LIMIT = int(os.environ.get('SUSPICIOUS_IP_ACTIVATION_LIMIT', '5'))
+SUSPICIOUS_IP_CHECK_HOURS = int(os.environ.get('SUSPICIOUS_IP_CHECK_HOURS', '1'))
+
+# 可疑活动检测 - 许可证频率限制配置  
+# 控制同一许可证的重复激活频率，防止许可证滥用
+SUSPICIOUS_LICENSE_ACTIVATION_LIMIT = int(os.environ.get('SUSPICIOUS_LICENSE_ACTIVATION_LIMIT', '3'))
+SUSPICIOUS_LICENSE_CHECK_MINUTES = int(os.environ.get('SUSPICIOUS_LICENSE_CHECK_MINUTES', '30'))
+
+# ========================================================================
+
 
 class ActivationRateThrottle(AnonRateThrottle):
-    """激活请求频率限制"""
+    """
+    激活请求频率限制
+    
+    通过环境变量ACTIVATION_API_RATE_LIMIT配置请求频率
+    格式：'次数/时间单位'，例如：'100/hour', '10/minute'
+    默认：100次/小时
+    """
     scope = 'activation'
-    rate = '100/hour'  # 每小时最多10次激活请求
+    
+    def get_rate(self):
+        """
+        动态获取频率限制配置
+        优先使用环境变量，如果没有配置则使用默认值
+        """
+        return ACTIVATION_API_RATE_LIMIT
 
 
 @extend_schema(
@@ -165,7 +196,9 @@ def activate_license(request):
 @extend_schema(
     tags=['许可证激活API'],
     summary='验证激活状态',
-    description='验证许可证激活状态，检查激活码和机器指纹匹配',
+    description='''验证许可证激活状态，仅检查激活码有效性
+    
+    注意：机器指纹验证已禁用，machine_fingerprint字段可选，不进行验证''',
     request=VerifyActivationSerializer,
     responses={
         200: OpenApiResponse(
@@ -194,9 +227,11 @@ def activate_license(request):
 @csrf_exempt
 def verify_activation(request):
     """
-    验证激活状态
+    验证激活状态（已禁用机器指纹验证）
     
     POST /api/v1/licenses/verify/
+    
+    注意：机器指纹验证已被禁用，只验证激活码有效性
     """
     serializer = VerifyActivationSerializer(data=request.data)
     if not serializer.is_valid():
@@ -207,21 +242,21 @@ def verify_activation(request):
     
     try:
         activation_code = serializer.validated_data['activation_code']
-        machine_fingerprint = serializer.validated_data['machine_fingerprint']
+        machine_fingerprint = serializer.validated_data.get('machine_fingerprint', '')
         
-        # 检查缓存
-        cache_key = f"activation_verify:{activation_code}:{machine_fingerprint[:8]}"
+        # 检查缓存（不依赖机器指纹）
+        cache_key = f"activation_verify:{activation_code}"
         cached_result = cache.get(cache_key)
         
         if cached_result:
             logger.debug(f"验证缓存命中: {activation_code}")
             return Response(cached_result)
         
-        # 执行验证
+        # 执行验证（机器指纹验证已禁用）
         activation_service = LicenseActivationService()
         result = activation_service.verify_activation(
             activation_code=activation_code,
-            machine_fingerprint=machine_fingerprint
+            machine_fingerprint=machine_fingerprint  # 传递但不验证
         )
         
         if result['valid']:
@@ -565,13 +600,13 @@ def detect_suspicious_activation(license_key: str, client_info: dict) -> dict:
         if ip_address:
             recent_activations = LicenseActivation.objects.filter(
                 ip_address=ip_address,
-                activated_at__gte=timezone.now() - timezone.timedelta(hours=1)
+                activated_at__gte=timezone.now() - timezone.timedelta(hours=SUSPICIOUS_IP_CHECK_HOURS)
             ).count()
             
-            if recent_activations >= 5:
+            if recent_activations >= SUSPICIOUS_IP_ACTIVATION_LIMIT:
                 return {
                     'suspicious': True,
-                    'reason': 'High activation frequency from same IP'
+                    'reason': f'High activation frequency from same IP (>{SUSPICIOUS_IP_ACTIVATION_LIMIT} times in {SUSPICIOUS_IP_CHECK_HOURS} hours)'
                 }
         
         # 检查许可证密钥的激活频率
@@ -581,13 +616,13 @@ def detect_suspicious_activation(license_key: str, client_info: dict) -> dict:
             license_obj = License.objects.get(license_hash=license_hash)
             recent_license_activations = LicenseActivation.objects.filter(
                 license=license_obj,
-                activated_at__gte=timezone.now() - timezone.timedelta(minutes=30)
+                activated_at__gte=timezone.now() - timezone.timedelta(minutes=SUSPICIOUS_LICENSE_CHECK_MINUTES)
             ).count()
             
-            if recent_license_activations >= 3:
+            if recent_license_activations >= SUSPICIOUS_LICENSE_ACTIVATION_LIMIT:
                 return {
                     'suspicious': True,
-                    'reason': 'Multiple activation attempts for same license'
+                    'reason': f'Multiple activation attempts for same license (>{SUSPICIOUS_LICENSE_ACTIVATION_LIMIT} times in {SUSPICIOUS_LICENSE_CHECK_MINUTES} minutes)'
                 }
         except License.DoesNotExist:
             pass

@@ -363,19 +363,24 @@ class LicenseActivationService:
                     'code': 'ACTIVATION_NOT_FOUND'
                 }
             
-            # 验证机器指纹
-            fingerprint_match = self.fingerprint_service.verify_fingerprint_match(
-                activation.machine_binding.machine_fingerprint,
-                machine_fingerprint
-            )
+            # 验证机器指纹（已禁用）
+            # TODO: 机器指纹验证已禁用，后续根据需要重新启用
+            # fingerprint_match = self.fingerprint_service.verify_fingerprint_match(
+            #     activation.machine_binding.machine_fingerprint,
+            #     machine_fingerprint
+            # )
+            # 
+            # if not fingerprint_match['is_match']:
+            #     return {
+            #         'valid': False,
+            #         'error': 'Machine fingerprint mismatch',
+            #         'code': 'FINGERPRINT_MISMATCH',
+            #         'similarity': fingerprint_match['similarity']
+            #     }
             
-            if not fingerprint_match['is_match']:
-                return {
-                    'valid': False,
-                    'error': 'Machine fingerprint mismatch',
-                    'code': 'FINGERPRINT_MISMATCH',
-                    'similarity': fingerprint_match['similarity']
-                }
+            # 记录指纹信息（但不验证）
+            fingerprint_preview = machine_fingerprint[:8] + '...' if machine_fingerprint else 'NOT_PROVIDED'
+            logger.info(f"验证请求 - 激活码: {activation_code}, 指纹: {fingerprint_preview}")
             
             # 检查许可证状态
             license_obj = activation.license

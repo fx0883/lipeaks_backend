@@ -403,7 +403,12 @@ class VerifyActivationSerializer(serializers.Serializer):
     """验证激活状态请求序列化器"""
     
     activation_code = serializers.CharField(max_length=100)
-    machine_fingerprint = serializers.CharField(max_length=64)
+    machine_fingerprint = serializers.CharField(
+        max_length=64, 
+        required=False, 
+        allow_blank=True,
+        help_text="机器指纹（可选，不进行验证）"
+    )
 
 
 class LicenseUsageLogSerializer(serializers.ModelSerializer):
