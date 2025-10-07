@@ -12,7 +12,10 @@ urlpatterns = [
     # 管理员用户相关URL
     path('admin-users/', include('users.urls.admin_user_urls', namespace='admin_users')),
     
-    # 普通用户相关URL
+    # 管理员端Member管理URL
+    path('admin/members/', include('users.urls.admin_member_urls', namespace='admin_members')),
+    
+    # Member端URL（Member自用）
     path('members/', include('users.urls.member_urls', namespace='members')),
     
     # 向后兼容的用户相关URL

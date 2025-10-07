@@ -27,14 +27,20 @@ from .admin_user_views import (
     AdminUserSpecificAvatarUploadView
 )
 
-# 从member_views.py导入普通用户相关视图
+# 从member_views.py导入Member端视图（Member自用）
 from .member_views import (
     CurrentMemberView,
-    MemberListCreateView,
-    MemberRetrieveUpdateDeleteView,
     MemberPasswordUpdateView,
     SubAccountListCreateView,
     SubAccountDetailView,
     MemberAvatarUploadView,
-    MemberSpecificAvatarUploadView
+)
+
+# 从member_admin_views.py导入管理员端Member管理视图
+from .member_admin_views import (
+    AdminMemberListCreateView,
+    AdminMemberRetrieveUpdateDeleteView,
+    AdminSubAccountListView,
+    AdminSubAccountDetailView,
+    AdminMemberAvatarUploadView,
 ) 
