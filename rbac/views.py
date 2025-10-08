@@ -184,7 +184,7 @@ class PermissionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def batch_check(self, request):
         """批量检查当前用户是否拥有多个权限"""
-        serializer = PermissionBatchCheckSerializer(data=request.data)
+        serializer = PermissionBatchCheckSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         
         codes = serializer.validated_data['codes']
@@ -353,7 +353,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     def add_permissions(self, request, pk=None):
         """分配一个或多个权限给角色"""
         role = self.get_object()
-        serializer = RolePermissionSerializer(data=request.data)
+        serializer = RolePermissionSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         
         permission_ids = serializer.validated_data['permission_ids']
@@ -421,7 +421,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     def update_permissions(self, request, pk=None):
         """批量更新角色的全部权限"""
         role = self.get_object()
-        serializer = RolePermissionSerializer(data=request.data)
+        serializer = RolePermissionSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         
         permission_ids = serializer.validated_data['permission_ids']
@@ -925,7 +925,7 @@ class TenantRolesViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     @action(detail=False, methods=['post'], url_path='from-template')
     def create_from_template(self, request, tenant_id=None):
         """从系统角色模板创建租户角色"""
-        serializer = TenantRoleCreateFromTemplateSerializer(data=request.data)
+        serializer = TenantRoleCreateFromTemplateSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         
         template_role_id = serializer.validated_data['template_role_id']

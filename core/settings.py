@@ -58,11 +58,23 @@ DEBUG = get_env_with_validation('DEBUG', lambda x: x.lower() == 'true', 'True')
 # 从环境变量读取日志输出方式，默认跟随DEBUG设置
 LOG_TO_CONSOLE = os.getenv('LOG_TO_CONSOLE', str(DEBUG)).lower() == 'true'
 
+# Feature flags
+# 是否强制成员/匿名在CMS路径携带并校验 X-Tenant-ID（默认开启，可用环境变量关闭以便灰度）
+FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER = get_env_with_validation(
+    'FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER', lambda x: x.lower() == 'true', 'True'
+)
+
 # 从环境变量读取ALLOWED_HOSTS，并添加espressox.online
-allowed_hosts_from_env = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-ALLOWED_HOSTS = allowed_hosts_from_env + ['espressox.online']
+# allowed_hosts_from_env = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1',).split(',')
+# ALLOWED_HOSTS = allowed_hosts_from_env + ['espressox.online', '*.localhost.charlesproxy.com']
 
-
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1', 
+    'myapp.localhost.charlesproxy.com',
+    '*.localhost.charlesproxy.com',  # 支持Charles Proxy的所有子域名
+    'espressox.online'
+]
 # Application definition
 
 INSTALLED_APPS = [
@@ -92,27 +104,25 @@ INSTALLED_APPS = [
     'charts',  # 图表应用
     'customers',  # 客户管理应用
     'orders',  # 订单管理应用
+    'licenses',  # 许可证管理应用
+    'points',  # 多租户积分系统
 ]
 
 MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',  # 静态文件优化
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # CORS中间件提前
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',  # 保持CSRF中间件位置
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    # 添加API认证中间件在AuthenticationMiddleware之后,TenantMiddleware之前
-    'common.middleware.api_auth_middleware.APIAuthMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # 自定义租户中间件
+    # 自定义中间件放在Django核心中间件之后
+    'common.middleware.api_auth_middleware.APIAuthMiddleware',
     'common.middleware.tenant_middleware.TenantMiddleware',
-    # 增强型API日志中间件（替换旧版）
     'common.middleware.enhanced_api_logging_middleware.EnhancedAPILoggingMiddleware',
-    # 浏览器控制台日志中间件（用于调试）
     'common.middleware.browser_console_logging_middleware.BrowserConsoleLoggingMiddleware',
-    # 响应格式标准化中间件(放在最后以确保处理所有其他中间件后的响应)
     'common.middleware.response_standardization_middleware.ResponseStandardizationMiddleware',
 ]
 
@@ -259,10 +269,48 @@ JWT_AUTH = {
 # ]
 
 # CORS 配置
-CORS_ALLOW_ALL_ORIGINS = True  # 允许所有源
+CORS_ALLOW_ALL_ORIGINS = False  # 改为False使用白名单模式
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",  # 前端应用
+    "http://127.0.0.1:3000",
+    "http://espressox.online",
+    "https://espressox.online",
+    "http://localhost:8848",
+]
 CORS_ALLOW_CREDENTIALS = True  # 允许携带凭证（如 cookies）
 
-CORS_ALLOW_HEADERS = ["*"]
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",  # 明确允许CSRF token头
+    "x-requested-with",
+    "x-tenant-id",
+]
+
+# CSRF 安全配置
+CSRF_COOKIE_AGE = 31449600  # 1年
+CSRF_COOKIE_DOMAIN = None
+CSRF_COOKIE_HTTPONLY = False  # 允许JavaScript访问CSRF cookie
+CSRF_COOKIE_NAME = 'csrftoken'
+CSRF_COOKIE_PATH = '/'
+CSRF_COOKIE_SAMESITE = 'Lax'  # 重要：设置为Lax而不是Strict
+CSRF_COOKIE_SECURE = False if DEBUG else True  # 开发环境设为False
+CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'
+CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://espressox.online',
+    'https://espressox.online'
+]  # 添加受信任的源
+CSRF_USE_SESSIONS = False
 
 # Spectacular API 文档设置
 SPECTACULAR_SETTINGS = {
@@ -403,3 +451,14 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 WHITENOISE_USE_FINDERS = True
 WHITENENOISE_AUTOREFRESH = DEBUG
+
+# 租户中间件配置（已完成重构，使用新架构）
+# 租户中间件调试模式（启用详细日志）
+TENANT_MIDDLEWARE_DEBUG = get_env_with_validation(
+    'TENANT_MIDDLEWARE_DEBUG', lambda x: x.lower() == 'true', 'True' if DEBUG else 'False'
+)
+
+# 租户中间件性能监控（记录处理时间）
+TENANT_MIDDLEWARE_PERFORMANCE_MONITORING = get_env_with_validation(
+    'TENANT_MIDDLEWARE_PERFORMANCE_MONITORING', lambda x: x.lower() == 'true', 'False'
+)

@@ -9,6 +9,8 @@ app_name = 'auth'
 urlpatterns = [
     # 注册
     path('register/', auth_views.RegisterView.as_view(), name='register'),
+    # 成员自助注册
+    path('member/register/', auth_views.MemberRegisterView.as_view(), name='member-register'),
     
     # 登录
     path('login/', auth_views.LoginView.as_view(), name='login'),

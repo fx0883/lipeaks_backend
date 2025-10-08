@@ -8,7 +8,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 
-from common.permissions import IsAdmin, IsSuperAdmin
+from common.permissions import IsSuperAdmin, IsAdmin
+from common.utils.user_permissions import is_super_admin, is_admin
 from menus.models import Menu, UserMenu
 from menus.serializers import MenuSerializer, MenuTreeSerializer
 
@@ -178,7 +179,7 @@ class MenuViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         # 只有超级管理员可以看到所有菜单
-        if not user.is_super_admin:
+        if not is_super_admin(user):
             # 普通管理员只能看到分配给自己的菜单
             user_menu_ids = UserMenu.objects.filter(
                 user=user
@@ -211,7 +212,7 @@ class MenuViewSet(viewsets.ModelViewSet):
         """
         创建菜单
         """
-        if not self.request.user.is_super_admin:
+        if not is_super_admin(self.request.user):
             return Response(
                 {"detail": "只有超级管理员才能创建菜单"},
                 status=status.HTTP_403_FORBIDDEN
@@ -223,7 +224,7 @@ class MenuViewSet(viewsets.ModelViewSet):
         """
         更新菜单
         """
-        if not self.request.user.is_super_admin:
+        if not is_super_admin(self.request.user):
             return Response(
                 {"detail": "只有超级管理员才能更新菜单"},
                 status=status.HTTP_403_FORBIDDEN
@@ -235,7 +236,7 @@ class MenuViewSet(viewsets.ModelViewSet):
         """
         删除菜单
         """
-        if not self.request.user.is_super_admin:
+        if not is_super_admin(self.request.user):
             return Response(
                 {"detail": "只有超级管理员才能删除菜单"},
                 status=status.HTTP_403_FORBIDDEN

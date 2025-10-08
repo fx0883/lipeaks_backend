@@ -8,7 +8,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse
 
-from common.permissions import IsAdmin
+from common.permissions import IsSuperAdmin, IsAdmin
+from common.utils.user_permissions import is_super_admin, is_admin
 from menus.models import UserMenu, Menu
 from menus.serializers import (
     UserMenuDetailSerializer,
@@ -148,7 +149,7 @@ class AdminMenuViewSet(mixins.ListModelMixin,
         current_user = self.request.user
         
         # 验证访问权限
-        if not current_user.is_super_admin:
+        if not is_super_admin(current_user):
             return UserMenu.objects.none()
         
         return UserMenu.objects.filter(user_id=user_id, is_active=True)
@@ -179,7 +180,7 @@ class AdminMenuViewSet(mixins.ListModelMixin,
         """
         为用户分配菜单
         """
-        if not request.user.is_super_admin:
+        if not is_super_admin(request.user):
             return Response(
                 {"detail": "只有超级管理员才能分配菜单给用户"},
                 status=status.HTTP_403_FORBIDDEN
@@ -195,13 +196,13 @@ class AdminMenuViewSet(mixins.ListModelMixin,
             )
         
         # 检查目标用户是否是管理员
-        if not user.is_admin and not user.is_super_admin:
+        if not is_admin(user) and not is_super_admin(user):
             return Response(
                 {"detail": "只能为管理员用户分配菜单"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        serializer = UserMenusSerializer(data=request.data)
+        serializer = UserMenusSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         
         menu_ids = serializer.validated_data['menu_ids']
@@ -244,7 +245,7 @@ class AdminMenuViewSet(mixins.ListModelMixin,
         """
         移除用户的特定菜单
         """
-        if not request.user.is_super_admin:
+        if not is_super_admin(request.user):
             return Response(
                 {"detail": "只有超级管理员才能移除用户的菜单"},
                 status=status.HTTP_403_FORBIDDEN
@@ -294,7 +295,7 @@ class AdminMenuViewSet(mixins.ListModelMixin,
         """
         批量移除用户菜单
         """
-        if not request.user.is_super_admin:
+        if not is_super_admin(request.user):
             return Response(
                 {"detail": "只有超级管理员才能批量移除用户的菜单"},
                 status=status.HTTP_403_FORBIDDEN
@@ -308,7 +309,7 @@ class AdminMenuViewSet(mixins.ListModelMixin,
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        serializer = UserMenusSerializer(data=request.data)
+        serializer = UserMenusSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         
         menu_ids = serializer.validated_data['menu_ids']

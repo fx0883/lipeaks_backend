@@ -971,8 +971,16 @@ paths:
   /api/v1/auth/login/:
     post:
       operationId: api_v1_auth_login_create
-      description: 用户登录接口，验证用户名/邮箱和密码，返回JWT令牌
+      description: |-
+        用户登录接口，验证用户名/邮箱和密码，返回JWT令牌。
+        成员可通过请求体的 tenant_id 或请求头 X-Tenant-ID 指定租户；当标识在多个租户中存在时需提供租户ID进行消歧。
       summary: 用户登录
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: integer
+        description: 租户ID。用于成员登录的租户定位（与请求体 tenant_id 等价；优先级：请求体 > 请求头）
       tags:
       - 认证
       requestBody:
@@ -983,8 +991,8 @@ paths:
             examples:
               用户名登录:
                 value:
-                  username: admin
-                  password: admin_password
+                  username: admin_cms
+                  password: admin_main
                 summary: 使用用户名和密码登录
                 description: 提供用户名和密码进行登录
               邮箱登录:
@@ -993,6 +1001,20 @@ paths:
                   password: admin_password
                 summary: 使用邮箱和密码登录
                 description: 提供邮箱和密码进行登录
+              成员登录（body携带tenantId）:
+                value:
+                  username: member@example.com
+                  password: member_password
+                  tenant_id: 1
+                summary: 成员使用用户名/邮箱 + 租户ID 登录
+                description: 当相同用户名/邮箱在多个租户中存在时，必须提供租户标识进行消歧。成员可在请求体提供 tenant_id 进行租户定位。
+              成员登录（使用请求头X-Tenant-ID）:
+                value:
+                  username: tenant_member
+                  password: member_password
+                summary: 成员使用用户名/邮箱 + X-Tenant-ID 登录
+                description: '成员也可以通过请求头 X-Tenant-ID 指定租户ID（与请求体的 tenant_id 等价，优先级：请求体
+                  > 请求头）。示例：在请求头中添加 X-Tenant-ID: 1'
               管理员登录成功:
                 value:
                   success: true
@@ -1127,6 +1149,88 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/auth/member/register/:
+    post:
+      operationId: api_v1_auth_member_register_create
+      description: 成员自助注册接口，tenant_id可从请求体或请求头X-Tenant-ID获取
+      summary: 成员自助注册
+      tags:
+      - 认证
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberSelfRegisterRequest'
+            examples:
+              标准注册:
+                value:
+                  username: newuser
+                  email: user@example.com
+                  phone: '13800138000'
+                  nick_name: 新用户
+                  password: SecurePass123!
+                  password_confirm: SecurePass123!
+                  tenant_id: 1
+                summary: 注册新用户
+                description: 提供用户名、邮箱、密码等信息注册新用户
+              简单注册:
+                value:
+                  username: simpleuser
+                  email: simple@example.com
+                  password: SecurePass123!
+                  password_confirm: SecurePass123!
+                summary: 简化注册
+                description: 仅提供必要信息注册新用户
+              注册成功:
+                value:
+                  success: true
+                  code: 2000
+                  message: 注册成功
+                  data:
+                    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    refresh_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    user:
+                      id: 10
+                      username: newuser
+                      email: user@example.com
+                      nick_name: 新用户
+                      is_admin: false
+                      is_member: true
+                      avatar: ''
+                      tenant_id: 1
+                      tenant_name: 测试租户
+                summary: 注册成功响应
+                description: 用户注册成功的响应示例
+              注册失败:
+                value:
+                  success: false
+                  code: 4000
+                  message: 注册失败
+                  data:
+                    username:
+                    - 该用户名已被使用
+                    email:
+                    - 该邮箱已被注册
+                    password:
+                    - 密码至少需要包含8个字符，并且不能是常见密码
+                summary: 注册失败响应
+                description: 注册数据无效的响应示例
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MemberSelfRegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MemberSelfRegisterRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '201':
+          description: 注册成功
+        '400':
+          description: 注册失败，输入数据无效
   /api/v1/auth/password-reset/confirm/:
     post:
       operationId: api_v1_auth_password_reset_confirm_create
@@ -1174,9 +1278,25 @@ paths:
             schema:
               $ref: '#/components/schemas/PasswordResetRequestRequest'
             examples:
-              密码重置请求示例:
+              管理员/平台用户重置（默认）:
                 value:
                   email: user@example.com
+                  account_type: user
+                summary: 平台用户通过邮箱发起重置
+                description: 用于后台管理员或平台用户（account_type=user），仅需提供邮箱。
+              成员重置（携带租户ID）:
+                value:
+                  email: member@example.com
+                  account_type: member
+                  tenant_id: 1
+                summary: 成员通过邮箱 + 租户ID 发起重置
+                description: 当邮箱在多个租户中可能重复时，需要提供 tenant_id 进行租户定位。
+              成员重置（省略租户ID，可能歧义）:
+                value:
+                  email: member.same@example.com
+                  account_type: member
+                summary: 成员仅提供邮箱发起重置（存在歧义时将返回匿名成功，不发送邮件）
+                description: 若该邮箱在多个租户中均存在成员账号且未提供 tenant_id，将返回通用成功提示以避免枚举，但不会发送邮件。
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/PasswordResetRequestRequest'
@@ -2507,7 +2627,6 @@ paths:
         description: Number of results to return per page.
         schema:
           type: integer
-
       - in: query
         name: search
         schema:
@@ -3139,7 +3258,7 @@ paths:
   /api/v1/cms/articles/{id}/view/:
     post:
       operationId: api_v1_cms_articles_view_create
-      description: 记录文章的阅读行为，更新阅读统计
+      description: 记录文章的阅读行为，更新阅读统计。不需要认证，每次调用将增加文章阅读数1次。
       summary: 记录文章阅读
       parameters:
       - in: header
@@ -3159,25 +3278,20 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                session_id:
-                  type: string
-                  description: 会话ID，用于跟踪唯一访客
-                reading_time:
-                  type: integer
-                  description: 阅读时长(秒)
-                referrer:
-                  type: string
-                  description: 来源URL
+              $ref: '#/components/schemas/ArticleDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ArticleDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ArticleDetailRequest'
+        required: true
       security:
       - Bearer: []
       - Bearer: []
       responses:
         '200':
           description: 记录成功
-        '403':
-          description: 权限不足
         '404':
           description: 文章不存在
   /api/v1/cms/articles/batch-delete/:
@@ -6454,6 +6568,1288 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/licenses/activate/:
+    post:
+      operationId: api_v1_licenses_activate_create
+      description: 客户端激活许可证，验证许可证密钥并绑定硬件信息
+      summary: 激活许可证
+      tags:
+      - 许可证激活API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateLicenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActivateLicenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActivateLicenseRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          description: 激活成功
+        '400':
+          description: 激活失败
+        '403':
+          description: 可疑活动被阻止
+        '429':
+          description: 请求频率限制
+  /api/v1/licenses/admin/activations/:
+    get:
+      operationId: api_v1_licenses_admin_activations_list
+      description: 获取许可证激活记录的分页列表，支持搜索和过滤
+      summary: 获取许可证激活记录列表
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 许可证激活记录
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLicenseActivationList'
+          description: ''
+  /api/v1/licenses/admin/activations/{id}/:
+    get:
+      operationId: api_v1_licenses_admin_activations_retrieve
+      description: 根据ID获取指定许可证激活记录的详细信息
+      summary: 获取许可证激活记录详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证激活记录
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseActivation'
+          description: ''
+  /api/v1/licenses/admin/audit-logs/:
+    get:
+      operationId: api_v1_licenses_admin_audit_logs_list
+      description: 获取安全审计日志的分页列表，支持按事件类型和严重程度过滤
+      summary: 获取安全审计日志列表
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - 安全审计日志
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSecurityAuditLogList'
+          description: ''
+  /api/v1/licenses/admin/audit-logs/{id}/:
+    get:
+      operationId: api_v1_licenses_admin_audit_logs_retrieve
+      description: 根据ID获取指定安全审计日志的详细信息
+      summary: 获取安全审计日志详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 安全审计日志
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityAuditLog'
+          description: ''
+  /api/v1/licenses/admin/licenses/:
+    get:
+      operationId: api_v1_licenses_admin_licenses_list
+      description: 获取许可证的分页列表，支持搜索和过滤
+      summary: 获取许可证列表
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 许可证管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLicenseList'
+          description: ''
+    post:
+      operationId: api_v1_licenses_admin_licenses_create
+      description: 为指定产品和方案创建新的许可证
+      summary: 创建许可证
+      tags:
+      - 许可证管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LicenseCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LicenseCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LicenseCreateRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseCreate'
+          description: ''
+  /api/v1/licenses/admin/licenses/{id}/:
+    get:
+      operationId: api_v1_licenses_admin_licenses_retrieve
+      description: 根据ID获取指定许可证的详细信息
+      summary: 获取许可证详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseDetail'
+          description: ''
+    put:
+      operationId: api_v1_licenses_admin_licenses_update
+      description: 更新指定许可证的信息
+      summary: 更新许可证
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/License'
+          description: ''
+    patch:
+      operationId: api_v1_licenses_admin_licenses_partial_update
+      description: 部分更新指定许可证的信息
+      summary: 部分更新许可证
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLicenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLicenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLicenseRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/License'
+          description: ''
+    delete:
+      operationId: api_v1_licenses_admin_licenses_destroy
+      description: 软删除指定的许可证
+      summary: 删除许可证
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/licenses/admin/licenses/{id}/extend/:
+    post:
+      operationId: api_v1_licenses_admin_licenses_extend_create
+      description: 延长指定许可证的有效期
+      summary: 延长许可证有效期
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 许可证延期成功
+  /api/v1/licenses/admin/licenses/{id}/revoke/:
+    post:
+      operationId: api_v1_licenses_admin_licenses_revoke_create
+      description: 撤销指定的许可证并记录原因
+      summary: 撤销许可证
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 许可证撤销成功
+  /api/v1/licenses/admin/licenses/{id}/usage_stats/:
+    get:
+      operationId: api_v1_licenses_admin_licenses_usage_stats_retrieve
+      description: 获取指定许可证的使用统计信息
+      summary: 获取许可证使用统计
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 使用统计信息
+  /api/v1/licenses/admin/licenses/batch_operation/:
+    post:
+      operationId: api_v1_licenses_admin_licenses_batch_operation_create
+      description: 对多个许可证执行批量操作（撤销、延期等）
+      summary: 批量操作许可证
+      tags:
+      - 许可证管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LicenseRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 批量操作结果
+  /api/v1/licenses/admin/machine-bindings/:
+    get:
+      operationId: api_v1_licenses_admin_machine_bindings_list
+      description: 获取机器绑定的分页列表，支持搜索和过滤
+      summary: 获取机器绑定列表
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 机器绑定管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMachineBindingList'
+          description: ''
+  /api/v1/licenses/admin/machine-bindings/{id}/:
+    get:
+      operationId: api_v1_licenses_admin_machine_bindings_retrieve
+      description: 根据ID获取指定机器绑定的详细信息
+      summary: 获取机器绑定详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 机器绑定管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineBinding'
+          description: ''
+  /api/v1/licenses/admin/machine-bindings/{id}/block/:
+    post:
+      operationId: api_v1_licenses_admin_machine_bindings_block_create
+      description: 阻止指定的机器绑定并记录原因
+      summary: 阻止机器绑定
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 机器绑定管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineBindingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MachineBindingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MachineBindingRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 机器绑定已阻止
+  /api/v1/licenses/admin/plans/:
+    get:
+      operationId: api_v1_licenses_admin_plans_list
+      description: 获取许可证方案的分页列表，支持搜索和过滤
+      summary: 获取许可证方案列表
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 许可证方案管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLicensePlanList'
+          description: ''
+    post:
+      operationId: api_v1_licenses_admin_plans_create
+      description: 为指定产品创建新的许可证方案
+      summary: 创建许可证方案
+      tags:
+      - 许可证方案管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LicensePlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LicensePlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LicensePlanRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicensePlan'
+          description: ''
+  /api/v1/licenses/admin/plans/{id}/:
+    get:
+      operationId: api_v1_licenses_admin_plans_retrieve
+      description: 根据ID获取指定许可证方案的详细信息
+      summary: 获取许可证方案详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证方案管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicensePlan'
+          description: ''
+    put:
+      operationId: api_v1_licenses_admin_plans_update
+      description: 更新指定许可证方案的信息
+      summary: 更新许可证方案
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证方案管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LicensePlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LicensePlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LicensePlanRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicensePlan'
+          description: ''
+    patch:
+      operationId: api_v1_licenses_admin_plans_partial_update
+      description: 部分更新指定许可证方案的信息
+      summary: 部分更新许可证方案
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证方案管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLicensePlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLicensePlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLicensePlanRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicensePlan'
+          description: ''
+    delete:
+      operationId: api_v1_licenses_admin_plans_destroy
+      description: 软删除指定的许可证方案
+      summary: 删除许可证方案
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证方案管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/licenses/admin/plans/{id}/duplicate/:
+    post:
+      operationId: api_v1_licenses_admin_plans_duplicate_create
+      description: 复制现有的许可证方案并创建副本
+      summary: 复制许可证方案
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证方案管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LicensePlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LicensePlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LicensePlanRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          description: 方案复制成功
+  /api/v1/licenses/admin/products/:
+    get:
+      operationId: api_v1_licenses_admin_products_list
+      description: 获取软件产品的分页列表，支持搜索和过滤
+      summary: 获取软件产品列表
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 许可证产品管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSoftwareProductList'
+          description: ''
+    post:
+      operationId: api_v1_licenses_admin_products_create
+      description: 创建新的软件产品并生成RSA密钥对
+      summary: 创建软件产品
+      tags:
+      - 许可证产品管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SoftwareProductCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SoftwareProductCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SoftwareProductCreateRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareProductCreate'
+          description: ''
+  /api/v1/licenses/admin/products/{id}/:
+    get:
+      operationId: api_v1_licenses_admin_products_retrieve
+      description: 根据ID获取指定软件产品的详细信息
+      summary: 获取软件产品详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证产品管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareProduct'
+          description: ''
+    put:
+      operationId: api_v1_licenses_admin_products_update
+      description: 更新指定软件产品的信息
+      summary: 更新软件产品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证产品管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SoftwareProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SoftwareProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SoftwareProductRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareProduct'
+          description: ''
+    patch:
+      operationId: api_v1_licenses_admin_products_partial_update
+      description: 部分更新指定软件产品的信息
+      summary: 部分更新软件产品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证产品管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSoftwareProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSoftwareProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSoftwareProductRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareProduct'
+          description: ''
+    delete:
+      operationId: api_v1_licenses_admin_products_destroy
+      description: 软删除指定的软件产品
+      summary: 删除软件产品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证产品管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/licenses/admin/products/{id}/regenerate_keypair/:
+    post:
+      operationId: api_v1_licenses_admin_products_regenerate_keypair_create
+      description: 为软件产品重新生成RSA密钥对
+      summary: 重新生成产品密钥对
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证产品管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SoftwareProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SoftwareProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SoftwareProductRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 密钥对重新生成成功
+  /api/v1/licenses/admin/products/{id}/statistics/:
+    get:
+      operationId: api_v1_licenses_admin_products_statistics_retrieve
+      description: 获取指定产品的许可证、激活和机器绑定统计信息
+      summary: 获取产品统计信息
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 许可证产品管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 统计信息
+  /api/v1/licenses/admin/quotas/:
+    get:
+      operationId: api_v1_licenses_admin_quotas_list
+      description: 获取租户许可证配额的分页列表，支持按租户和产品过滤
+      summary: 获取租户许可证配额列表
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - 租户许可证配额管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTenantLicenseQuotaList'
+          description: ''
+    post:
+      operationId: api_v1_licenses_admin_quotas_create
+      description: 为指定租户和产品创建许可证配额限制
+      summary: 创建租户许可证配额
+      tags:
+      - 租户许可证配额管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantLicenseQuotaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TenantLicenseQuotaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TenantLicenseQuotaRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantLicenseQuota'
+          description: ''
+  /api/v1/licenses/admin/quotas/{id}/:
+    get:
+      operationId: api_v1_licenses_admin_quotas_retrieve
+      description: 根据ID获取指定租户许可证配额的详细信息
+      summary: 获取租户许可证配额详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 租户许可证配额管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantLicenseQuota'
+          description: ''
+    put:
+      operationId: api_v1_licenses_admin_quotas_update
+      description: 更新指定租户许可证配额的信息
+      summary: 更新租户许可证配额
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 租户许可证配额管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantLicenseQuotaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TenantLicenseQuotaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TenantLicenseQuotaRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantLicenseQuota'
+          description: ''
+    patch:
+      operationId: api_v1_licenses_admin_quotas_partial_update
+      description: 部分更新指定租户许可证配额的信息
+      summary: 部分更新租户许可证配额
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 租户许可证配额管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantLicenseQuotaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantLicenseQuotaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTenantLicenseQuotaRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantLicenseQuota'
+          description: ''
+    delete:
+      operationId: api_v1_licenses_admin_quotas_destroy
+      description: 软删除指定的租户许可证配额
+      summary: 删除租户许可证配额
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 租户许可证配额管理
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/licenses/heartbeat/:
+    post:
+      operationId: api_v1_licenses_heartbeat_create
+      description: 发送许可证使用心跳，更新最后使用时间和状态信息
+      summary: 许可证心跳
+      tags:
+      - 许可证激活API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          description: 心跳成功
+        '400':
+          description: 心跳失败
+  /api/v1/licenses/info/{license_key}/:
+    get:
+      operationId: api_v1_licenses_info_retrieve
+      description: 根据许可证密钥获取许可证详细信息（不敏感信息）
+      summary: 获取许可证信息
+      parameters:
+      - in: path
+        name: license_key
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: license_key
+        schema:
+          type: string
+        description: 许可证密钥
+        required: true
+      tags:
+      - 许可证信息查询
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          description: 信息获取成功
+        '404':
+          description: 许可证未找到
+  /api/v1/licenses/reports/dashboard/:
+    get:
+      operationId: api_v1_licenses_reports_dashboard_retrieve
+      description: 获取许可证管理仪表板的统计数据和图表信息
+      summary: 获取仪表板统计数据
+      tags:
+      - 许可证仪表板
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 仪表板统计数据
+  /api/v1/licenses/reports/generate/:
+    post:
+      operationId: api_v1_licenses_reports_generate_create
+      description: 根据指定参数生成自定义许可证报表，支持异步生成和导出
+      summary: 生成自定义报表
+      tags:
+      - 许可证报告
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LicenseReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LicenseReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LicenseReportRequest'
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          description: 报表生成成功
+        '400':
+          description: 参数验证失败
+  /api/v1/licenses/status/:
+    get:
+      operationId: api_v1_licenses_status_retrieve
+      description: 获取许可证服务器的运行状态和基本信息
+      summary: 获取服务器状态
+      tags:
+      - 许可证服务状态
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          description: 服务器状态信息
+  /api/v1/licenses/verify/:
+    post:
+      operationId: api_v1_licenses_verify_create
+      description: 验证许可证激活状态，检查激活码和机器指纹匹配
+      summary: 验证激活状态
+      tags:
+      - 许可证激活API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyActivationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyActivationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyActivationRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      - {}
+      responses:
+        '200':
+          description: 验证成功
+        '400':
+          description: 验证失败
   /api/v1/members/:
     get:
       operationId: api_v1_members_list
@@ -7438,7 +8834,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this 用户菜单.
         required: true
       - in: path
         name: pk
@@ -7570,6 +8967,11 @@ paths:
           type: string
         description: 按客户类型筛选订单
       - in: query
+        name: end_date
+        schema:
+          type: string
+        description: 按服务时间范围筛选（结束日期）
+      - in: query
         name: language
         schema:
           type: string
@@ -7612,6 +9014,11 @@ paths:
         schema:
           type: string
         description: 按服务类型筛选订单
+      - in: query
+        name: start_date
+        schema:
+          type: string
+        description: 按服务时间范围筛选（起始日期）
       tags:
       - 订单管理
       security:
@@ -7635,6 +9042,98 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/OrderCreateRequest'
+            examples:
+              标准翻译订单示例:
+                value:
+                  source_platform: 官网
+                  project_manager: 五组
+                  customer_type: 老客户
+                  order_date: '2025-07-15'
+                  service_type: 文档翻译
+                  language: 中英
+                  customer_count: 5000字
+                  translation_count: 5000字
+                  service_time: 2025-07-20前交稿
+                  project_location: 线上
+                  translator: 张三
+                  customer_price: 0.3元/字
+                  customer_total_amount: '1500.00'
+                  translator_fee: '750.00'
+                  translator_price: 0.15元/字
+                  translator_payment_status: 待付款
+                  translator_payment_method: 支付宝
+                  project_fee: '50.00'
+                  project_details: 技术文档翻译，包含5个Word文档
+                  cost_details: 版式调整费用50元
+                  refund_amount: '0.00'
+                  refund_reason: null
+                  payment_status: paid
+                  payment_date: '2025-07-15'
+                  payment_method: 微信支付
+                  invoice_status: pending
+                  invoice_info: 需要开具增值税专用发票
+                  remarks: 客户要求保持原文格式
+                  customer: 1
+                  customer_contact: 5
+                summary: 创建标准翻译订单示例
+              口译服务订单示例:
+                value:
+                  source_platform: 电话咨询
+                  project_manager: 三组
+                  customer_type: VIP客户
+                  order_date: '2025-07-16'
+                  service_type: 口译服务
+                  language: 中日
+                  customer_count: 1天
+                  translation_count: 1天
+                  service_time: 2025-07-25 9:00-17:00
+                  project_location: 上海市浦东新区xx大厦
+                  translator: 李四
+                  customer_price: 3000元/天
+                  customer_total_amount: '3000.00'
+                  translator_fee: '1800.00'
+                  translator_price: 1800元/天
+                  translator_payment_status: 未付款
+                  translator_payment_method: 对公转账
+                  project_fee: '200.00'
+                  project_details: 商务会议交替传译
+                  cost_details: 交通费200元
+                  payment_status: unpaid
+                  invoice_status: not_required
+                  remarks: 译员需提前30分钟到场
+                  customer: 2
+                  customer_contact: 8
+                summary: 创建口译服务订单示例
+              校对服务订单示例:
+                value:
+                  source_platform: 邮件咨询
+                  project_manager: 八组
+                  customer_type: 新客户
+                  order_date: '2025-07-17'
+                  service_type: 校对服务
+                  language: 中英
+                  customer_count: 3000字
+                  translation_count: 3000字
+                  service_time: 2025-07-18前交稿
+                  project_location: 线上
+                  translator: 王五
+                  customer_price: 0.1元/字
+                  customer_total_amount: '300.00'
+                  translator_fee: '150.00'
+                  translator_price: 0.05元/字
+                  translator_payment_status: 待付款
+                  translator_payment_method: 微信
+                  project_fee: '0.00'
+                  project_details: 英文论文校对
+                  payment_status: paid
+                  payment_date: '2025-07-17'
+                  payment_method: 支付宝
+                  invoice_status: issued
+                  invoice_info: 已开具电子发票
+                  remarks: 客户要求重点检查专业术语
+                  customer: 3
+                  customer_contact: 12
+                summary: 创建校对服务订单示例
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/OrderCreateRequest'
@@ -7651,6 +9150,98 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderCreate'
+              examples:
+                标准翻译订单示例:
+                  value:
+                    source_platform: 官网
+                    project_manager: 五组
+                    customer_type: 老客户
+                    order_date: '2025-07-15'
+                    service_type: 文档翻译
+                    language: 中英
+                    customer_count: 5000字
+                    translation_count: 5000字
+                    service_time: 2025-07-20前交稿
+                    project_location: 线上
+                    translator: 张三
+                    customer_price: 0.3元/字
+                    customer_total_amount: '1500.00'
+                    translator_fee: '750.00'
+                    translator_price: 0.15元/字
+                    translator_payment_status: 待付款
+                    translator_payment_method: 支付宝
+                    project_fee: '50.00'
+                    project_details: 技术文档翻译，包含5个Word文档
+                    cost_details: 版式调整费用50元
+                    refund_amount: '0.00'
+                    refund_reason: null
+                    payment_status: paid
+                    payment_date: '2025-07-15'
+                    payment_method: 微信支付
+                    invoice_status: pending
+                    invoice_info: 需要开具增值税专用发票
+                    remarks: 客户要求保持原文格式
+                    customer: 1
+                    customer_contact: 5
+                  summary: 创建标准翻译订单示例
+                口译服务订单示例:
+                  value:
+                    source_platform: 电话咨询
+                    project_manager: 三组
+                    customer_type: VIP客户
+                    order_date: '2025-07-16'
+                    service_type: 口译服务
+                    language: 中日
+                    customer_count: 1天
+                    translation_count: 1天
+                    service_time: 2025-07-25 9:00-17:00
+                    project_location: 上海市浦东新区xx大厦
+                    translator: 李四
+                    customer_price: 3000元/天
+                    customer_total_amount: '3000.00'
+                    translator_fee: '1800.00'
+                    translator_price: 1800元/天
+                    translator_payment_status: 未付款
+                    translator_payment_method: 对公转账
+                    project_fee: '200.00'
+                    project_details: 商务会议交替传译
+                    cost_details: 交通费200元
+                    payment_status: unpaid
+                    invoice_status: not_required
+                    remarks: 译员需提前30分钟到场
+                    customer: 2
+                    customer_contact: 8
+                  summary: 创建口译服务订单示例
+                校对服务订单示例:
+                  value:
+                    source_platform: 邮件咨询
+                    project_manager: 八组
+                    customer_type: 新客户
+                    order_date: '2025-07-17'
+                    service_type: 校对服务
+                    language: 中英
+                    customer_count: 3000字
+                    translation_count: 3000字
+                    service_time: 2025-07-18前交稿
+                    project_location: 线上
+                    translator: 王五
+                    customer_price: 0.1元/字
+                    customer_total_amount: '300.00'
+                    translator_fee: '150.00'
+                    translator_price: 0.05元/字
+                    translator_payment_status: 待付款
+                    translator_payment_method: 微信
+                    project_fee: '0.00'
+                    project_details: 英文论文校对
+                    payment_status: paid
+                    payment_date: '2025-07-17'
+                    payment_method: 支付宝
+                    invoice_status: issued
+                    invoice_info: 已开具电子发票
+                    remarks: 客户要求重点检查专业术语
+                    customer: 3
+                    customer_contact: 12
+                  summary: 创建校对服务订单示例
           description: ''
   /api/v1/orders/{order_id}/history/:
     get:
@@ -7663,12 +9254,6 @@ paths:
         schema:
           type: string
           pattern: ^\d+$
-        required: true
-      - in: query
-        name: order_id
-        schema:
-          type: integer
-        description: 订单ID
         required: true
       - name: ordering
         required: false
@@ -7712,12 +9297,6 @@ paths:
           type: string
           pattern: ^\d+$
         required: true
-      - in: query
-        name: order_id
-        schema:
-          type: integer
-        description: 订单ID
-        required: true
       - in: path
         name: version
         schema:
@@ -7726,12 +9305,6 @@ paths:
           minimum: 0
           format: int64
           title: 版本号
-        required: true
-      - in: query
-        name: version
-        schema:
-          type: integer
-        description: 版本号
         required: true
       tags:
       - 订单历史
@@ -7791,12 +9364,6 @@ paths:
           pattern: ^\d+$
         required: true
       - in: query
-        name: order_id
-        schema:
-          type: integer
-        description: 订单ID
-        required: true
-      - in: query
         name: version1
         schema:
           type: integer
@@ -7846,7 +9413,7 @@ paths:
           description: ''
     put:
       operationId: api_v1_orders_update
-      description: 更新指定ID的订单信息
+      description: 更新指定ID的订单信息，应传入订单的所有字段
       summary: 更新订单
       parameters:
       - in: path
@@ -7862,6 +9429,70 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/OrderUpdateRequest'
+            examples:
+              更新订单完整示例:
+                value:
+                  source_platform: 官网
+                  project_manager: 五组
+                  customer_type: 老客户
+                  order_date: '2025-07-15'
+                  service_type: 文档翻译
+                  language: 中英
+                  customer_count: 5000字
+                  translation_count: 5000字
+                  service_time: 2025-07-20前交稿
+                  project_location: 线上
+                  translator: 张三
+                  customer_price: 0.3元/字
+                  customer_total_amount: '1500.00'
+                  translator_fee: '750.00'
+                  translator_price: 0.15元/字
+                  translator_payment_status: 待付款
+                  translator_payment_method: 支付宝
+                  project_fee: '50.00'
+                  project_details: 技术文档翻译，包含5个Word文档
+                  cost_details: 版式调整费用50元
+                  refund_amount: '0.00'
+                  refund_reason: null
+                  payment_status: paid
+                  payment_date: '2025-07-15'
+                  payment_method: 微信支付
+                  payment_remarks: 已确认收款
+                  invoice_status: pending
+                  invoice_info: 需要开具增值税专用发票
+                  contract_number: ''
+                  contract_info: ''
+                  contract_remarks: ''
+                  delivery_address: ''
+                  order_address: ''
+                  remarks: 客户要求保持原文格式
+                  follow_up_record: ''
+                  customer: 1
+                  customer_contact: 5
+                summary: 更新订单的完整示例 - 包含所有字段
+              更新订单状态示例:
+                value:
+                  payment_status: paid
+                  payment_date: '2025-07-18'
+                  payment_method: 银行转账
+                  payment_remarks: 已确认收款
+                summary: 更新订单支付状态（部分更新，实际应传入完整对象）
+              更新译员信息示例:
+                value:
+                  translator: 赵六
+                  translator_fee: '800.00'
+                  translator_price: 0.16元/字
+                  translator_payment_status: 已付款
+                  translator_payment_method: 微信转账
+                  project_fee: '100.00'
+                  project_details: 文档翻译含排版服务
+                summary: 更新译员和费用信息（部分更新，实际应传入完整对象）
+              更新发票状态示例:
+                value:
+                  invoice_status: issued
+                  invoice_info: 增值税专用发票已邮寄，单号：SF1234567890
+                  remarks: 客户已确认收到发票
+                summary: 更新发票状态信息（部分更新，实际应传入完整对象）
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/OrderUpdateRequest'
@@ -7878,10 +9509,74 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderUpdate'
+              examples:
+                更新订单完整示例:
+                  value:
+                    source_platform: 官网
+                    project_manager: 五组
+                    customer_type: 老客户
+                    order_date: '2025-07-15'
+                    service_type: 文档翻译
+                    language: 中英
+                    customer_count: 5000字
+                    translation_count: 5000字
+                    service_time: 2025-07-20前交稿
+                    project_location: 线上
+                    translator: 张三
+                    customer_price: 0.3元/字
+                    customer_total_amount: '1500.00'
+                    translator_fee: '750.00'
+                    translator_price: 0.15元/字
+                    translator_payment_status: 待付款
+                    translator_payment_method: 支付宝
+                    project_fee: '50.00'
+                    project_details: 技术文档翻译，包含5个Word文档
+                    cost_details: 版式调整费用50元
+                    refund_amount: '0.00'
+                    refund_reason: null
+                    payment_status: paid
+                    payment_date: '2025-07-15'
+                    payment_method: 微信支付
+                    payment_remarks: 已确认收款
+                    invoice_status: pending
+                    invoice_info: 需要开具增值税专用发票
+                    contract_number: ''
+                    contract_info: ''
+                    contract_remarks: ''
+                    delivery_address: ''
+                    order_address: ''
+                    remarks: 客户要求保持原文格式
+                    follow_up_record: ''
+                    customer: 1
+                    customer_contact: 5
+                  summary: 更新订单的完整示例 - 包含所有字段
+                更新订单状态示例:
+                  value:
+                    payment_status: paid
+                    payment_date: '2025-07-18'
+                    payment_method: 银行转账
+                    payment_remarks: 已确认收款
+                  summary: 更新订单支付状态（部分更新，实际应传入完整对象）
+                更新译员信息示例:
+                  value:
+                    translator: 赵六
+                    translator_fee: '800.00'
+                    translator_price: 0.16元/字
+                    translator_payment_status: 已付款
+                    translator_payment_method: 微信转账
+                    project_fee: '100.00'
+                    project_details: 文档翻译含排版服务
+                  summary: 更新译员和费用信息（部分更新，实际应传入完整对象）
+                更新发票状态示例:
+                  value:
+                    invoice_status: issued
+                    invoice_info: 增值税专用发票已邮寄，单号：SF1234567890
+                    remarks: 客户已确认收到发票
+                  summary: 更新发票状态信息（部分更新，实际应传入完整对象）
           description: ''
     patch:
       operationId: api_v1_orders_partial_update
-      description: 部分更新指定ID的订单信息
+      description: 部分更新指定ID的订单信息，允许只传入需要更新的字段
       summary: 部分更新订单
       parameters:
       - in: path
@@ -7897,6 +9592,19 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PatchedOrderUpdateRequest'
+            examples:
+              部分更新示例:
+                value:
+                  remarks: 客户要求加急处理，将于明天完成
+                  follow_up_record: 2025-07-18已电话告知客户进度
+                summary: 部分更新订单备注和回访记录
+              部分更新支付状态示例:
+                value:
+                  payment_status: paid
+                  payment_date: '2025-07-18'
+                  payment_method: 银行转账
+                  payment_remarks: 已确认收款
+                summary: 部分更新订单支付状态
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/PatchedOrderUpdateRequest'
@@ -7912,6 +9620,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderUpdate'
+              examples:
+                部分更新示例:
+                  value:
+                    remarks: 客户要求加急处理，将于明天完成
+                    follow_up_record: 2025-07-18已电话告知客户进度
+                  summary: 部分更新订单备注和回访记录
+                部分更新支付状态示例:
+                  value:
+                    payment_status: paid
+                    payment_date: '2025-07-18'
+                    payment_method: 银行转账
+                    payment_remarks: 已确认收款
+                  summary: 部分更新订单支付状态
           description: ''
     delete:
       operationId: api_v1_orders_destroy
@@ -7932,6 +9653,96 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/orders/bulk_operations/:
+    post:
+      operationId: api_v1_orders_bulk_operations_create
+      description: 批量更新或删除订单
+      summary: 批量操作订单
+      tags:
+      - 订单管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order_ids:
+                  type: array
+                  items:
+                    type: integer
+                action:
+                  type: string
+                  enum:
+                  - update
+                  - delete
+                data:
+                  type: object
+              required:
+              - order_ids
+              - action
+            examples:
+              批量更新支付状态:
+                value:
+                  order_ids:
+                  - 1
+                  - 2
+                  - 3
+                  action: update
+                  data:
+                    payment_status: paid
+                    payment_date: '2025-07-18'
+                    payment_method: 银行转账
+                summary: 批量更新订单支付状态
+              批量删除订单:
+                value:
+                  order_ids:
+                  - 4
+                  - 5
+                  - 6
+                  action: delete
+                summary: 批量删除多个订单
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  updated_count:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: string
+              examples:
+                批量更新支付状态:
+                  value:
+                    order_ids:
+                    - 1
+                    - 2
+                    - 3
+                    action: update
+                    data:
+                      payment_status: paid
+                      payment_date: '2025-07-18'
+                      payment_method: 银行转账
+                  summary: 批量更新订单支付状态
+                批量删除订单:
+                  value:
+                    order_ids:
+                    - 4
+                    - 5
+                    - 6
+                    action: delete
+                  summary: 批量删除多个订单
+          description: ''
   /api/v1/orders/contacts/{contact_id}/orders/:
     get:
       operationId: api_v1_orders_contacts_orders_list
@@ -7945,11 +9756,10 @@ paths:
           pattern: ^\d+$
         required: true
       - in: query
-        name: contact_id
+        name: end_date
         schema:
-          type: integer
-        description: 联系人ID
-        required: true
+          type: string
+        description: 按服务时间范围筛选（结束日期）
       - in: query
         name: order_date_from
         schema:
@@ -7993,6 +9803,11 @@ paths:
         schema:
           type: string
         description: 按服务类型筛选订单
+      - in: query
+        name: start_date
+        schema:
+          type: string
+        description: 按服务时间范围筛选（起始日期）
       tags:
       - 联系人订单
       security:
@@ -8004,6 +9819,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedOrderListList'
+              examples:
+                联系人订单列表响应示例:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 2
+                      next: null
+                      previous: null
+                      results:
+                      - id: 18
+                        customer_name: 北京科技有限公司
+                        created_by_info:
+                          id: 1
+                          username: admin
+                          display_name: 管理员
+                        customer_contact_info:
+                          id: 12
+                          username: lisi
+                          display_name: 李四
+                          phone: '13900139000'
+                          email: lisi@example.com
+                        profit: 600.0
+                        profit_rate: 0.3
+                        formatted_profit: ¥600.00
+                        formatted_profit_rate: 30.00%
+                        created_at: '2025-07-10T11:22:33.123456Z'
+                        updated_at: '2025-07-10T11:22:33.123456Z'
+                        is_deleted: false
+                        order_number: PQ-202507-1234
+                        service_type: 校对服务
+                        language: 中英
+                        customer_count: 3000字
+                        customer_total_amount: '2000.00'
+                        payment_status: paid
+                        payment_status_display: 已支付
+                      - id: 19
+                        customer_name: 北京科技有限公司
+                        created_by_info:
+                          id: 1
+                          username: admin
+                          display_name: 管理员
+                        customer_contact_info:
+                          id: 12
+                          username: lisi
+                          display_name: 李四
+                          phone: '13900139000'
+                          email: lisi@example.com
+                        profit: 800.0
+                        profit_rate: 0.4
+                        formatted_profit: ¥800.00
+                        formatted_profit_rate: 40.00%
+                        created_at: '2025-07-12T14:25:36.234567Z'
+                        updated_at: '2025-07-12T14:25:36.234567Z'
+                        is_deleted: false
+                        order_number: PQ-202507-5432
+                        service_type: 文档翻译
+                        language: 中英
+                        customer_count: 2000字
+                        customer_total_amount: '2000.00'
+                        payment_status: unpaid
+                        payment_status_display: 未支付
+                  summary: 联系人订单列表响应示例
           description: ''
   /api/v1/orders/contacts/{contact_id}/orders/{id}/:
     get:
@@ -8017,23 +9896,11 @@ paths:
           type: string
           pattern: ^\d+$
         required: true
-      - in: query
-        name: contact_id
-        schema:
-          type: integer
-        description: 联系人ID
-        required: true
       - in: path
         name: id
         schema:
           type: integer
         description: A unique integer value identifying this 订单.
-        required: true
-      - in: query
-        name: id
-        schema:
-          type: integer
-        description: 订单ID
         required: true
       tags:
       - 联系人订单
@@ -8046,6 +9913,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderDetail'
+              examples:
+                联系人订单详情响应示例:
+                  value:
+                    id: 18
+                    customer:
+                      id: 3
+                      name: 北京科技有限公司
+                      code: BJ001
+                      contact_name: 李四
+                      contact_phone: '13900139000'
+                      contact_email: lisi@example.com
+                    customer_contact:
+                      id: 12
+                      username: lisi
+                      display_name: 李四
+                      phone: '13900139000'
+                      email: lisi@example.com
+                    history_count: 1
+                    profit: 600.0
+                    profit_rate: 0.3
+                    formatted_profit: ¥600.00
+                    formatted_profit_rate: 30.00%
+                    created_at: '2025-07-10T11:22:33.123456Z'
+                    updated_at: '2025-07-10T11:22:33.123456Z'
+                    is_deleted: false
+                    order_number: PQ-202507-1234
+                    source_platform: 邮件咨询
+                    project_manager: 八组
+                    customer_type: 新客户
+                    order_date: '2025-07-10'
+                    service_type: 校对服务
+                    service_type_display: 校对服务
+                    language: 中英
+                    customer_count: 3000字
+                    translation_count: 3000字
+                    service_time: 2025-07-12前交稿
+                    project_location: 线上
+                    translator: 王五
+                    customer_price: 0.67元/字
+                    customer_total_amount: '2000.00'
+                    translator_fee: '1200.00'
+                    translator_price: 0.4元/字
+                    translator_payment_status: 已付款
+                    translator_payment_method: 微信
+                    project_fee: '200.00'
+                    project_details: 英文论文校对
+                    cost_details: 术语表制作费用200元
+                    refund_amount: '0.00'
+                    refund_reason: null
+                    payment_status: paid
+                    payment_status_display: 已支付
+                    payment_date: '2025-07-10'
+                    payment_method: 支付宝
+                    payment_remarks: 已确认收款
+                    invoice_status: issued
+                    invoice_status_display: 已开具
+                    invoice_info: 已开具电子发票
+                    contract_number: null
+                    contract_info: null
+                    contract_remarks: null
+                    delivery_address: null
+                    order_address: 北京市海淀区xx路xx号
+                    remarks: 客户要求重点检查专业术语
+                    follow_up_record: 2025-07-11已电话回访，客户表示满意
+                    tenant: 1
+                  summary: 联系人订单详情响应示例
           description: ''
   /api/v1/orders/customers/{customer_id}/orders/:
     get:
@@ -8060,11 +9993,10 @@ paths:
           pattern: ^\d+$
         required: true
       - in: query
-        name: customer_id
+        name: end_date
         schema:
-          type: integer
-        description: 客户ID
-        required: true
+          type: string
+        description: 按服务时间范围筛选（结束日期）
       - in: query
         name: order_date_from
         schema:
@@ -8108,6 +10040,11 @@ paths:
         schema:
           type: string
         description: 按服务类型筛选订单
+      - in: query
+        name: start_date
+        schema:
+          type: string
+        description: 按服务时间范围筛选（起始日期）
       tags:
       - 客户订单
       security:
@@ -8119,6 +10056,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedOrderListList'
+              examples:
+                客户订单列表响应示例:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 2
+                      next: null
+                      previous: null
+                      results:
+                      - id: 15
+                        customer_name: 上海环球公司
+                        created_by_info:
+                          id: 1
+                          username: admin
+                          display_name: 管理员
+                        customer_contact_info:
+                          id: 8
+                          username: zhangsan
+                          display_name: 张三
+                          phone: '13800138000'
+                          email: zhangsan@example.com
+                        profit: 1000.0
+                        profit_rate: 0.4
+                        formatted_profit: ¥1000.00
+                        formatted_profit_rate: 40.00%
+                        created_at: '2025-07-15T08:30:45.123456Z'
+                        updated_at: '2025-07-15T08:30:45.123456Z'
+                        is_deleted: false
+                        order_number: PQ-202507-5678
+                        service_type: 文档翻译
+                        language: 中英
+                        customer_count: 5000字
+                        customer_total_amount: '2500.00'
+                        payment_status: paid
+                        payment_status_display: 已支付
+                      - id: 16
+                        customer_name: 上海环球公司
+                        created_by_info:
+                          id: 1
+                          username: admin
+                          display_name: 管理员
+                        customer_contact_info:
+                          id: 8
+                          username: zhangsan
+                          display_name: 张三
+                          phone: '13800138000'
+                          email: zhangsan@example.com
+                        profit: 800.0
+                        profit_rate: 0.32
+                        formatted_profit: ¥800.00
+                        formatted_profit_rate: 32.00%
+                        created_at: '2025-07-16T09:45:30.234567Z'
+                        updated_at: '2025-07-16T09:45:30.234567Z'
+                        is_deleted: false
+                        order_number: PQ-202507-9876
+                        service_type: 口译服务
+                        language: 中日
+                        customer_count: 1天
+                        customer_total_amount: '2500.00'
+                        payment_status: unpaid
+                        payment_status_display: 未支付
+                  summary: 客户订单列表响应示例
           description: ''
   /api/v1/orders/customers/{customer_id}/orders/{id}/:
     get:
@@ -8132,23 +10133,11 @@ paths:
           type: string
           pattern: ^\d+$
         required: true
-      - in: query
-        name: customer_id
-        schema:
-          type: integer
-        description: 客户ID
-        required: true
       - in: path
         name: id
         schema:
           type: integer
         description: A unique integer value identifying this 订单.
-        required: true
-      - in: query
-        name: id
-        schema:
-          type: integer
-        description: 订单ID
         required: true
       tags:
       - 客户订单
@@ -8161,21 +10150,113 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderDetail'
+              examples:
+                客户订单详情响应示例:
+                  value:
+                    id: 15
+                    customer:
+                      id: 5
+                      name: 上海环球公司
+                      code: SH001
+                      contact_name: 张三
+                      contact_phone: '13800138000'
+                      contact_email: zhangsan@example.com
+                    customer_contact:
+                      id: 8
+                      username: zhangsan
+                      display_name: 张三
+                      phone: '13800138000'
+                      email: zhangsan@example.com
+                    history_count: 2
+                    profit: 1000.0
+                    profit_rate: 0.4
+                    formatted_profit: ¥1000.00
+                    formatted_profit_rate: 40.00%
+                    created_at: '2025-07-15T08:30:45.123456Z'
+                    updated_at: '2025-07-15T08:30:45.123456Z'
+                    is_deleted: false
+                    order_number: PQ-202507-5678
+                    source_platform: 官网
+                    project_manager: 五组
+                    customer_type: 老客户
+                    order_date: '2025-07-15'
+                    service_type: 文档翻译
+                    service_type_display: 文档翻译
+                    language: 中英
+                    customer_count: 5000字
+                    translation_count: 5000字
+                    service_time: 2025-07-20前交稿
+                    project_location: 线上
+                    translator: 张三
+                    customer_price: 0.5元/字
+                    customer_total_amount: '2500.00'
+                    translator_fee: '1250.00'
+                    translator_price: 0.25元/字
+                    translator_payment_status: 已付款
+                    translator_payment_method: 支付宝
+                    project_fee: '250.00'
+                    project_details: 技术文档翻译，包含10个Word文档
+                    cost_details: 版式调整费用250元
+                    refund_amount: '0.00'
+                    refund_reason: null
+                    payment_status: paid
+                    payment_status_display: 已支付
+                    payment_date: '2025-07-15'
+                    payment_method: 银行转账
+                    payment_remarks: 已确认收款
+                    invoice_status: issued
+                    invoice_status_display: 已开具
+                    invoice_info: 增值税专用发票已邮寄
+                    contract_number: HT-202507-001
+                    contract_info: 合同已签署
+                    contract_remarks: 客户要求提前交付
+                    delivery_address: 上海市浦东新区xx路xx号
+                    order_address: 上海市浦东新区xx路xx号
+                    remarks: 客户要求保持原文格式
+                    follow_up_record: 2025-07-16已电话回访，客户表示满意
+                    tenant: 1
+                  summary: 客户订单详情响应示例
           description: ''
   /api/v1/orders/export/:
-    get:
-      operationId: api_v1_orders_export_retrieve
-      description: 导出订单数据为Excel文件
+    post:
+      operationId: api_v1_orders_export_create
+      description: 导出订单数据为Excel文件，可选择按订单ID列表进行筛选
       summary: 导出订单数据
-      parameters:
-      - in: query
-        name: format
-        schema:
-          type: string
-          default: xlsx
-        description: 导出格式，支持 xlsx, csv
       tags:
       - 订单管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order_ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: 要导出的订单ID列表，如果不提供则导出所有订单
+                format:
+                  type: string
+                  enum:
+                  - xlsx
+                  - csv
+                  default: xlsx
+                  description: 导出格式，支持xlsx和csv
+            examples:
+              导出指定订单:
+                value:
+                  order_ids:
+                  - 1
+                  - 2
+                  - 3
+                  - 4
+                  - 5
+                  format: xlsx
+                summary: 导出指定ID的订单
+              导出所有订单为CSV:
+                value:
+                  format: csv
+                summary: 导出所有订单为CSV格式
       security:
       - Bearer: []
       - Bearer: []
@@ -8184,7 +10265,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Order'
+                description: Excel或CSV文件下载
+                content:
+                  application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: {}
+                  text/csv: {}
+              examples:
+                导出指定订单:
+                  value:
+                    order_ids:
+                    - 1
+                    - 2
+                    - 3
+                    - 4
+                    - 5
+                    format: xlsx
+                  summary: 导出指定ID的订单
+                导出所有订单为CSV:
+                  value:
+                    format: csv
+                  summary: 导出所有订单为CSV格式
           description: ''
   /api/v1/orders/import_data/:
     post:
@@ -8231,11 +10330,260 @@ paths:
                     type: array
                     items:
                       type: string
+              examples:
+                导入订单响应示例:
+                  value:
+                    status: success
+                    total_records: 10
+                    created: 8
+                    updated: 0
+                    failed: 2
+                    errors:
+                    - '行5: 客户ID不存在'
+                    - '行8: 金额格式不正确'
+                  summary: 导入订单响应示例
+          description: ''
+  /api/v1/orders/members/{member_id}/orders/:
+    get:
+      operationId: api_v1_orders_members_orders_list
+      description: 获取与特定成员相关的所有订单，支持分页、排序和筛选
+      summary: 获取成员订单列表
+      parameters:
+      - in: query
+        name: end_date
+        schema:
+          type: string
+        description: 按服务时间范围筛选（结束日期）
+      - in: path
+        name: member_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: query
+        name: order_date_from
+        schema:
+          type: string
+        description: 按订单日期范围筛选（起始）
+      - in: query
+        name: order_date_to
+        schema:
+          type: string
+        description: 按订单日期范围筛选（结束）
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: payment_status
+        schema:
+          type: string
+        description: 按支付状态筛选订单
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: 搜索订单编号、译员等信息
+      - in: query
+        name: service_type
+        schema:
+          type: string
+        description: 按服务类型筛选订单
+      - in: query
+        name: start_date
+        schema:
+          type: string
+        description: 按服务时间范围筛选（起始日期）
+      tags:
+      - 成员订单
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOrderListList'
+              examples:
+                成员订单列表响应示例:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - count: 2
+                      next: null
+                      previous: null
+                      results:
+                      - id: 15
+                        customer_name: 上海环球公司
+                        created_by_info:
+                          id: 1
+                          username: admin
+                          display_name: 管理员
+                        customer_contact_info:
+                          id: 1
+                          username: zhangsan
+                          display_name: 张三
+                          phone: '13800138000'
+                          email: zhangsan@example.com
+                        profit: 1000.0
+                        profit_rate: 0.4
+                        formatted_profit: ¥1000.00
+                        formatted_profit_rate: 40.00%
+                        created_at: '2025-07-15T08:30:45.123456Z'
+                        updated_at: '2025-07-15T08:30:45.123456Z'
+                        is_deleted: false
+                        order_number: PQ-202507-5678
+                        service_type: 文档翻译
+                        language: 中英
+                        customer_count: 5000字
+                        customer_total_amount: '2500.00'
+                        payment_status: paid
+                        payment_status_display: 已支付
+                      - id: 16
+                        customer_name: 上海环球公司
+                        created_by_info:
+                          id: 1
+                          username: admin
+                          display_name: 管理员
+                        customer_contact_info:
+                          id: 1
+                          username: zhangsan
+                          display_name: 张三
+                          phone: '13800138000'
+                          email: zhangsan@example.com
+                        profit: 800.0
+                        profit_rate: 0.32
+                        formatted_profit: ¥800.00
+                        formatted_profit_rate: 32.00%
+                        created_at: '2025-07-16T09:45:30.234567Z'
+                        updated_at: '2025-07-16T09:45:30.234567Z'
+                        is_deleted: false
+                        order_number: PQ-202507-9876
+                        service_type: 口译服务
+                        language: 中日
+                        customer_count: 1天
+                        customer_total_amount: '2500.00'
+                        payment_status: unpaid
+                        payment_status_display: 未支付
+                  summary: 成员订单列表响应示例
+          description: ''
+  /api/v1/orders/members/{member_id}/orders/{id}/:
+    get:
+      operationId: api_v1_orders_members_orders_retrieve
+      description: 获取与特定成员相关的指定订单详情
+      summary: 获取成员订单详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 订单.
+        required: true
+      - in: path
+        name: member_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - 成员订单
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+              examples:
+                成员订单详情响应示例:
+                  value:
+                    id: 15
+                    customer:
+                      id: 5
+                      name: 上海环球公司
+                      code: SH001
+                      contact_name: 张三
+                      contact_phone: '13800138000'
+                      contact_email: zhangsan@example.com
+                    customer_contact:
+                      id: 1
+                      username: zhangsan
+                      display_name: 张三
+                      phone: '13800138000'
+                      email: zhangsan@example.com
+                    history_count: 2
+                    profit: 1000.0
+                    profit_rate: 0.4
+                    formatted_profit: ¥1000.00
+                    formatted_profit_rate: 40.00%
+                    created_at: '2025-07-15T08:30:45.123456Z'
+                    updated_at: '2025-07-15T08:30:45.123456Z'
+                    is_deleted: false
+                    order_number: PQ-202507-5678
+                    source_platform: 官网
+                    project_manager: 五组
+                    customer_type: 老客户
+                    order_date: '2025-07-15'
+                    service_type: 文档翻译
+                    service_type_display: 文档翻译
+                    language: 中英
+                    customer_count: 5000字
+                    translation_count: 5000字
+                    service_time: 2025-07-20前交稿
+                    project_location: 线上
+                    translator: 张三
+                    customer_price: 0.5元/字
+                    customer_total_amount: '2500.00'
+                    translator_fee: '1250.00'
+                    translator_price: 0.25元/字
+                    translator_payment_status: 已付款
+                    translator_payment_method: 支付宝
+                    project_fee: '250.00'
+                    project_details: 技术文档翻译，包含10个Word文档
+                    cost_details: 版式调整费用250元
+                    refund_amount: '0.00'
+                    refund_reason: null
+                    payment_status: paid
+                    payment_status_display: 已支付
+                    payment_date: '2025-07-15'
+                    payment_method: 银行转账
+                    payment_remarks: 已确认收款
+                    invoice_status: issued
+                    invoice_status_display: 已开具
+                    invoice_info: 增值税专用发票已邮寄
+                    contract_number: HT-202507-001
+                    contract_info: 合同已签署
+                    contract_remarks: 客户要求提前交付
+                    delivery_address: 上海市浦东新区xx路xx号
+                    order_address: 上海市浦东新区xx路xx号
+                    remarks: 客户要求保持原文格式
+                    follow_up_record: 2025-07-16已电话回访，客户表示满意
+                    tenant: 1
+                  summary: 成员订单详情响应示例
           description: ''
   /api/v1/orders/reminders/:
     get:
       operationId: api_v1_orders_reminders_retrieve
-      description: 获取需要关注的订单提醒
+      description: 获取未来N天内需要交付的订单提醒
       summary: 获取订单提醒
       parameters:
       - in: query
@@ -8243,7 +10591,7 @@ paths:
         schema:
           type: integer
           default: 7
-        description: 近期天数范围
+        description: 未来天数范围
       - in: query
         name: keyword
         schema:
@@ -8264,7 +10612,7 @@ paths:
   /api/v1/orders/statistics/:
     get:
       operationId: api_v1_orders_statistics_retrieve
-      description: 获取订单的统计数据，包括总数、总金额、平均金额等
+      description: 获取订单的统计数据，包括总数、总金额、平均金额等。所有日期筛选和周期统计都基于服务时间(service_time)。
       summary: 获取订单统计数据
       parameters:
       - in: query
@@ -8276,7 +10624,7 @@ paths:
         name: end_date
         schema:
           type: string
-        description: 结束日期
+        description: 服务时间范围结束日期
       - in: query
         name: period
         schema:
@@ -8292,7 +10640,7 @@ paths:
         name: start_date
         schema:
           type: string
-        description: 开始日期
+        description: 服务时间范围起始日期
       tags:
       - 订单管理
       security:
@@ -10808,6 +13156,35 @@ components:
       - status_type
       - tenant_name
       - user
+    AccountTypeEnum:
+      enum:
+      - user
+      - member
+      type: string
+      description: |-
+        * `user` - user
+        * `member` - member
+    ActivateLicenseRequest:
+      type: object
+      description: 激活许可证请求序列化器
+      properties:
+        license_key:
+          type: string
+          minLength: 1
+          maxLength: 200
+        hardware_info: {}
+        client_info: {}
+      required:
+      - hardware_info
+      - license_key
+    ActivationTypeEnum:
+      enum:
+      - online
+      - offline
+      type: string
+      description: |-
+        * `online` - 在线激活
+        * `offline` - 离线激活
     AdminChangePasswordRequest:
       type: object
       description: 管理员修改用户密码的序列化器
@@ -10985,9 +13362,8 @@ components:
           title: 发布时间
         cover_image:
           type: string
-          nullable: true
-          title: 封面图片
-          maxLength: 255
+          description: 获取完整的封面图片URL
+          readOnly: true
         template:
           type: string
           nullable: true
@@ -11034,6 +13410,7 @@ components:
       - author_info
       - categories
       - content
+      - cover_image
       - created_at
       - id
       - meta
@@ -11102,11 +13479,6 @@ components:
           format: date-time
           nullable: true
           title: 发布时间
-        cover_image:
-          type: string
-          nullable: true
-          title: 封面图片
-          maxLength: 255
         template:
           type: string
           nullable: true
@@ -11161,9 +13533,8 @@ components:
           title: 是否置顶
         cover_image:
           type: string
-          nullable: true
-          title: 封面图片
-          maxLength: 255
+          description: 获取完整的封面图片URL
+          readOnly: true
         published_at:
           type: string
           format: date-time
@@ -11196,6 +13567,7 @@ components:
       - author_info
       - categories
       - comments_count
+      - cover_image
       - id
       - likes_count
       - slug
@@ -12094,11 +14466,13 @@ components:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 创建时间
         updated_at:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 更新时间
         created_by:
           type: string
@@ -12164,6 +14538,7 @@ components:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 创建时间
       required:
       - created_at
@@ -12199,11 +14574,13 @@ components:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 创建时间
         updated_at:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 更新时间
       required:
       - created_at
@@ -12256,11 +14633,13 @@ components:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 创建时间
         updated_at:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 更新时间
       required:
       - created_at
@@ -12535,11 +14914,13 @@ components:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 创建时间
         updated_at:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 更新时间
         created_by:
           type: string
@@ -12625,11 +15006,13 @@ components:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 创建时间
         updated_at:
           type: string
           format: date-time
           readOnly: true
+          nullable: true
           title: 更新时间
         created_by:
           type: string
@@ -12723,6 +15106,555 @@ components:
         * `weekly` - 每周
         * `monthly` - 每月
         * `custom` - 自定义
+    HeartbeatEventTypeEnum:
+      enum:
+      - startup
+      - heartbeat
+      - feature_use
+      - shutdown
+      - verification
+      type: string
+      description: |-
+        * `startup` - 软件启动
+        * `heartbeat` - 心跳检测
+        * `feature_use` - 功能使用
+        * `shutdown` - 软件关闭
+        * `verification` - 在线验证
+    HeartbeatRequest:
+      type: object
+      description: 心跳检测请求序列化器
+      properties:
+        activation_code:
+          type: string
+          minLength: 1
+          maxLength: 100
+        event_type:
+          $ref: '#/components/schemas/HeartbeatEventTypeEnum'
+        event_data: {}
+        software_version:
+          type: string
+          minLength: 1
+          maxLength: 50
+        session_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        system_status: {}
+      required:
+      - activation_code
+      - event_type
+    License:
+      type: object
+      description: 许可证序列化器（列表显示）
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        product:
+          type: integer
+          title: 关联产品
+        product_name:
+          type: string
+          readOnly: true
+        plan:
+          type: integer
+          title: 许可方案
+        plan_name:
+          type: string
+          readOnly: true
+        tenant:
+          type: integer
+          title: 租户
+        tenant_name:
+          type: string
+          readOnly: true
+        license_key:
+          type: string
+          readOnly: true
+          title: 许可证密钥
+        customer_name:
+          type: string
+          title: 客户名称
+          maxLength: 100
+        customer_email:
+          type: string
+          format: email
+          title: 客户邮箱
+          maxLength: 254
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        current_activations:
+          type: integer
+          readOnly: true
+          title: 当前激活数
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 签发时间
+        expires_at:
+          type: string
+          format: date-time
+          title: 过期时间
+        last_verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 最后验证时间
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status50cEnum'
+          title: 状态
+        machine_bindings_count:
+          type: string
+          readOnly: true
+        days_until_expiry:
+          type: string
+          readOnly: true
+        notes:
+          type: string
+          title: 备注
+      required:
+      - current_activations
+      - days_until_expiry
+      - expires_at
+      - id
+      - issued_at
+      - last_verified_at
+      - license_key
+      - machine_bindings_count
+      - plan
+      - plan_name
+      - product
+      - product_name
+      - tenant
+      - tenant_name
+    LicenseActivation:
+      type: object
+      description: 许可证激活序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        license:
+          type: integer
+          title: 关联许可证
+        license_key_preview:
+          type: string
+          readOnly: true
+        machine_id:
+          type: string
+          readOnly: true
+        activation_type:
+          allOf:
+          - $ref: '#/components/schemas/ActivationTypeEnum'
+          title: 激活类型
+        activation_code:
+          type: string
+          readOnly: true
+          title: 激活码
+        client_version:
+          type: string
+          title: 客户端版本
+          maxLength: 50
+        ip_address:
+          type: string
+          nullable: true
+          title: IP地址
+        result:
+          allOf:
+          - $ref: '#/components/schemas/ResultEnum'
+          title: 激活结果
+        error_message:
+          type: string
+          title: 错误消息
+        activated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 激活时间
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 过期时间
+      required:
+      - activated_at
+      - activation_code
+      - activation_type
+      - id
+      - license
+      - license_key_preview
+      - machine_id
+    LicenseCreate:
+      type: object
+      description: 许可证创建序列化器
+      properties:
+        product:
+          type: integer
+          title: 关联产品
+        plan:
+          type: integer
+          title: 许可方案
+        tenant:
+          type: integer
+          title: 租户
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        notes:
+          type: string
+          title: 备注
+      required:
+      - plan
+      - product
+      - tenant
+    LicenseCreateRequest:
+      type: object
+      description: 许可证创建序列化器
+      properties:
+        product:
+          type: integer
+          title: 关联产品
+        plan:
+          type: integer
+          title: 许可方案
+        tenant:
+          type: integer
+          title: 租户
+        customer_info:
+          writeOnly: true
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        validity_days:
+          type: integer
+          writeOnly: true
+        notes:
+          type: string
+          title: 备注
+      required:
+      - customer_info
+      - plan
+      - product
+      - tenant
+    LicenseDetail:
+      type: object
+      description: 许可证详情序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        product:
+          type: integer
+          title: 关联产品
+        product_name:
+          type: string
+          readOnly: true
+        plan:
+          type: integer
+          title: 许可方案
+        plan_name:
+          type: string
+          readOnly: true
+        tenant:
+          type: integer
+          title: 租户
+        tenant_name:
+          type: string
+          readOnly: true
+        license_key:
+          type: string
+          readOnly: true
+          title: 许可证密钥
+        customer_name:
+          type: string
+          title: 客户名称
+          maxLength: 100
+        customer_email:
+          type: string
+          format: email
+          title: 客户邮箱
+          maxLength: 254
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        current_activations:
+          type: integer
+          readOnly: true
+          title: 当前激活数
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 签发时间
+        expires_at:
+          type: string
+          format: date-time
+          title: 过期时间
+        last_verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 最后验证时间
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status50cEnum'
+          title: 状态
+        machine_bindings_count:
+          type: string
+          readOnly: true
+        days_until_expiry:
+          type: string
+          readOnly: true
+        notes:
+          type: string
+          title: 备注
+        machine_bindings:
+          type: string
+          readOnly: true
+        recent_activations:
+          type: string
+          readOnly: true
+        usage_stats:
+          type: string
+          readOnly: true
+        metadata:
+          title: 元数据
+      required:
+      - current_activations
+      - days_until_expiry
+      - expires_at
+      - id
+      - issued_at
+      - last_verified_at
+      - license_key
+      - machine_bindings
+      - machine_bindings_count
+      - plan
+      - plan_name
+      - product
+      - product_name
+      - recent_activations
+      - tenant
+      - tenant_name
+      - usage_stats
+    LicensePlan:
+      type: object
+      description: 许可证方案序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        product:
+          type: integer
+          title: 关联产品
+        product_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          title: 方案名称
+          maxLength: 100
+        code:
+          type: string
+          title: 方案代码
+          maxLength: 50
+        plan_type:
+          allOf:
+          - $ref: '#/components/schemas/PlanTypeEnum'
+          title: 方案类型
+        max_machines:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大机器数
+        validity_days:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 有效天数
+        features:
+          title: 功能配置
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: 价格
+        currency:
+          type: string
+          title: 货币
+          maxLength: 3
+        status:
+          allOf:
+          - $ref: '#/components/schemas/LicensePlanStatusEnum'
+          title: 状态
+        licenses_count:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 更新时间
+      required:
+      - code
+      - created_at
+      - id
+      - licenses_count
+      - name
+      - plan_type
+      - product
+      - product_name
+      - updated_at
+    LicensePlanRequest:
+      type: object
+      description: 许可证方案序列化器
+      properties:
+        product:
+          type: integer
+          title: 关联产品
+        name:
+          type: string
+          minLength: 1
+          title: 方案名称
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          title: 方案代码
+          maxLength: 50
+        plan_type:
+          allOf:
+          - $ref: '#/components/schemas/PlanTypeEnum'
+          title: 方案类型
+        max_machines:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大机器数
+        validity_days:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 有效天数
+        features:
+          title: 功能配置
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: 价格
+        currency:
+          type: string
+          minLength: 1
+          title: 货币
+          maxLength: 3
+        status:
+          allOf:
+          - $ref: '#/components/schemas/LicensePlanStatusEnum'
+          title: 状态
+      required:
+      - code
+      - name
+      - plan_type
+      - product
+    LicensePlanStatusEnum:
+      enum:
+      - active
+      - inactive
+      type: string
+      description: |-
+        * `active` - 启用
+        * `inactive` - 禁用
+    LicenseReportRequest:
+      type: object
+      description: 许可证报告序列化器
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        product_id:
+          type: integer
+        tenant_id:
+          type: integer
+        report_type:
+          allOf:
+          - $ref: '#/components/schemas/ReportTypeEnum'
+          default: summary
+    LicenseRequest:
+      type: object
+      description: 许可证序列化器（列表显示）
+      properties:
+        product:
+          type: integer
+          title: 关联产品
+        plan:
+          type: integer
+          title: 许可方案
+        tenant:
+          type: integer
+          title: 租户
+        customer_name:
+          type: string
+          title: 客户名称
+          maxLength: 100
+        customer_email:
+          type: string
+          format: email
+          title: 客户邮箱
+          maxLength: 254
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        expires_at:
+          type: string
+          format: date-time
+          title: 过期时间
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status50cEnum'
+          title: 状态
+        notes:
+          type: string
+          title: 备注
+      required:
+      - expires_at
+      - plan
+      - product
+      - tenant
     LoginRequest:
       type: object
       description: 登录序列化器
@@ -12736,6 +15668,87 @@ components:
       required:
       - password
       - username
+    MachineBinding:
+      type: object
+      description: 机器绑定序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        license:
+          type: integer
+          title: 关联许可证
+        license_key_preview:
+          type: string
+          readOnly: true
+        machine_id:
+          type: string
+          readOnly: true
+          title: 机器ID
+        hardware_summary:
+          readOnly: true
+        os_info:
+          title: 操作系统信息
+        last_ip_address:
+          type: string
+          nullable: true
+          title: 最后IP地址
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MachineBindingStatusEnum'
+          title: 状态
+        first_seen_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 首次绑定时间
+        last_seen_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 最后活跃时间
+        days_since_last_seen:
+          type: string
+          readOnly: true
+      required:
+      - days_since_last_seen
+      - first_seen_at
+      - hardware_summary
+      - id
+      - last_seen_at
+      - license
+      - license_key_preview
+      - machine_id
+    MachineBindingRequest:
+      type: object
+      description: 机器绑定序列化器
+      properties:
+        license:
+          type: integer
+          title: 关联许可证
+        os_info:
+          title: 操作系统信息
+        last_ip_address:
+          type: string
+          nullable: true
+          minLength: 1
+          title: 最后IP地址
+        status:
+          allOf:
+          - $ref: '#/components/schemas/MachineBindingStatusEnum'
+          title: 状态
+      required:
+      - license
+    MachineBindingStatusEnum:
+      enum:
+      - active
+      - inactive
+      - blocked
+      type: string
+      description: |-
+        * `active` - 活跃
+        * `inactive` - 非活跃
+        * `blocked` - 已阻止
     Member:
       type: object
       description: 普通用户序列化器
@@ -12826,7 +15839,11 @@ components:
       - username
     MemberCreateRequest:
       type: object
-      description: 普通用户创建序列化器
+      description: |-
+        管理端创建普通成员序列化器
+        - 超级管理员可通过 body 的 tenant_id 指定租户；否则使用当前管理员的 tenant
+        - 校验密码一致性与强度
+        - 在目标租户下校验 username/email/phone 唯一
       properties:
         username:
           type: string
@@ -12851,14 +15868,12 @@ components:
           nullable: true
           title: 昵称
           maxLength: 30
-        first_name:
+        wechat_id:
           type: string
-          title: 名字
-          maxLength: 150
-        last_name:
-          type: string
-          title: 姓氏
-          maxLength: 150
+          nullable: true
+          title: 微信号
+          description: 用户的微信号
+          maxLength: 32
         password:
           type: string
           writeOnly: true
@@ -12872,21 +15887,54 @@ components:
         tenant_id:
           type: integer
           writeOnly: true
-        avatar:
-          type: string
-          title: 头像
-          maxLength: 200
-        wechat_id:
-          type: string
-          nullable: true
-          title: 微信号
-          description: 用户的微信号
-          maxLength: 32
       required:
       - email
       - password
       - password_confirm
       - username
+    MemberMinimal:
+      type: object
+      description: 普通会员最小化序列化器，用于嵌套在其他序列化器中
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+        display_name:
+          type: string
+          readOnly: true
+        avatar:
+          type: string
+          description: 获取完整的头像URL
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: 邮箱
+        phone:
+          type: string
+          readOnly: true
+          nullable: true
+          title: 手机号
+        wechat_id:
+          type: string
+          readOnly: true
+          nullable: true
+          title: 微信号
+          description: 用户的微信号
+      required:
+      - avatar
+      - display_name
+      - email
+      - id
+      - phone
+      - username
+      - wechat_id
     MemberRequest:
       type: object
       description: 普通用户序列化器
@@ -12946,6 +15994,62 @@ components:
           maxLength: 32
       required:
       - email
+      - username
+    MemberSelfRegisterRequest:
+      type: object
+      description: |-
+        成员自助注册序列化器
+        - 仅从请求头 X-Tenant-ID 获取租户ID（忽略 body 的 tenant_id）
+        - 校验密码一致性与强度
+        - 校验在同一租户内的 username/email/phone 唯一
+        - 创建激活状态的 Member
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: 邮箱
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          title: 手机号
+          maxLength: 11
+        nick_name:
+          type: string
+          nullable: true
+          title: 昵称
+          maxLength: 30
+        wechat_id:
+          type: string
+          nullable: true
+          title: 微信号
+          description: 用户的微信号
+          maxLength: 32
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          title: 密码
+          maxLength: 128
+        password_confirm:
+          type: string
+          writeOnly: true
+          minLength: 1
+        tenant_id:
+          type: integer
+          writeOnly: true
+      required:
+      - email
+      - password
+      - password_confirm
       - username
     Menu:
       type: object
@@ -13405,10 +16509,10 @@ components:
           maxLength: 100
         service_time:
           type: string
+          format: date
           nullable: true
           title: 服务时间
-          description: 如：笔译的约定交稿时间、口译的项目具体时间
-          maxLength: 200
+          description: 服务交付日期
         project_location:
           type: string
           nullable: true
@@ -13647,10 +16751,10 @@ components:
           maxLength: 100
         service_time:
           type: string
+          format: date
           nullable: true
           title: 服务时间
-          description: 如：笔译的约定交稿时间、口译的项目具体时间
-          maxLength: 200
+          description: 服务交付日期
         project_location:
           type: string
           nullable: true
@@ -13918,10 +17022,10 @@ components:
           maxLength: 100
         service_time:
           type: string
+          format: date
           nullable: true
           title: 服务时间
-          description: 如：笔译的约定交稿时间、口译的项目具体时间
-          maxLength: 200
+          description: 服务交付日期
         project_location:
           type: string
           nullable: true
@@ -14125,10 +17229,10 @@ components:
           maxLength: 100
         service_time:
           type: string
+          format: date
           nullable: true
           title: 服务时间
-          description: 如：笔译的约定交稿时间、口译的项目具体时间
-          maxLength: 200
+          description: 服务交付日期
         project_location:
           type: string
           nullable: true
@@ -14299,7 +17403,7 @@ components:
           readOnly: true
         customer_contact:
           allOf:
-          - $ref: '#/components/schemas/UserMinimal'
+          - $ref: '#/components/schemas/MemberMinimal'
           readOnly: true
         history_count:
           type: string
@@ -14369,10 +17473,10 @@ components:
           maxLength: 100
         service_time:
           type: string
+          format: date
           nullable: true
           title: 服务时间
-          description: 如：笔译的约定交稿时间、口译的项目具体时间
-          maxLength: 200
+          description: 服务交付日期
         project_location:
           type: string
           nullable: true
@@ -14626,45 +17730,29 @@ components:
       - version
     OrderList:
       type: object
-      description: 订单列表序列化器（简化版，用于列表展示）
+      description: 订单列表序列化器（包含所有字段，与OrderSerializer保持一致）
       properties:
         id:
           type: integer
           readOnly: true
-        order_number:
+        payment_status_display:
           type: string
           readOnly: true
-          title: 订单编号
-        customer:
-          type: integer
-          readOnly: true
-          title: 客户
-        customer_name:
-          type: string
-          readOnly: true
-        service_type:
-          type: string
-          readOnly: true
-          title: 服务类型
         service_type_display:
           type: string
           readOnly: true
-        language:
+        invoice_status_display:
           type: string
           readOnly: true
-          title: 语种
-        customer_count:
+        customer_name:
           type: string
           readOnly: true
-          nullable: true
-          title: 客户数量
-          description: 如：份、字、天、半天、小时、页
-        customer_total_amount:
+        created_by_info:
           type: string
-          format: decimal
-          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
           readOnly: true
-          title: 客户总价
+        customer_contact_info:
+          type: string
+          readOnly: true
         profit:
           type: string
           readOnly: true
@@ -14675,20 +17763,6 @@ components:
           type: string
           readOnly: true
         formatted_profit_rate:
-          type: string
-          readOnly: true
-        payment_status:
-          type: string
-          readOnly: true
-          title: 支付状态
-        payment_status_display:
-          type: string
-          readOnly: true
-        invoice_status:
-          type: string
-          readOnly: true
-          title: 发票状态
-        invoice_status_display:
           type: string
           readOnly: true
         created_at:
@@ -14703,33 +17777,217 @@ components:
           readOnly: true
           nullable: true
           title: 更新时间
-        customer_contact_info:
+        is_deleted:
+          type: boolean
+          readOnly: true
+          title: 是否删除
+        order_number:
           type: string
           readOnly: true
-        created_by_info:
+          title: 订单编号
+        source_platform:
           type: string
+          nullable: true
+          title: 来源平台
+          description: 如：淘宝、小红书店铺、抖音私信等
+          maxLength: 100
+        project_manager:
+          type: string
+          nullable: true
+          title: 项目负责人
+          description: 如：三组、六组、九组等
+          maxLength: 100
+        customer_type:
+          type: string
+          nullable: true
+          title: 客户类型
+          description: 如：老客户、新客户、VIP客户等
+          maxLength: 100
+        order_date:
+          type: string
+          format: date
+          nullable: true
+          title: 下单日期
+        service_type:
+          type: string
+          title: 服务类型
+          maxLength: 200
+        language:
+          type: string
+          title: 语种
+          maxLength: 100
+        customer_count:
+          type: string
+          nullable: true
+          title: 客户数量
+          description: 如：份、字、天、半天、小时、页
+          maxLength: 100
+        translation_count:
+          type: string
+          nullable: true
+          title: 翻译数量
+          description: 与客户数量单位相同但单独计算
+          maxLength: 100
+        service_time:
+          type: string
+          format: date
+          nullable: true
+          title: 服务时间
+          description: 服务交付日期
+        project_location:
+          type: string
+          nullable: true
+          title: 项目地点
+          description: 如：城市、线上
+          maxLength: 100
+        translator:
+          type: string
+          nullable: true
+          title: 译员
+          maxLength: 100
+        customer_price:
+          type: string
+          nullable: true
+          title: 客户单价
+          description: 如：元/份、元/字、元/天、元/半天、元/小时、元/页
+          maxLength: 100
+        customer_total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: 客户总价
+        translator_fee:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: 译员费用
+        translator_price:
+          type: string
+          nullable: true
+          title: 翻译单价
+          description: 如：元/份、元/字、元/天、元/半天、元/小时、元/页
+          maxLength: 100
+        translator_payment_status:
+          type: string
+          nullable: true
+          title: 译费支付状态
+          description: 如：已付款、未付款、月结30天
+          maxLength: 100
+        translator_payment_method:
+          type: string
+          nullable: true
+          title: 译费支付方式
+          description: 如：对公转账、微信转账、支付宝转账
+          maxLength: 100
+        project_fee:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: 项目费用
+        project_details:
+          type: string
+          nullable: true
+          title: 项目明细
+        cost_details:
+          type: string
+          nullable: true
+          title: 费用明细
+        refund_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: 项目退款
+        refund_reason:
+          type: string
+          nullable: true
+          title: 退款原因
+          maxLength: 200
+        payment_status:
+          type: string
+          title: 支付状态
+          maxLength: 50
+        payment_date:
+          type: string
+          format: date
+          nullable: true
+          title: 支付日期
+        payment_method:
+          type: string
+          nullable: true
+          title: 支付方式
+          maxLength: 50
+        payment_remarks:
+          type: string
+          nullable: true
+          title: 支付备注
+        invoice_status:
+          type: string
+          title: 发票状态
+          maxLength: 50
+        invoice_info:
+          type: string
+          nullable: true
+          title: 发票信息
+        contract_number:
+          type: string
+          nullable: true
+          title: 合同编号
+          maxLength: 100
+        contract_info:
+          type: string
+          nullable: true
+          title: 合同信息
+        contract_remarks:
+          type: string
+          nullable: true
+          title: 合同备注
+        delivery_address:
+          type: string
+          nullable: true
+          title: 收件地址
+          maxLength: 200
+        order_address:
+          type: string
+          nullable: true
+          title: 订单地址
+          maxLength: 200
+        remarks:
+          type: string
+          nullable: true
+          title: 备注
+        follow_up_record:
+          type: string
+          nullable: true
+          title: 回访记录
+        tenant:
+          type: integer
           readOnly: true
+          nullable: true
+          title: 租户
+        customer:
+          type: integer
+          title: 客户
+        customer_contact:
+          type: integer
+          nullable: true
+          title: 客户联系人
       required:
       - created_at
       - created_by_info
       - customer
       - customer_contact_info
-      - customer_count
       - customer_name
-      - customer_total_amount
       - formatted_profit
       - formatted_profit_rate
       - id
-      - invoice_status
       - invoice_status_display
-      - language
+      - is_deleted
       - order_number
-      - payment_status
       - payment_status_display
       - profit
       - profit_rate
-      - service_type
       - service_type_display
+      - tenant
       - updated_at
     OrderStatistics:
       type: object
@@ -14879,10 +18137,10 @@ components:
           maxLength: 100
         service_time:
           type: string
+          format: date
           nullable: true
           title: 服务时间
-          description: 如：笔译的约定交稿时间、口译的项目具体时间
-          maxLength: 200
+          description: 服务交付日期
         project_location:
           type: string
           nullable: true
@@ -15086,10 +18344,10 @@ components:
           maxLength: 100
         service_time:
           type: string
+          format: date
           nullable: true
           title: 服务时间
-          description: 如：笔译的约定交稿时间、口译的项目具体时间
-          maxLength: 200
+          description: 服务交付日期
         project_location:
           type: string
           nullable: true
@@ -15433,6 +18691,98 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CustomerTenantRelationDetail'
+    PaginatedLicenseActivationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LicenseActivation'
+    PaginatedLicenseList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/License'
+    PaginatedLicensePlanList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LicensePlan'
+    PaginatedMachineBindingList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MachineBinding'
     PaginatedMenuList:
       type: object
       required:
@@ -15571,6 +18921,52 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Role'
+    PaginatedSecurityAuditLogList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecurityAuditLog'
+    PaginatedSoftwareProductList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoftwareProduct'
     PaginatedTagGroupList:
       type: object
       required:
@@ -15686,6 +19082,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TaskTemplate'
+    PaginatedTenantLicenseQuotaList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantLicenseQuota'
     PaginatedUserRoleList:
       type: object
       required:
@@ -15760,12 +19179,20 @@ components:
       - token
     PasswordResetRequestRequest:
       type: object
-      description: 请求密码重置的序列化器
+      description: |-
+        请求密码重置的序列化器（统一 User/Member）
+        - 仅校验基本字段格式，不泄露账号是否存在
+        - account_type 可选：user / member，用于明确主体；不提供时由服务端尝试自动判定
+        - tenant_id 可选：当 account_type=member 且邮箱在多租户下重复时需要提供
       properties:
         email:
           type: string
           format: email
           minLength: 1
+        account_type:
+          $ref: '#/components/schemas/AccountTypeEnum'
+        tenant_id:
+          type: integer
       required:
       - email
     PasswordResetVerifyRequest:
@@ -16231,6 +19658,94 @@ components:
           nullable: true
           title: 更新者
           maxLength: 50
+    PatchedLicensePlanRequest:
+      type: object
+      description: 许可证方案序列化器
+      properties:
+        product:
+          type: integer
+          title: 关联产品
+        name:
+          type: string
+          minLength: 1
+          title: 方案名称
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          title: 方案代码
+          maxLength: 50
+        plan_type:
+          allOf:
+          - $ref: '#/components/schemas/PlanTypeEnum'
+          title: 方案类型
+        max_machines:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大机器数
+        validity_days:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 有效天数
+        features:
+          title: 功能配置
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          title: 价格
+        currency:
+          type: string
+          minLength: 1
+          title: 货币
+          maxLength: 3
+        status:
+          allOf:
+          - $ref: '#/components/schemas/LicensePlanStatusEnum'
+          title: 状态
+    PatchedLicenseRequest:
+      type: object
+      description: 许可证序列化器（列表显示）
+      properties:
+        product:
+          type: integer
+          title: 关联产品
+        plan:
+          type: integer
+          title: 许可方案
+        tenant:
+          type: integer
+          title: 租户
+        customer_name:
+          type: string
+          title: 客户名称
+          maxLength: 100
+        customer_email:
+          type: string
+          format: email
+          title: 客户邮箱
+          maxLength: 254
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        expires_at:
+          type: string
+          format: date-time
+          title: 过期时间
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status50cEnum'
+          title: 状态
+        notes:
+          type: string
+          title: 备注
     PatchedMemberRequest:
       type: object
       description: 普通用户序列化器
@@ -16454,10 +19969,10 @@ components:
           maxLength: 100
         service_time:
           type: string
+          format: date
           nullable: true
           title: 服务时间
-          description: 如：笔译的约定交稿时间、口译的项目具体时间
-          maxLength: 200
+          description: 服务交付日期
         project_location:
           type: string
           nullable: true
@@ -16642,6 +20157,44 @@ components:
           nullable: true
           title: 所属租户
           description: 为空表示系统角色，所有租户可见
+    PatchedSoftwareProductRequest:
+      type: object
+      description: 软件产品序列化器
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 产品名称
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          title: 产品代码
+          maxLength: 50
+        description:
+          type: string
+          title: 产品描述
+        version:
+          type: string
+          minLength: 1
+          title: 版本号
+          maxLength: 20
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        offline_days:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 离线允许天数
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SoftwareProductStatusEnum'
+          title: 状态
     PatchedSubAccountRequest:
       type: object
       description: 子账号序列化器
@@ -16874,6 +20427,33 @@ components:
           nullable: true
           title: 联系人电话
           maxLength: 20
+    PatchedTenantLicenseQuotaRequest:
+      type: object
+      description: 租户许可证配额序列化器
+      properties:
+        tenant:
+          type: integer
+          title: 租户
+        product:
+          type: integer
+          title: 产品
+        max_licenses:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大许可证数
+        quota_start_date:
+          type: string
+          format: date
+          title: 配额开始日期
+        quota_end_date:
+          type: string
+          format: date
+          title: 配额结束日期
+        is_active:
+          type: boolean
+          title: 是否激活
     PatchedUserRoleRequest:
       type: object
       description: 用户角色关联序列化器
@@ -17059,6 +20639,20 @@ components:
       - category
       - code
       - name
+    PlanTypeEnum:
+      enum:
+      - trial
+      - basic
+      - professional
+      - enterprise
+      - custom
+      type: string
+      description: |-
+        * `trial` - 试用版
+        * `basic` - 基础版
+        * `professional` - 专业版
+        * `enterprise` - 企业版
+        * `custom` - 定制版
     RegisterRequest:
       type: object
       description: 用户注册序列化器
@@ -17126,6 +20720,18 @@ components:
         * `distributor` - 分销商
         * `supplier` - 供应商
         * `other` - 其他
+    ReportTypeEnum:
+      enum:
+      - usage
+      - activation
+      - security
+      - summary
+      type: string
+      description: |-
+        * `usage` - usage
+        * `activation` - activation
+        * `security` - security
+        * `summary` - summary
     RequestMethodEnum:
       enum:
       - GET
@@ -17144,6 +20750,16 @@ components:
         * `DELETE` - DELETE
         * `OPTIONS` - OPTIONS
         * `HEAD` - HEAD
+    ResultEnum:
+      enum:
+      - success
+      - failed
+      - pending
+      type: string
+      description: |-
+        * `success` - 成功
+        * `failed` - 失败
+        * `pending` - 待处理
     ResultItem:
       type: object
       properties:
@@ -17460,6 +21076,90 @@ components:
       - data
       - message
       - success
+    SecurityAuditLog:
+      type: object
+      description: 安全审计日志序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        event_type:
+          allOf:
+          - $ref: '#/components/schemas/SecurityAuditLogEventTypeEnum'
+          title: 事件类型
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/SeverityEnum'
+          title: 严重级别
+        user:
+          type: integer
+          nullable: true
+          title: 用户
+        user_name:
+          type: string
+          readOnly: true
+        tenant:
+          type: integer
+          nullable: true
+          title: 租户
+        tenant_name:
+          type: string
+          readOnly: true
+        ip_address:
+          type: string
+          nullable: true
+          title: IP地址
+        user_agent:
+          type: string
+          title: 用户代理
+        details:
+          title: 事件详情
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 时间戳
+      required:
+      - event_type
+      - id
+      - severity
+      - tenant_name
+      - timestamp
+      - user_name
+    SecurityAuditLogEventTypeEnum:
+      enum:
+      - license_generated
+      - license_activated
+      - license_revoked
+      - keypair_generated
+      - suspicious_activity
+      - authentication_failed
+      - privilege_escalation
+      - data_access
+      - system_change
+      type: string
+      description: |-
+        * `license_generated` - 许可证生成
+        * `license_activated` - 许可证激活
+        * `license_revoked` - 许可证撤销
+        * `keypair_generated` - 密钥对生成
+        * `suspicious_activity` - 可疑活动
+        * `authentication_failed` - 认证失败
+        * `privilege_escalation` - 权限提升
+        * `data_access` - 数据访问
+        * `system_change` - 系统变更
+    SeverityEnum:
+      enum:
+      - LOW
+      - MEDIUM
+      - HIGH
+      - CRITICAL
+      type: string
+      description: |-
+        * `LOW` - 低
+        * `MEDIUM` - 中
+        * `HIGH` - 高
+        * `CRITICAL` - 严重
     SimpleResponse:
       type: object
       properties:
@@ -17477,6 +21177,196 @@ components:
           description: 响应消息
       required:
       - detail
+    SoftwareProduct:
+      type: object
+      description: 软件产品序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: 产品名称
+          maxLength: 100
+        code:
+          type: string
+          title: 产品代码
+          maxLength: 50
+        description:
+          type: string
+          title: 产品描述
+        version:
+          type: string
+          title: 版本号
+          maxLength: 20
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        offline_days:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 离线允许天数
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SoftwareProductStatusEnum'
+          title: 状态
+        license_plans_count:
+          type: string
+          readOnly: true
+        total_licenses:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 更新时间
+      required:
+      - code
+      - created_at
+      - id
+      - license_plans_count
+      - name
+      - total_licenses
+      - updated_at
+    SoftwareProductCreate:
+      type: object
+      description: 软件产品创建序列化器
+      properties:
+        name:
+          type: string
+          title: 产品名称
+          maxLength: 100
+        code:
+          type: string
+          title: 产品代码
+          maxLength: 50
+        description:
+          type: string
+          title: 产品描述
+        version:
+          type: string
+          title: 版本号
+          maxLength: 20
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        offline_days:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 离线允许天数
+      required:
+      - code
+      - name
+    SoftwareProductCreateRequest:
+      type: object
+      description: 软件产品创建序列化器
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 产品名称
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          title: 产品代码
+          maxLength: 50
+        description:
+          type: string
+          title: 产品描述
+        version:
+          type: string
+          minLength: 1
+          title: 版本号
+          maxLength: 20
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        offline_days:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 离线允许天数
+        generate_keypair:
+          type: boolean
+          writeOnly: true
+          default: true
+      required:
+      - code
+      - name
+    SoftwareProductRequest:
+      type: object
+      description: 软件产品序列化器
+      properties:
+        name:
+          type: string
+          minLength: 1
+          title: 产品名称
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          title: 产品代码
+          maxLength: 50
+        description:
+          type: string
+          title: 产品描述
+        version:
+          type: string
+          minLength: 1
+          title: 版本号
+          maxLength: 20
+        max_activations:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大激活数
+        offline_days:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 离线允许天数
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SoftwareProductStatusEnum'
+          title: 状态
+      required:
+      - code
+      - name
+    SoftwareProductStatusEnum:
+      enum:
+      - active
+      - inactive
+      - deprecated
+      type: string
+      description: |-
+        * `active` - 启用
+        * `inactive` - 禁用
+        * `deprecated` - 已弃用
     Status4f9Enum:
       enum:
       - draft
@@ -17489,6 +21379,20 @@ components:
         * `pending` - 待审核
         * `published` - 已发布
         * `archived` - 已归档
+    Status50cEnum:
+      enum:
+      - generated
+      - activated
+      - suspended
+      - revoked
+      - expired
+      type: string
+      description: |-
+        * `generated` - 已生成
+        * `activated` - 已激活
+        * `suspended` - 已挂起
+        * `revoked` - 已撤销
+        * `expired` - 已过期
     Status8d5Enum:
       enum:
       - active
@@ -18422,6 +22326,91 @@ components:
           maxLength: 20
       required:
       - name
+    TenantLicenseQuota:
+      type: object
+      description: 租户许可证配额序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        tenant:
+          type: integer
+          title: 租户
+        tenant_name:
+          type: string
+          readOnly: true
+        product:
+          type: integer
+          title: 产品
+        product_name:
+          type: string
+          readOnly: true
+        max_licenses:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大许可证数
+        current_licenses:
+          type: integer
+          readOnly: true
+          title: 当前许可证数
+        quota_start_date:
+          type: string
+          format: date
+          title: 配额开始日期
+        quota_end_date:
+          type: string
+          format: date
+          title: 配额结束日期
+        is_active:
+          type: boolean
+          title: 是否激活
+        usage_percentage:
+          type: string
+          readOnly: true
+      required:
+      - current_licenses
+      - id
+      - product
+      - product_name
+      - quota_end_date
+      - quota_start_date
+      - tenant
+      - tenant_name
+      - usage_percentage
+    TenantLicenseQuotaRequest:
+      type: object
+      description: 租户许可证配额序列化器
+      properties:
+        tenant:
+          type: integer
+          title: 租户
+        product:
+          type: integer
+          title: 产品
+        max_licenses:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+          title: 最大许可证数
+        quota_start_date:
+          type: string
+          format: date
+          title: 配额开始日期
+        quota_end_date:
+          type: string
+          format: date
+          title: 配额结束日期
+        is_active:
+          type: boolean
+          title: 是否激活
+      required:
+      - product
+      - quota_end_date
+      - quota_start_date
+      - tenant
     TenantQuotaUpdateRequest:
       type: object
       description: 租户配额更新序列化器
@@ -18642,10 +22631,6 @@ components:
           type: boolean
           description: 获取是否为普通成员
           readOnly: true
-        is_super_admin:
-          type: boolean
-          readOnly: true
-          title: 是否超级管理员
         role:
           type: string
           description: 获取用户角色
@@ -18668,7 +22653,6 @@ components:
       - id
       - is_admin
       - is_member
-      - is_super_admin
       - role
       - tenant_name
       - username
@@ -18773,11 +22757,30 @@ components:
           type: string
           description: 获取完整的头像URL
           readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: 邮箱
+        phone:
+          type: string
+          readOnly: true
+          nullable: true
+          title: 手机号
+        wechat_id:
+          type: string
+          readOnly: true
+          nullable: true
+          title: 微信号
+          description: 用户的微信号
       required:
       - avatar
       - display_name
+      - email
       - id
+      - phone
       - username
+      - wechat_id
     UserPasswordUpdateRequest:
       type: object
       description: 用户密码更新序列化器
@@ -19041,6 +23044,21 @@ components:
         * `gold` - 黄金
         * `silver` - 白银
         * `bronze` - 青铜
+    VerifyActivationRequest:
+      type: object
+      description: 验证激活状态请求序列化器
+      properties:
+        activation_code:
+          type: string
+          minLength: 1
+          maxLength: 100
+        machine_fingerprint:
+          type: string
+          minLength: 1
+          maxLength: 64
+      required:
+      - activation_code
+      - machine_fingerprint
     VisibilityEnum:
       enum:
       - public

@@ -23,6 +23,7 @@ class APIAuthMiddleware(MiddlewareMixin):
     """
     
     def process_request(self, request):
+        logger.info(f"[进入中间件] APIAuthMiddleware - 处理请求: {request.path}")
         # 只处理API请求
         if not request.path.startswith('/api/'):
             logger.debug(f"非API路径，跳过JWT认证中间件: {request.path}")

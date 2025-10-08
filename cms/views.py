@@ -18,6 +18,11 @@ from common.permissions import IsSuperAdmin, IsAdmin
 from common.pagination import StandardResultsSetPagination
 from common.authentication.jwt_auth import JWTAuthentication
 from common.viewsets import TenantModelViewSet
+from common.utils.user_permissions import (
+    is_super_admin, is_admin, is_member, can_create_content,
+    can_edit_content, can_delete_content, can_moderate_comments,
+    filter_queryset_by_user_permissions
+)
 from users.models import User
 from .models import (
     Article, Category, Tag, TagGroup, Comment, 
@@ -352,6 +357,12 @@ class ArticleViewSet(TenantModelViewSet):
         
         租户ID已通过TenantModelViewSet自动处理
         """
+        user = self.request.user
+        
+        # 检查用户是否有创建权限
+        if not can_create_content(user):
+            raise serializers.ValidationError(_("您没有权限创建文章"))
+        
         # 设置作者为当前用户
         serializer.save(author=self.request.user)
         
@@ -428,10 +439,14 @@ class ArticleViewSet(TenantModelViewSet):
         tenant = user.tenant
         instance = self.get_object()
         
+        # 检查用户是否有编辑权限
+        if not can_edit_content(user, instance.author):
+            raise serializers.ValidationError(_("您没有权限编辑此文章"))
+        
         # 验证作者权限
         if 'author' in serializer.validated_data:
             new_author = serializer.validated_data['author']
-            if new_author != instance.author and not (user.is_super_admin or user.is_admin):
+            if new_author != instance.author and not (is_super_admin(user) or is_admin(user)):
                 raise serializers.ValidationError(_("您没有权限更改文章作者"))
         
         # 更新文章
@@ -463,6 +478,10 @@ class ArticleViewSet(TenantModelViewSet):
         """
         user = self.request.user
         tenant = user.tenant
+        
+        # 检查用户是否有删除权限
+        if not can_delete_content(user, instance.author):
+            raise serializers.ValidationError(_("您没有权限删除此文章"))
         
         # 检查是否强制删除
         force_delete = self.request.query_params.get('force', 'false').lower() == 'true'
@@ -746,6 +765,13 @@ class ArticleViewSet(TenantModelViewSet):
         article = self.get_object()
         user = request.user
         
+        # Member 不能进行写操作
+        if is_member(user):
+            return Response(
+                {"detail": _("普通成员没有权限进行此操作")},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         # 验证文章是否已是发布状态
         if article.status == 'published':
             return Response(
@@ -971,9 +997,9 @@ class ArticleViewSet(TenantModelViewSet):
                 raise ValidationError({"detail": f"无效的租户ID: {tenant_id}"})
         
         # 根据权限获取可操作的文章
-        if user.is_super_admin:
+        if is_super_admin(user):
             articles = Article.objects.filter(id__in=article_ids)
-        elif user.is_admin:
+        elif is_admin(user):
             articles = Article.objects.filter(id__in=article_ids, tenant_id=tenant_id)
         else:
             articles = Article.objects.filter(id__in=article_ids, tenant_id=tenant_id, author=user)
@@ -1164,7 +1190,7 @@ class CategoryViewSet(TenantModelViewSet):
             return queryset.filter(is_active=True)
         
         # 基于租户的过滤
-        if not user.is_super_admin:
+        if not is_super_admin(user):
             queryset = queryset.filter(tenant=user.tenant)
         
         return queryset
@@ -1340,7 +1366,7 @@ class CategoryViewSet(TenantModelViewSet):
         if not user.is_authenticated:
             # 匿名用户只能看到激活的分类
             root_categories = Category.objects.filter(parent=None, is_active=True)
-        elif user.is_super_admin:
+        elif is_super_admin(user):
             root_categories = Category.objects.filter(parent=None)
         else:
             root_categories = Category.objects.filter(parent=None, tenant=user.tenant)
@@ -1502,7 +1528,7 @@ class TagGroupViewSet(TenantModelViewSet):
             return queryset.filter(is_active=True)
         
         # 基于租户的过滤
-        if not user.is_super_admin:
+        if not is_super_admin(user):
             queryset = queryset.filter(tenant=user.tenant)
         
         return queryset
@@ -1740,7 +1766,7 @@ class TagViewSet(TenantModelViewSet):
             return queryset.filter(is_active=True)
         
         # 基于租户的过滤
-        if not user.is_super_admin:
+        if not is_super_admin(user):
             queryset = queryset.filter(tenant=user.tenant)
         
         return queryset
@@ -1873,7 +1899,7 @@ class TagViewSet(TenantModelViewSet):
             tags_with_count = Tag.objects.filter(is_active=True).annotate(
                 articles_count=Count('article_tags')
             ).values('id', 'name', 'slug', 'color', 'articles_count')
-        elif user.is_super_admin:
+        elif is_super_admin(user):
             tags_with_count = Tag.objects.annotate(
                 articles_count=Count('article_tags')
             ).values('id', 'name', 'slug', 'color', 'articles_count')
@@ -2031,11 +2057,11 @@ class CommentViewSet(TenantModelViewSet):
             return queryset.filter(status='approved')
         
         # 基于租户的过滤
-        if not user.is_super_admin:
+        if not is_super_admin(user):
             queryset = queryset.filter(tenant=user.tenant)
         
         # 基于用户角色和权限的过滤
-        if not (user.is_super_admin or user.is_admin):
+        if not (is_super_admin(user) or is_admin(user)):
             # 普通用户只能看到已批准的评论或自己的评论
             queryset = queryset.filter(
                 Q(status='approved') |  # 已批准的评论
@@ -2094,7 +2120,7 @@ class CommentViewSet(TenantModelViewSet):
             raise serializers.ValidationError(_("文章不存在或无权限访问"))
         
         # 设置初始状态（管理员和作者的评论自动批准，其他需要审核）
-        if user.is_super_admin or user.is_admin or user.id == article.author_id:
+        if is_super_admin(user) or is_admin(user) or user.id == article.author_id:
             serializer.validated_data['status'] = 'approved'
         else:
             serializer.validated_data['status'] = 'pending'
@@ -2254,7 +2280,7 @@ class CommentViewSet(TenantModelViewSet):
         if not user.is_authenticated:
             replies = replies.filter(status='approved')
         # 非管理员且已认证用户只能看到已批准的评论或自己的评论
-        elif not (user.is_super_admin or user.is_admin or user.id == comment.article.author_id):
+        elif not (is_super_admin(user) or is_admin(user) or user.id == comment.article.author_id):
             replies = replies.filter(
                 Q(status='approved') |  # 已批准的评论
                 Q(user=user)            # 自己的评论
@@ -2292,8 +2318,15 @@ class CommentViewSet(TenantModelViewSet):
         comment = self.get_object()
         user = request.user
         
+        # Member 不能进行写操作
+        if is_member(user):
+            return Response(
+                {"detail": _("普通成员没有权限进行此操作")},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         # 验证权限（只有管理员和文章作者可以批准评论）
-        if not (user.is_super_admin or user.is_admin or user.id == comment.article.author_id):
+        if not can_moderate_comments(user, comment.article.author_id):
             return Response(
                 {"detail": _("您没有权限批准此评论")},
                 status=status.HTTP_403_FORBIDDEN
@@ -2370,8 +2403,15 @@ class CommentViewSet(TenantModelViewSet):
         comment = self.get_object()
         user = request.user
         
+        # Member 不能进行写操作
+        if is_member(user):
+            return Response(
+                {"detail": _("普通成员没有权限进行此操作")},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         # 验证权限（只有管理员和文章作者可以拒绝评论）
-        if not (user.is_super_admin or user.is_admin or user.id == comment.article.author_id):
+        if not can_moderate_comments(user, comment.article.author_id):
             return Response(
                 {"detail": _("您没有权限拒绝此评论")},
                 status=status.HTTP_403_FORBIDDEN
@@ -2448,8 +2488,15 @@ class CommentViewSet(TenantModelViewSet):
         comment = self.get_object()
         user = request.user
         
+        # Member 不能进行写操作
+        if is_member(user):
+            return Response(
+                {"detail": _("普通成员没有权限进行此操作")},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         # 验证权限（只有管理员和文章作者可以标记垃圾评论）
-        if not (user.is_super_admin or user.is_admin or user.id == comment.article.author_id):
+        if not can_moderate_comments(user, comment.article.author_id):
             return Response(
                 {"detail": _("您没有权限标记此评论为垃圾评论")},
                 status=status.HTTP_403_FORBIDDEN
@@ -2560,9 +2607,9 @@ class CommentViewSet(TenantModelViewSet):
             )
         
         # 根据权限获取可操作的评论
-        if user.is_super_admin:
+        if is_super_admin(user):
             comments = Comment.objects.filter(id__in=comment_ids)
-        elif user.is_admin:
+        elif is_admin(user):
             comments = Comment.objects.filter(id__in=comment_ids, tenant=tenant)
         else:
             # 普通用户只能操作自己的评论和自己文章下的评论

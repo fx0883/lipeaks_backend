@@ -26,6 +26,33 @@ login_request_examples = [
             "password": "admin_password"
         },
         request_only=True
+    ),
+    OpenApiExample(
+        name="成员登录（body携带tenant_id）",
+        summary="成员使用用户名/邮箱 + 租户ID 登录",
+        description=(
+            "当相同用户名/邮箱在多个租户中存在时，必须提供租户标识进行消歧。"
+            "成员可在请求体提供 tenant_id 进行租户定位。"
+        ),
+        value={
+            "username": "member@example.com",
+            "password": "member_password",
+            "tenant_id": 1
+        },
+        request_only=True
+    ),
+    OpenApiExample(
+        name="成员登录（使用请求头X-Tenant-ID）",
+        summary="成员使用用户名/邮箱 + X-Tenant-ID 登录",
+        description=(
+            "成员也可以通过请求头 X-Tenant-ID 指定租户ID（与请求体的 tenant_id 等价，优先级：请求体 > 请求头）。"
+            "示例：在请求头中添加 X-Tenant-ID: 1"
+        ),
+        value={
+            "username": "tenant_member",
+            "password": "member_password"
+        },
+        request_only=True
     )
 ]
 
@@ -680,9 +707,33 @@ sub_account_create_responses = {
 # 密码重置请求示例和响应
 password_reset_request_examples = [
     OpenApiExample(
-        name="密码重置请求示例",
+        name="管理员/平台用户重置（默认）",
+        summary="平台用户通过邮箱发起重置",
+        description="用于后台管理员或平台用户（account_type=user），仅需提供邮箱。",
         value={
-            "email": "user@example.com"
+            "email": "user@example.com",
+            "account_type": "user"
+        },
+        request_only=True
+    ),
+    OpenApiExample(
+        name="成员重置（携带租户ID）",
+        summary="成员通过邮箱 + 租户ID 发起重置",
+        description="当邮箱在多个租户中可能重复时，需要提供 tenant_id 进行租户定位。",
+        value={
+            "email": "member@example.com",
+            "account_type": "member",
+            "tenant_id": 1
+        },
+        request_only=True
+    ),
+    OpenApiExample(
+        name="成员重置（省略租户ID，可能歧义）",
+        summary="成员仅提供邮箱发起重置（存在歧义时将返回匿名成功，不发送邮件）",
+        description="若该邮箱在多个租户中均存在成员账号且未提供 tenant_id，将返回通用成功提示以避免枚举，但不会发送邮件。",
+        value={
+            "email": "member.same@example.com",
+            "account_type": "member"
         },
         request_only=True
     )
@@ -690,25 +741,27 @@ password_reset_request_examples = [
 
 password_reset_response_examples = [
     OpenApiExample(
-        name="密码重置请求成功响应",
+        name="密码重置请求成功响应（匿名化）",
+        summary="无论是否存在该邮箱，均返回通用成功提示",
         value={
             "success": True,
             "code": 2000,
-            "message": "密码重置链接已发送到您的邮箱",
+            "message": "如果该邮箱存在，密码重置链接已发送",
             "data": {
-                "detail": "密码重置链接已发送到您的邮箱"
+                "detail": "如果该邮箱存在，密码重置链接已发送"
             }
         },
         response_only=True
     ),
     OpenApiExample(
-        name="邮箱不存在响应",
+        name="请求数据无效（示例）",
+        summary="例如参数缺失或格式错误",
         value={
             "success": False,
             "code": 4000,
             "message": "请求数据无效",
             "data": {
-                "email": ["未找到使用此邮箱的活跃账户"]
+                "account_type": ["无效的选项"]
             }
         },
         response_only=True
@@ -720,13 +773,13 @@ password_reset_request_responses = {
         description="密码重置链接发送成功",
         examples=[
             OpenApiExample(
-                name="密码重置请求成功响应",
+                name="密码重置请求成功响应（匿名化）",
                 value={
                     "success": True,
                     "code": 2000,
-                    "message": "密码重置链接已发送到您的邮箱",
+                    "message": "如果该邮箱存在，密码重置链接已发送",
                     "data": {
-                        "detail": "密码重置链接已发送到您的邮箱"
+                        "detail": "如果该邮箱存在，密码重置链接已发送"
                     }
                 }
             )
@@ -736,13 +789,13 @@ password_reset_request_responses = {
         description="请求数据无效",
         examples=[
             OpenApiExample(
-                name="邮箱不存在响应",
+                name="参数无效",
                 value={
                     "success": False,
                     "code": 4000,
                     "message": "请求数据无效",
                     "data": {
-                        "email": ["未找到使用此邮箱的活跃账户"]
+                        "account_type": ["无效的选项"]
                     }
                 }
             )
@@ -786,7 +839,7 @@ password_reset_verify_response_examples = [
             "message": "重置令牌有效",
             "data": {
                 "detail": "重置令牌有效",
-                "user_email": "user@example.com"
+                "user_email": "user@example.com"  # 与 user 或 member 绑定的邮箱
             }
         },
         response_only=True
