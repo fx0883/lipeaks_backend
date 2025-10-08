@@ -29,7 +29,13 @@ logger = logging.getLogger('licenses.member')
 class MemberTrialApplicationThrottle(UserRateThrottle):
     """Member试用申请频率限制"""
     scope = 'member_trial_application'
-    rate = '5/day'  # 每天最多5次申请
+    
+    @property
+    def rate(self):
+        """从配置文件动态获取频率限制"""
+        from licenses.config import APPLICATION_RATE_LIMITS
+        daily_limit = APPLICATION_RATE_LIMITS.get('daily_limit', 5)
+        return f'{daily_limit}/day'
 
 
 class MemberAPIThrottle(UserRateThrottle):
@@ -330,6 +336,7 @@ def apply_trial_license(request):
         result = application_service.apply_trial_license(
             member=request.user,
             product_id=serializer.validated_data['product_id'],
+            plan_id=serializer.validated_data.get('plan_id'),  # 新增：支持指定方案ID
             reason=serializer.validated_data.get('reason', '试用版申请'),
             user_info=serializer.validated_data.get('user_info')
         )

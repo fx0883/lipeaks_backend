@@ -504,8 +504,93 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
     batch_operation=extend_schema(
         tags=['许可证管理'],
         summary='批量操作许可证',
-        description='对多个许可证执行批量操作（撤销、延期等）',
-        responses={200: OpenApiResponse(description='批量操作结果')}
+        description='''
+        对多个许可证执行批量操作
+        
+        ## 支持的操作类型
+        
+        1. **revoke** - 撤销许可证：永久撤销许可证，用户无法继续使用
+        2. **suspend** - 暂停许可证：临时暂停许可证，可以恢复
+        3. **activate** - 激活许可证：激活已暂停的许可证
+        4. **extend** - 延长有效期：延长许可证的过期时间，需要在parameters中指定days参数
+        5. **delete** - 删除许可证：软删除许可证（会先撤销再删除）
+        
+        ## 权限要求
+        
+        - 超级管理员：可操作所有许可证
+        - 租户管理员：只能操作自己租户的许可证
+        
+        ## 参数说明
+        
+        - **license_ids**: 许可证ID数组（1-100个）
+        - **operation**: 操作类型（必填）
+        - **parameters**: 操作参数（JSON对象，extend操作需要days参数）
+        - **reason**: 操作原因（可选，建议填写）
+        
+        ## 注意事项
+        
+        - 使用数据库事务，确保操作一致性
+        - 所有操作都会记录安全审计日志
+        - 删除操作会先撤销许可证再软删除
+        - 操作结果包含成功和失败的详细信息
+        ''',
+        request=BatchOperationSerializer,
+        responses={
+            200: OpenApiResponse(
+                description='批量操作执行完成（可能部分成功）',
+                examples=[
+                    OpenApiExample(
+                        'All Success',
+                        value={
+                            "success": True,
+                            "message": "批量操作完成，成功: 3/3",
+                            "results": [
+                                {
+                                    "license_id": 123,
+                                    "success": True,
+                                    "message": "撤销成功"
+                                }
+                            ]
+                        }
+                    ),
+                    OpenApiExample(
+                        'Partial Success',
+                        value={
+                            "success": True,
+                            "message": "批量操作完成，成功: 2/3",
+                            "results": [
+                                {
+                                    "license_id": 123,
+                                    "success": True,
+                                    "message": "撤销成功"
+                                },
+                                {
+                                    "license_id": 124,
+                                    "success": False,
+                                    "error": "许可证状态不支持该操作"
+                                }
+                            ]
+                        }
+                    )
+                ]
+            ),
+            400: OpenApiResponse(
+                description='请求参数错误',
+                examples=[
+                    OpenApiExample(
+                        'Invalid License IDs',
+                        value={
+                            "success": False,
+                            "errors": {
+                                "license_ids": ["以下许可证ID不存在: [999, 1000]"]
+                            }
+                        }
+                    )
+                ]
+            ),
+            403: OpenApiResponse(description='权限不足'),
+            500: OpenApiResponse(description='服务器内部错误')
+        }
     )
 )
 class LicenseViewSet(viewsets.ModelViewSet):
@@ -984,8 +1069,119 @@ class LicenseViewSet(viewsets.ModelViewSet):
                                     'success': True,
                                     'message': f'延长{days}天成功'
                                 })
+                            else:
+                                results.append({
+                                    'license_id': license_obj.id,
+                                    'success': False,
+                                    'error': '延长天数必须大于0'
+                                })
                         
-                        # 其他操作...
+                        elif operation == 'suspend':
+                            if license_obj.status in ['generated', 'activated']:
+                                license_obj.status = 'suspended'
+                                license_obj.save()
+                                
+                                # 记录安全审计日志
+                                SecurityAuditLog.objects.create(
+                                    event_type='license_suspended',
+                                    severity='MEDIUM',
+                                    user=request.user,
+                                    tenant=license_obj.tenant,
+                                    details={
+                                        'license_id': license_obj.id,
+                                        'license_key': license_obj.license_key[-8:],
+                                        'operation': 'batch_suspend',
+                                        'reason': reason,
+                                        'product': license_obj.product.name,
+                                        'customer': license_obj.customer_name
+                                    }
+                                )
+                                
+                                results.append({
+                                    'license_id': license_obj.id,
+                                    'success': True,
+                                    'message': '暂停成功'
+                                })
+                            else:
+                                results.append({
+                                    'license_id': license_obj.id,
+                                    'success': False,
+                                    'error': f'许可证状态({license_obj.get_status_display()})不支持暂停操作'
+                                })
+                        
+                        elif operation == 'activate':
+                            if license_obj.status == 'suspended':
+                                license_obj.status = 'activated'
+                                license_obj.save()
+                                
+                                # 记录安全审计日志
+                                SecurityAuditLog.objects.create(
+                                    event_type='license_activated',
+                                    severity='LOW',
+                                    user=request.user,
+                                    tenant=license_obj.tenant,
+                                    details={
+                                        'license_id': license_obj.id,
+                                        'license_key': license_obj.license_key[-8:],
+                                        'operation': 'batch_activate',
+                                        'reason': reason,
+                                        'product': license_obj.product.name,
+                                        'customer': license_obj.customer_name
+                                    }
+                                )
+                                
+                                results.append({
+                                    'license_id': license_obj.id,
+                                    'success': True,
+                                    'message': '激活成功'
+                                })
+                            else:
+                                results.append({
+                                    'license_id': license_obj.id,
+                                    'success': False,
+                                    'error': f'许可证状态({license_obj.get_status_display()})不支持激活操作'
+                                })
+                        
+                        elif operation == 'delete':
+                            # 软删除许可证
+                            if license_obj.status != 'revoked':
+                                # 先撤销再删除
+                                management_service.revoke_license(
+                                    license_obj.id, f"删除前撤销: {reason}", request.user.id
+                                )
+                            
+                            # 执行软删除
+                            license_obj.is_deleted = True
+                            license_obj.save()
+                            
+                            # 记录安全审计日志
+                            SecurityAuditLog.objects.create(
+                                event_type='license_deleted',
+                                severity='HIGH',
+                                user=request.user,
+                                tenant=license_obj.tenant,
+                                details={
+                                    'license_id': license_obj.id,
+                                    'license_key': license_obj.license_key[-8:],
+                                    'operation': 'batch_delete',
+                                    'reason': reason,
+                                    'product': license_obj.product.name,
+                                    'customer': license_obj.customer_name
+                                }
+                            )
+                            
+                            results.append({
+                                'license_id': license_obj.id,
+                                'success': True,
+                                'message': '删除成功'
+                            })
+                        
+                        else:
+                            results.append({
+                                'license_id': license_obj.id,
+                                'success': False,
+                                'error': f'不支持的操作类型: {operation}'
+                            })
                         
                     except Exception as e:
                         results.append({

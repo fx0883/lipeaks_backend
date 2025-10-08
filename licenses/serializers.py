@@ -573,7 +573,7 @@ class BatchOperationSerializer(serializers.Serializer):
         max_length=100
     )
     operation = serializers.ChoiceField(
-        choices=['revoke', 'suspend', 'activate', 'extend']
+        choices=['revoke', 'suspend', 'activate', 'extend', 'delete']
     )
     parameters = serializers.JSONField(required=False, default=dict)
     reason = serializers.CharField(max_length=500, required=False)
@@ -794,37 +794,44 @@ class LicenseAssignmentCreateSerializer(serializers.ModelSerializer):
 class AvailableProductSerializer(serializers.ModelSerializer):
     """可申请产品序列化器"""
     
-    trial_plan = serializers.SerializerMethodField()
+    trial_plans = serializers.SerializerMethodField()  # 改为复数，返回所有方案
     already_applied = serializers.SerializerMethodField()
     
     class Meta:
         model = SoftwareProduct
         fields = [
             'id', 'name', 'code', 'description', 'version', 
-            'trial_plan', 'already_applied'
+            'trial_plans',  # 改为复数
+            'already_applied'
         ]
     
-    def get_trial_plan(self, obj):
-        """获取试用方案信息"""
-        trial_plan = obj.license_plans.filter(
+    def get_trial_plans(self, obj):
+        """获取所有试用方案（按有效期从长到短排序）"""
+        trial_plans = obj.license_plans.filter(
             plan_type='trial', 
             status='active'
-        ).first()
+        ).order_by(
+            '-default_validity_days',   # 优先：有效期从长到短
+            '-default_max_activations'  # 其次：激活数从多到少
+        )
         
-        if trial_plan:
-            return {
-                'id': trial_plan.id,
-                'name': trial_plan.name,
-                'default_validity_days': trial_plan.default_validity_days,
-                'default_max_activations': trial_plan.default_max_activations,
-                'features': trial_plan.features,
-                'price': float(trial_plan.price) if trial_plan.price else 0,
-                'currency': trial_plan.currency
-            }
-        return None
+        plans_data = []
+        for index, plan in enumerate(trial_plans):
+            plans_data.append({
+                'id': plan.id,
+                'name': plan.name,
+                'default_validity_days': plan.default_validity_days,
+                'default_max_activations': plan.default_max_activations,
+                'features': plan.features,
+                'price': float(plan.price) if plan.price else 0,
+                'currency': plan.currency,
+                'is_recommended': index == 0  # 第一个（有效期最长）标记为推荐
+            })
+        
+        return plans_data if plans_data else None
     
     def get_already_applied(self, obj):
-        """检查是否已经申请过"""
+        """检查是否已经申请过（排除已删除的许可证）"""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
@@ -832,6 +839,7 @@ class AvailableProductSerializer(serializers.ModelSerializer):
         return LicenseAssignment.objects.filter(
             member=request.user,
             license__product=obj,
+            license__is_deleted=False,  # 排除已删除的许可证
             status__in=['active', 'pending']
         ).exists()
 
@@ -841,6 +849,10 @@ class LicenseApplicationSerializer(serializers.Serializer):
     
     product_id = serializers.IntegerField(
         help_text="产品ID"
+    )
+    plan_id = serializers.IntegerField(
+        required=False,
+        help_text="方案ID（可选）。如果产品有多个试用方案，可以指定要申请的方案ID；如果不指定，系统会自动选择有效期最长的方案"
     )
     reason = serializers.CharField(
         max_length=500, 
@@ -906,27 +918,32 @@ class LicenseApplicationSerializer(serializers.Serializer):
         user = request.user
         product_id = data['product_id']
         
-        # 检查重复申请
+        # 检查重复申请（排除已删除的许可证）
         existing_application = LicenseAssignment.objects.filter(
             member=user,
             license__product_id=product_id,
+            license__is_deleted=False,  # 排除已删除的许可证
             status__in=['active', 'pending']
         ).exists()
         
         if existing_application:
             raise serializers.ValidationError("您已经申请过该产品的许可证")
         
-        # 检查申请频率（24小时内最多3次申请）
+        # 检查申请频率（从配置文件获取限制）
         from datetime import timedelta
         from django.utils import timezone
+        from licenses.config import APPLICATION_RATE_LIMITS
+        
+        business_limit = APPLICATION_RATE_LIMITS.get('business_limit', 3)
+        cooldown_hours = APPLICATION_RATE_LIMITS.get('cooldown_hours', 24)
         
         recent_applications = LicenseAssignment.objects.filter(
             member=user,
-            created_at__gte=timezone.now() - timedelta(hours=24)
+            created_at__gte=timezone.now() - timedelta(hours=cooldown_hours)
         ).count()
         
-        if recent_applications >= 3:
-            raise serializers.ValidationError("24小时内申请次数过多，请稍后再试")
+        if recent_applications >= business_limit:
+            raise serializers.ValidationError(f"{cooldown_hours}小时内申请次数过多，请稍后再试（当前限制: {business_limit}次）")
         
         # 检查用户当前试用许可证数量（默认限制：1个）
         current_trial_count = LicenseAssignment.objects.filter(
@@ -935,7 +952,11 @@ class LicenseApplicationSerializer(serializers.Serializer):
             status='active'
         ).count()
         
-        max_trial_licenses = getattr(user, 'max_trial_licenses', 1)  # 可配置项
+        # 从配置文件获取默认配额
+        from licenses.config import TRIAL_LICENSE_QUOTAS
+        default_quota = TRIAL_LICENSE_QUOTAS.get('default', 1)
+        max_trial_licenses = getattr(user, 'max_trial_licenses', default_quota)
+        
         if current_trial_count >= max_trial_licenses:
             raise serializers.ValidationError(f"您的试用许可证数量已达上限（{max_trial_licenses}个）")
         

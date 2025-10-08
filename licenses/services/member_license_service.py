@@ -33,6 +33,7 @@ class MemberLicenseApplicationService:
         self,
         member: Member,
         product_id: int,
+        plan_id: int = None,
         reason: str = "试用版申请",
         user_info: Dict[str, Any] = None
     ) -> Dict[str, Any]:
@@ -42,6 +43,7 @@ class MemberLicenseApplicationService:
         Args:
             member: Member用户实例
             product_id: 产品ID
+            plan_id: 方案ID（可选）。如果指定，使用指定方案；否则自动选择有效期最长的方案
             reason: 申请原因
             user_info: 用户补充信息
             
@@ -49,10 +51,10 @@ class MemberLicenseApplicationService:
             Dict[str, Any]: 申请结果
         """
         try:
-            logger.info(f"开始处理Member {member.username} 的试用许可证申请，产品ID: {product_id}")
+            logger.info(f"开始处理Member {member.username} 的试用许可证申请，产品ID: {product_id}, 方案ID: {plan_id}")
             
             # 1. 验证产品和方案
-            product, trial_plan = self._validate_product_and_plan(product_id)
+            product, trial_plan = self._validate_product_and_plan(product_id, plan_id)
             
             # 2. 检查申请资格
             self._check_application_eligibility(member, product)
@@ -60,14 +62,17 @@ class MemberLicenseApplicationService:
             # 3. 检查配额限制
             self._check_quota_limits(member, product)
             
-            # 4. 生成许可证
+            # 4. 获取统一的时间基准（避免时间差异导致验证失败）
+            base_time = timezone.now()
+            
+            # 5. 生成许可证
             license_obj = self._create_trial_license(
-                product, trial_plan, member, user_info
+                product, trial_plan, member, user_info, base_time
             )
             
-            # 5. 创建分配关系
+            # 6. 创建分配关系
             assignment = self._create_license_assignment(
-                member, license_obj, reason
+                member, license_obj, reason, base_time
             )
             
             # 6. 发送通知
@@ -118,13 +123,23 @@ class MemberLicenseApplicationService:
             List[SoftwareProduct]: 可申请的产品列表
         """
         try:
-            # 获取有试用方案的产品
+            from django.db.models import Exists, OuterRef
+            
+            # 使用子查询确保产品有活跃的试用方案
+            # 这样可以避免JOIN导致的误判问题
+            has_active_trial_plan = LicensePlan.objects.filter(
+                product=OuterRef('pk'),
+                plan_type='trial',
+                status='active'
+            )
+            
+            # 获取有活跃试用方案的产品
             available_products = SoftwareProduct.objects.filter(
                 status='active',
-                is_deleted=False,
-                license_plans__plan_type='trial',
-                license_plans__status='active'
-            ).distinct()
+                is_deleted=False
+            ).filter(
+                Exists(has_active_trial_plan)  # 确保产品有活跃的试用方案
+            )
             
             # 过滤租户产品（如果有租户限制）
             if member.tenant:
@@ -192,12 +207,13 @@ class MemberLicenseApplicationService:
                 'licenses': []
             }
     
-    def _validate_product_and_plan(self, product_id: int) -> Tuple[SoftwareProduct, LicensePlan]:
+    def _validate_product_and_plan(self, product_id: int, plan_id: int = None) -> Tuple[SoftwareProduct, LicensePlan]:
         """
         验证产品和试用方案
         
         Args:
             product_id: 产品ID
+            plan_id: 方案ID（可选）
             
         Returns:
             Tuple[SoftwareProduct, LicensePlan]: 产品和试用方案
@@ -211,13 +227,28 @@ class MemberLicenseApplicationService:
         except SoftwareProduct.DoesNotExist:
             raise ValueError("产品不存在或不可用")
         
-        trial_plan = product.license_plans.filter(
-            plan_type='trial',
-            status='active'
-        ).first()
-        
-        if not trial_plan:
-            raise ValueError("该产品没有可用的试用方案")
+        # 如果指定了plan_id，使用指定的方案
+        if plan_id:
+            try:
+                trial_plan = product.license_plans.get(
+                    id=plan_id,
+                    plan_type='trial',
+                    status='active'
+                )
+            except LicensePlan.DoesNotExist:
+                raise ValueError("指定的试用方案不存在或不可用")
+        else:
+            # 未指定plan_id，自动选择有效期最长的方案
+            trial_plan = product.license_plans.filter(
+                plan_type='trial',
+                status='active'
+            ).order_by(
+                '-default_validity_days',
+                '-default_max_activations'
+            ).first()
+            
+            if not trial_plan:
+                raise ValueError("该产品没有可用的试用方案")
         
         return product, trial_plan
     
@@ -229,10 +260,11 @@ class MemberLicenseApplicationService:
             member: Member用户实例
             product: 产品实例
         """
-        # 检查重复申请
+        # 检查重复申请（排除已删除的许可证）
         existing = LicenseAssignment.objects.filter(
             member=member,
             license__product=product,
+            license__is_deleted=False,  # 排除已删除的许可证
             status__in=['active', 'pending']
         ).exists()
         
@@ -274,7 +306,12 @@ class MemberLicenseApplicationService:
                 raise ValueError(f"租户许可证配额已满，当前配额: {tenant_quota.max_licenses}")
         
         # 检查用户个人配额（试用许可证限制）
-        max_trial_licenses = getattr(member, 'max_trial_licenses', 1)
+        from licenses.config import TRIAL_LICENSE_QUOTAS
+        
+        # 从配置文件获取默认配额
+        default_quota = TRIAL_LICENSE_QUOTAS.get('default', 1)
+        max_trial_licenses = getattr(member, 'max_trial_licenses', default_quota)
+        
         user_trial_count = LicenseAssignment.objects.filter(
             member=member,
             license__plan__plan_type='trial',
@@ -284,21 +321,27 @@ class MemberLicenseApplicationService:
         if user_trial_count >= max_trial_licenses:
             raise ValueError(f"您的试用许可证数量已达上限（{max_trial_licenses}个）")
         
-        # 检查申请频率
+        # 检查申请频率（从配置文件获取限制）
+        from licenses.config import APPLICATION_RATE_LIMITS
+        
+        business_limit = APPLICATION_RATE_LIMITS.get('business_limit', 3)
+        cooldown_hours = APPLICATION_RATE_LIMITS.get('cooldown_hours', 24)
+        
         recent_applications = LicenseAssignment.objects.filter(
             member=member,
-            created_at__gte=timezone.now() - timedelta(hours=24)
+            created_at__gte=timezone.now() - timedelta(hours=cooldown_hours)
         ).count()
         
-        if recent_applications >= 3:
-            raise ValueError("24小时内申请次数过多，请稍后再试")
+        if recent_applications >= business_limit:
+            raise ValueError(f"{cooldown_hours}小时内申请次数过多，请稍后再试（当前限制: {business_limit}次）")
     
     def _create_trial_license(
         self, 
         product: SoftwareProduct, 
         plan: LicensePlan, 
         member: Member, 
-        user_info: Dict[str, Any] = None
+        user_info: Dict[str, Any] = None,
+        base_time: timezone.datetime = None
     ) -> License:
         """
         创建试用许可证
@@ -321,12 +364,19 @@ class MemberLicenseApplicationService:
             'intended_use': user_info.get('intended_use', '') if user_info else ''
         }
         
+        # 计算许可证过期时间（使用统一的时间基准）
+        if base_time is None:
+            base_time = timezone.now()
+        
+        license_expires_at = base_time + timedelta(days=plan.default_validity_days)
+        
         # 使用现有的许可证管理服务创建许可证
         license_obj = self.license_management_service.create_license(
             product_id=product.id,
             plan_id=plan.id,
             tenant_id=member.tenant.id,
             customer_info=customer_info,
+            expires_at=license_expires_at,  # 明确传递过期时间
             max_activations=plan.default_max_activations
         )
         
@@ -336,7 +386,8 @@ class MemberLicenseApplicationService:
         self, 
         member: Member, 
         license_obj: License, 
-        reason: str
+        reason: str,
+        base_time: timezone.datetime = None
     ) -> LicenseAssignment:
         """
         创建许可证分配
@@ -349,8 +400,19 @@ class MemberLicenseApplicationService:
         Returns:
             LicenseAssignment: 创建的分配实例
         """
-        # 试用版默认有效期从方案配置读取
-        expires_at = timezone.now() + timedelta(days=license_obj.plan.default_validity_days)
+        # 试用版默认有效期从方案配置读取（使用统一的时间基准）
+        if base_time is None:
+            base_time = timezone.now()
+        
+        # 确保分配过期时间不超过许可证过期时间
+        license_expires_at = license_obj.expires_at
+        assignment_expires_at = base_time + timedelta(days=license_obj.plan.default_validity_days)
+        
+        # 如果许可证有过期时间，分配时间不能超过许可证时间
+        if license_expires_at and assignment_expires_at > license_expires_at:
+            expires_at = license_expires_at
+        else:
+            expires_at = assignment_expires_at
         
         assignment = LicenseAssignment.objects.create(
             member=member,
