@@ -1,160 +1,125 @@
 """
 异常处理模块
+
+统一异常处理系统，包含：
+- 业务异常基类和各模块异常类
+- 全局异常处理器
+- 错误码常量定义
+- 向后兼容的旧异常类别名
+
+参考文档：docs/exception/
 """
-import logging
-import traceback
-from datetime import datetime
-from django.core.exceptions import PermissionDenied
-from django.http import Http404
-from rest_framework import status
-from rest_framework.exceptions import APIException, ValidationError, NotAuthenticated, AuthenticationFailed
-from rest_framework.response import Response
-from rest_framework.views import exception_handler
 
-logger = logging.getLogger(__name__)
+# ==================== 新异常系统导入 ====================
 
-# 自定义错误码
-ERROR_CODES = {
-    # 客户端错误 (4xxx)
-    'ValidationError': 4000,
-    'NotAuthenticated': 4001,
-    'AuthenticationFailed': 4002,
-    'PermissionDenied': 4003,
-    'NotFound': 4004,
-    'MethodNotAllowed': 4005,
-    'NotAcceptable': 4006,
-    'UnsupportedMediaType': 4015,
-    'Throttled': 4029,
+# 基础类和工具
+from .base import BusinessException
+from .error_codes import ErrorCodes, ErrorMessages, ERROR_CODE_TO_STRING
+from .handler import custom_exception_handler
+
+# 租户模块异常
+from .tenant import (
+    TenantException,
+    TenantNotFoundException,
+    TenantInactiveException,
+    TenantQuotaExceededException,
+    TenantAccessDeniedException,
+)
+
+# 许可证模块异常
+from .license import (
+    LicenseException,
+    LicenseExpiredException,
+    LicenseNotFoundException,
+    LicenseQuotaExceededException,
+    LicenseRevokedException,
+    LicenseActivationFailedException,
+)
+
+# 用户模块异常
+from .user import (
+    UserException,
+    UserNotFoundException,
+    UserInactiveException,
+    UserPermissionDeniedException,
+)
+
+# 积分模块异常
+from .points import (
+    PointsException,
+    PointsInsufficientException,
+    PointsExpiredException,
+)
+
+# CMS模块异常
+from .cms import (
+    CMSException,
+    ArticleNotFoundException,
+    CategoryNotFoundException,
+)
+
+
+# ==================== 向后兼容性别名 ====================
+# 保留旧异常类的导入路径，避免破坏现有代码
+# ⚠️ 这些别名在v2.0版本将被移除，请使用新异常类
+
+# 租户相关异常（旧名称）
+TenantNotFound = TenantNotFoundException  # ⚠️ Deprecated: Use TenantNotFoundException
+TenantInactive = TenantInactiveException  # ⚠️ Deprecated: Use TenantInactiveException
+
+# 配额相关异常（旧名称）
+QuotaExceeded = LicenseQuotaExceededException  # ⚠️ Deprecated: Use LicenseQuotaExceededException
+
+# 租户头错误（保留用于中间件）
+TenantHeaderInvalidOrMissing = TenantException
+TenantMismatchOrNoPermission = TenantAccessDeniedException
+
+
+# ==================== 导出列表 ====================
+
+__all__ = [
+    # 基础类
+    'BusinessException',
+    'ErrorCodes',
+    'ErrorMessages',
+    'ERROR_CODE_TO_STRING',
+    'custom_exception_handler',
     
-    # 租户相关错误 (41xx)
-    'TenantNotFound': 4100,
-    'TenantInactive': 4101,
-    'QuotaExceeded': 4110,
+    # 租户模块异常
+    'TenantException',
+    'TenantNotFoundException',
+    'TenantInactiveException',
+    'TenantQuotaExceededException',
+    'TenantAccessDeniedException',
     
-    # 服务器错误 (5xxx)
-    'APIException': 5000,
-    'ServerError': 5001,
-    'DatabaseError': 5002,
-}
-
-def custom_exception_handler(exc, context):
-    """
-    自定义异常处理器
-    """
-    # 首先调用REST framework的默认异常处理
-    response = exception_handler(exc, context)
-
-    # 优先处理租户头相关的统一错误，固定中文文案与业务码
-    if isinstance(exc, TenantHeaderInvalidOrMissing):
-        return Response(
-            {
-                'success': False,
-                'code': 4001,
-                'message': '缺少或非法的租户ID',
-                'data': None,
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    if isinstance(exc, TenantMismatchOrNoPermission):
-        return Response(
-            {
-                'success': False,
-                'code': 4003,
-                'message': '租户不匹配，或者没有权限',
-                'data': None,
-            },
-            status=status.HTTP_403_FORBIDDEN,
-        )
+    # 许可证模块异常
+    'LicenseException',
+    'LicenseExpiredException',
+    'LicenseNotFoundException',
+    'LicenseQuotaExceededException',
+    'LicenseRevokedException',
+    'LicenseActivationFailedException',
     
-    if response is not None:
-        # 自定义格式化响应
-        data = {
-            'success': False,
-            'code': response.status_code,
-            'message': str(exc),
-            'data': None
-        }
-        
-        # 如果状态码在400-499之间，则是客户端错误
-        if 400 <= response.status_code < 500:
-            # 根据不同类型的异常，给出不同的错误码
-            if response.status_code == 401:  # 未认证
-                data['code'] = 4001
-                data['message'] = '认证失败，请登录'
-            elif response.status_code == 403:  # 权限不足
-                data['code'] = 4003
-                data['message'] = '您没有执行该操作的权限'
-            elif response.status_code == 404:  # 资源不存在
-                data['code'] = 4004
-                data['message'] = '请求的资源不存在'
-            elif response.status_code == 400:  # 请求错误
-                data['code'] = 4000
-                if hasattr(exc, 'detail'):
-                    data['message'] = str(exc.detail)
-                    data['errors'] = exc.detail
-            else:
-                data['code'] = 4000 + response.status_code % 1000
-        else:
-            # 服务器错误
-            data['code'] = 5000
-            data['message'] = '服务器内部错误'
-        
-        response.data = data
+    # 用户模块异常
+    'UserException',
+    'UserNotFoundException',
+    'UserInactiveException',
+    'UserPermissionDeniedException',
     
-    # 处理自定义异常
-    elif isinstance(exc, QuotaExceeded):
-        response = Response(
-            {
-                'success': False,
-                'code': 4029,
-                'message': str(exc) or '配额超限',
-                'data': None
-            },
-            status=status.HTTP_429_TOO_MANY_REQUESTS
-        )
+    # 积分模块异常
+    'PointsException',
+    'PointsInsufficientException',
+    'PointsExpiredException',
     
-    return response
-
-
-# 自定义异常类
-
-class TenantNotFound(APIException):
-    """租户不存在异常"""
-    status_code = status.HTTP_404_NOT_FOUND
-    default_detail = '租户不存在'
-    default_code = 'tenant_not_found'
-
-
-class TenantInactive(APIException):
-    """租户未激活异常"""
-    status_code = status.HTTP_403_FORBIDDEN
-    default_detail = '租户未激活或已被禁用'
-    default_code = 'tenant_inactive'
-
-
-class QuotaExceeded(Exception):
-    """配额超限异常"""
-    pass
-
-
-class APIException(APIException):
-    """服务器错误异常"""
-    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-    default_detail = '服务器内部错误'
-    default_code = 'server_error'
-
-
-# —— 成员/CMS 租户头统一错误 ——
-class TenantHeaderInvalidOrMissing(APIException):
-    """缺少或非法的租户ID（4001）"""
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_detail = '缺少或非法的租户ID'
-    default_code = 'tenant_header_invalid_or_missing'
-
-
-class TenantMismatchOrNoPermission(APIException):
-    """租户不匹配，或者没有权限（4003）"""
-    status_code = status.HTTP_403_FORBIDDEN
-    default_detail = '租户不匹配，或者没有权限'
-    default_code = 'tenant_mismatch_or_no_permission'
+    # CMS模块异常
+    'CMSException',
+    'ArticleNotFoundException',
+    'CategoryNotFoundException',
+    
+    # 向后兼容的旧异常类（已废弃）
+    'TenantNotFound',  # ⚠️ Deprecated
+    'TenantInactive',  # ⚠️ Deprecated
+    'QuotaExceeded',  # ⚠️ Deprecated
+    'TenantHeaderInvalidOrMissing',  # 保留用于中间件
+    'TenantMismatchOrNoPermission',  # 保留用于中间件
+]

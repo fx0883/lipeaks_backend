@@ -4,6 +4,7 @@ CMS系统权限控制
 import logging
 from rest_framework import permissions
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from common.exceptions import CMSException
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,12 @@ class CMSBasePermission(permissions.BasePermission):
             # 确保请求中有租户ID
             if not hasattr(request, 'tenant_id') or not request.tenant_id:
                 logger.warning(f"GET请求未提供租户ID: {request.path}")
-                raise ValidationError({"detail": "未提供租户ID，无法访问CMS资源"})
+                raise CMSException(
+                    error_code='TENANT_ID_REQUIRED',
+                    detail='未提供租户ID，无法访问CMS资源',
+                    request_path=request.path,
+                    request_method=request.method
+                )
             return True
             
         # 非安全方法需要认证
@@ -60,7 +66,12 @@ class CMSBasePermission(permissions.BasePermission):
             # 确保请求中有租户ID（由中间件设置）
             if not hasattr(request, 'tenant_id') or not request.tenant_id:
                 logger.warning(f"超级管理员 {user.username} 尝试操作CMS数据但未指定租户ID")
-                raise ValidationError({"detail": "超级管理员需要通过X-Tenant-ID请求头指定租户ID"})
+                raise CMSException(
+                    error_code='SUPER_ADMIN_TENANT_ID_REQUIRED',
+                    detail='超级管理员需要通过X-Tenant-ID请求头指定租户ID',
+                    user_id=user.id,
+                    username=user.username
+                )
             return True
         
         # 检查普通用户是否关联租户

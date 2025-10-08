@@ -6,7 +6,11 @@ from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.conf import settings
 from common.utils.tenant_header import get_header_tenant_id, require_member_header_match
-from common.exceptions import TenantHeaderInvalidOrMissing, TenantMismatchOrNoPermission
+from common.exceptions import (
+    TenantHeaderInvalidOrMissing,
+    TenantMismatchOrNoPermission,
+    TenantException,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +145,11 @@ class TenantModelViewSet(viewsets.ModelViewSet):
                 return queryset.filter(tenant_id=tenant_id)
             except (ValueError, TypeError):
                 logger.error(f"[TenantModelViewSet] {view_name} 无效的租户ID: {tenant_id}")
-                raise ValidationError({"detail": f"无效的租户ID: {tenant_id}"})
+                raise TenantException(
+                    error_code='INVALID_TENANT_ID',
+                    detail=f'无效的租户ID格式: {tenant_id}',
+                    tenant_id=tenant_id
+                )
         else:
             logger.warning(f"[TenantModelViewSet] {view_name} 普通用户未提供租户ID，返回空查询集")
             return queryset.none()
@@ -173,7 +181,11 @@ class TenantModelViewSet(viewsets.ModelViewSet):
                 serializer.save(tenant_id=tenant_id)
             except (ValueError, TypeError):
                 logger.error(f"[TenantModelViewSet] {view_name} 无效的租户ID: {tenant_id}")
-                raise ValidationError({"detail": f"无效的租户ID: {tenant_id}"})
+                raise TenantException(
+                    error_code='INVALID_TENANT_ID',
+                    detail=f'无效的租户ID格式: {tenant_id}',
+                    tenant_id=tenant_id
+                )
         else:
             # 如果没有租户ID但模型需要，则拒绝创建
             if hasattr(serializer.Meta.model, 'tenant') and \
@@ -315,7 +327,10 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         if not getattr(settings, 'FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER', True):
             tid = getattr(request, 'tenant_id', None)
             if tid is None:
-                raise ValidationError({"detail": "未提供租户ID，无法创建对象"})
+                raise TenantException(
+                    error_code='TENANT_ID_REQUIRED',
+                    detail='未提供租户ID，无法创建对象'
+                )
             return tid
 
         user = getattr(request, 'user', None)

@@ -29,6 +29,7 @@ from tenants.schema import (
 )
 from drf_spectacular.utils import OpenApiParameter
 from rest_framework.exceptions import ValidationError
+from common.exceptions import TenantException
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -238,7 +239,12 @@ class TenantRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
             pk = int(pk)
         except (ValueError, TypeError):
             logger.error(f"无效的租户ID: {pk}")
-            raise ValidationError({"detail": f"无效的租户ID: {pk}"})
+            raise TenantException(
+                error_code='INVALID_TENANT_ID',
+                detail=f'无效的租户ID格式: {pk}',
+                tenant_id=pk,
+                requested_by=self.request.user.id if hasattr(self.request, 'user') else None
+            )
         
         obj = get_object_or_404(queryset, pk=pk)
         self.check_object_permissions(self.request, obj)
@@ -263,15 +269,15 @@ class TenantQuotaUpdateView(APIView):
         """
         try:
             pk = int(pk)
-            tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
         except (ValueError, TypeError):
             logger.error(f"无效的租户ID: {pk}")
-            return Response({
-                'success': False,
-                'code': 4000,
-                'message': f'无效的租户ID: {pk}',
-                'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)
+            raise TenantException(
+                error_code='INVALID_TENANT_ID',
+                detail=f'无效的租户ID格式: {pk}',
+                tenant_id=pk
+            )
+        
+        tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
             
         quota = tenant.quota
         serializer = TenantQuotaSerializer(quota)
@@ -297,15 +303,15 @@ class TenantQuotaUpdateView(APIView):
         """
         try:
             pk = int(pk)
-            tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
         except (ValueError, TypeError):
             logger.error(f"无效的租户ID: {pk}")
-            return Response({
-                'success': False,
-                'code': 4000,
-                'message': f'无效的租户ID: {pk}',
-                'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)
+            raise TenantException(
+                error_code='INVALID_TENANT_ID',
+                detail=f'无效的租户ID格式: {pk}',
+                tenant_id=pk
+            )
+        
+        tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
             
         quota = tenant.quota
         
@@ -359,15 +365,15 @@ class TenantQuotaUsageView(APIView):
             # 验证租户访问权限
             try:
                 pk = int(pk)
-                tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {pk}")
-                return Response({
-                    'success': False,
-                    'code': 4000,
-                    'message': f'无效的租户ID: {pk}',
-                    'data': None
-                }, status=status.HTTP_400_BAD_REQUEST)
+                raise TenantException(
+                    error_code='INVALID_TENANT_ID',
+                    detail=f'无效的租户ID格式: {pk}',
+                    tenant_id=pk
+                )
+            
+            tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
             
             # 如果不是超级管理员，只能查看自己的租户
             if not is_super_admin(request.user) and request.user.tenant.id != tenant.id:
@@ -418,15 +424,15 @@ class TenantSuspendView(APIView):
         try:
             try:
                 pk = int(pk)
-                tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {pk}")
-                return Response({
-                    'success': False,
-                    'code': 4000,
-                    'message': f'无效的租户ID: {pk}',
-                    'data': None
-                }, status=status.HTTP_400_BAD_REQUEST)
+                raise TenantException(
+                    error_code='INVALID_TENANT_ID',
+                    detail=f'无效的租户ID格式: {pk}',
+                    tenant_id=pk
+                )
+            
+            tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
             
             if tenant.status == 'suspended':
                 return Response({
@@ -478,15 +484,15 @@ class TenantActivateView(APIView):
         try:
             try:
                 pk = int(pk)
-                tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {pk}")
-                return Response({
-                    'success': False,
-                    'code': 4000,
-                    'message': f'无效的租户ID: {pk}',
-                    'data': None
-                }, status=status.HTTP_400_BAD_REQUEST)
+                raise TenantException(
+                    error_code='INVALID_TENANT_ID',
+                    detail=f'无效的租户ID格式: {pk}',
+                    tenant_id=pk
+                )
+            
+            tenant = get_object_or_404(Tenant, pk=pk, is_deleted=False)
             
             if tenant.status == 'active':
                 return Response({
@@ -603,12 +609,11 @@ class TenantUserListView(generics.ListAPIView):
                 logger.info(f"用户 {request.user.username} 请求获取租户ID {tenant_id} 的用户列表")
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {tenant_id}")
-                return Response({
-                    'success': False,
-                    'code': 4000,
-                    'message': f'无效的租户ID: {tenant_id}',
-                    'data': None
-                }, status=status.HTTP_400_BAD_REQUEST)
+                raise TenantException(
+                    error_code='INVALID_TENANT_ID',
+                    detail=f'无效的租户ID格式: {tenant_id}',
+                    tenant_id=tenant_id
+                )
             
             return super().get(request, *args, **kwargs)
         except Exception as e:
@@ -720,12 +725,11 @@ class TenantComprehensiveView(APIView):
             pk = int(pk)
         except (ValueError, TypeError):
             logger.error(f"无效的租户ID: {pk}")
-            return Response({
-                'success': False,
-                'code': 4000,
-                'message': f'无效的租户ID: {pk}',
-                'data': None
-            }, status=status.HTTP_400_BAD_REQUEST)
+            raise TenantException(
+                error_code='INVALID_TENANT_ID',
+                detail=f'无效的租户ID格式: {pk}',
+                tenant_id=pk
+            )
         
         # 检查权限
         user = request.user

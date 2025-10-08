@@ -12,6 +12,10 @@ from django.db import transaction
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
+from common.exceptions import (
+    PointsException,
+    PointsInsufficientException,
+)
 from ..models import (
     TenantUserProfile,
     TenantUserPoints,
@@ -83,10 +87,19 @@ class PointsEngine:
             TenantUserPoints: 积分记录
         """
         if points <= 0:
-            raise ValueError("奖励积分必须大于0")
+            raise PointsException(
+                error_code='INVALID_POINTS_AMOUNT',
+                detail='奖励积分必须大于0',
+                points=points
+            )
         
         if not tenant_user_profile.is_points_enabled:
-            raise ValidationError("该用户未启用积分功能")
+            raise PointsException(
+                error_code='POINTS_NOT_ENABLED',
+                detail='该用户未启用积分功能',
+                user_id=tenant_user_profile.member.id,
+                tenant_id=tenant_user_profile.tenant.id
+            )
         
         # 应用积分倍数
         actual_points = int(points * tenant_user_profile.points_multiplier)
@@ -97,7 +110,14 @@ class PointsEngine:
             if 'max_daily' in source_config:
                 today_points = self._get_daily_points(tenant_user_profile, category)
                 if today_points + actual_points > source_config['max_daily']:
-                    raise ValidationError(f"今日{source_config['description']}积分已达上限")
+                    raise PointsException(
+                        error_code='POINTS_DAILY_LIMIT_EXCEEDED',
+                        detail=f"今日{source_config['description']}积分已达上限",
+                        user_id=tenant_user_profile.member.id,
+                        category=category,
+                        today_points=today_points,
+                        max_daily=source_config['max_daily']
+                    )
         
         # 计算过期时间
         expires_at = None
@@ -161,14 +181,26 @@ class PointsEngine:
             TenantUserPoints: 积分记录
         """
         if points <= 0:
-            raise ValueError("消费积分必须大于0")
+            raise PointsException(
+                error_code='INVALID_POINTS_AMOUNT',
+                detail='消费积分必须大于0',
+                points=points
+            )
         
         if not tenant_user_profile.is_points_enabled:
-            raise ValidationError("该用户未启用积分功能")
+            raise PointsException(
+                error_code='POINTS_NOT_ENABLED',
+                detail='该用户未启用积分功能',
+                user_id=tenant_user_profile.member.id,
+                tenant_id=tenant_user_profile.tenant.id
+            )
         
         if tenant_user_profile.available_points < points:
-            raise ValidationError(
-                f"积分余额不足，当前可用: {tenant_user_profile.available_points}，需要: {points}"
+            raise PointsInsufficientException(
+                detail=f'积分余额不足，当前可用: {tenant_user_profile.available_points}，需要: {points}',
+                user_id=tenant_user_profile.member.id,
+                available_points=tenant_user_profile.available_points,
+                required_points=points
             )
         
         # 创建消费记录（负数）
@@ -269,7 +301,12 @@ class PointsEngine:
             reason = f"续期许可证 {license_key}"
             subcategory = 'renewal'
         else:
-            raise ValueError(f"不支持的许可证动作: {action}")
+            raise PointsException(
+                error_code='UNSUPPORTED_LICENSE_ACTION',
+                detail=f'不支持的许可证动作: {action}',
+                action=action,
+                supported_actions=list(points_map.keys())
+            )
         
         # 如果有许可证价值，增加比例奖励
         if license_value:
