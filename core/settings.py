@@ -75,6 +75,7 @@ ALLOWED_HOSTS = [
     '*.localhost.charlesproxy.com',  # 支持Charles Proxy的所有子域名
     'espressox.online',
     'backend.espressox.online',
+    'admin.espressox.online',
 ]
 # Application definition
 
@@ -281,6 +282,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8848",
     "http://backend.espressox.online",
     "https://backend.espressox.online",
+    "http://admin.espressox.online",
+    "https://admin.espressox.online",
 ]
 CORS_ALLOW_CREDENTIALS = True  # 允许携带凭证（如 cookies）
 
@@ -314,6 +317,8 @@ CSRF_TRUSTED_ORIGINS = [
     'https://espressox.online',
     "http://backend.espressox.online",
     "https://backend.espressox.online",
+    "http://admin.espressox.online",
+    "https://admin.espressox.online",
 ]  # 添加受信任的源
 CSRF_USE_SESSIONS = False
 
