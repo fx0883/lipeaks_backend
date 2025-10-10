@@ -73,7 +73,8 @@ ALLOWED_HOSTS = [
     '127.0.0.1', 
     'myapp.localhost.charlesproxy.com',
     '*.localhost.charlesproxy.com',  # 支持Charles Proxy的所有子域名
-    'espressox.online'
+    'espressox.online',
+    'backend.espressox.online',
 ]
 # Application definition
 
@@ -310,7 +311,9 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://espressox.online',
-    'https://espressox.online'
+    'https://espressox.online',
+    "http://backend.espressox.online",
+    "https://backend.espressox.online",
 ]  # 添加受信任的源
 CSRF_USE_SESSIONS = False
 
