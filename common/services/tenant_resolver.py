@@ -5,6 +5,7 @@
 """
 import logging
 from rest_framework.exceptions import ValidationError
+from common.exceptions import TenantException
 from common.utils.error_response_builder import TenantErrorResponseBuilder, TenantErrorTypes
 
 logger = logging.getLogger(__name__)
@@ -95,9 +96,12 @@ class TenantIdResolver:
             return result
         except (ValueError, TypeError):
             self.logger.warning(f"无效的查询参数租户ID格式: {query_tenant_id}")
-            raise ValidationError({
-                "detail": f"无效的查询参数租户ID格式: {query_tenant_id}，租户ID必须是整数"
-            })
+            raise TenantException(
+                error_code='INVALID_TENANT_ID',
+                detail=f'无效的查询参数租户ID格式: {query_tenant_id}，租户ID必须是整数',
+                tenant_id=query_tenant_id,
+                source='query_param'
+            )
     
     def _extract_header_tenant_id(self):
         """
@@ -124,9 +128,12 @@ class TenantIdResolver:
             return result
         except (ValueError, TypeError):
             self.logger.warning(f"无效的请求头租户ID格式: {header_tenant_id}")
-            raise ValidationError({
-                "detail": f"无效的请求头租户ID格式: {header_tenant_id}，租户ID必须是整数"
-            })
+            raise TenantException(
+                error_code='INVALID_TENANT_ID',
+                detail=f'无效的请求头租户ID格式: {header_tenant_id}，租户ID必须是整数',
+                tenant_id=header_tenant_id,
+                source='header'
+            )
     
     def _extract_user_tenant_id(self):
         """

@@ -18,6 +18,7 @@ from common.pagination import StandardResultsSetPagination
 
 from common.permissions import IsSuperAdmin, IsAdmin
 from common.utils.user_permissions import is_super_admin, is_admin
+from common.exceptions import UserPermissionDeniedException, TenantException
 from users.models import Member
 from users.serializers import (
     MemberSerializer, 
@@ -254,7 +255,11 @@ class MemberListCreateView(generics.ListCreateAPIView):
             # 非超级管理员只能在自己租户创建用户
             tenant = user.tenant
             if not tenant:
-                raise PermissionDenied("您没有关联的租户，无法创建普通用户")
+                raise UserPermissionDeniedException(
+                    detail='您没有关联的租户，无法创建普通用户',
+                    user_id=user.id,
+                    username=user.username
+                )
         
         # 如果传入了tenant_id参数并且是超级管理员
         tenant_id = self.request.data.get('tenant_id')
@@ -271,7 +276,12 @@ class MemberListCreateView(generics.ListCreateAPIView):
                 tenant_id = int(tenant_id)
                 requested_tenant = get_object_or_404(Tenant, pk=tenant_id)
                 if requested_tenant.id != user.tenant.id:
-                    raise PermissionDenied("您只能在自己的租户下创建用户")
+                    raise UserPermissionDeniedException(
+                        detail='您只能在自己的租户下创建用户',
+                        user_id=user.id,
+                        user_tenant_id=user.tenant.id,
+                        requested_tenant_id=tenant_id
+                    )
                 tenant = user.tenant
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {tenant_id}")

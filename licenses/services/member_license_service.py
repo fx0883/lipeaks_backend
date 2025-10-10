@@ -11,6 +11,12 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.conf import settings
 
+from common.exceptions import (
+    LicenseException,
+    LicenseQuotaExceededException,
+    UserInactiveException,
+    TenantInactiveException,
+)
 from licenses.models import (
     SoftwareProduct, LicensePlan, License, LicenseAssignment,
     TenantLicenseQuota, SecurityAuditLog
@@ -225,7 +231,11 @@ class MemberLicenseApplicationService:
                 is_deleted=False
             )
         except SoftwareProduct.DoesNotExist:
-            raise ValueError("产品不存在或不可用")
+            raise LicenseException(
+                error_code='PRODUCT_NOT_FOUND',
+                detail=f'产品ID {product_id} 不存在或不可用',
+                product_id=product_id
+            )
         
         # 如果指定了plan_id，使用指定的方案
         if plan_id:
@@ -236,7 +246,12 @@ class MemberLicenseApplicationService:
                     status='active'
                 )
             except LicensePlan.DoesNotExist:
-                raise ValueError("指定的试用方案不存在或不可用")
+                raise LicenseException(
+                    error_code='TRIAL_PLAN_NOT_FOUND',
+                    detail=f'试用方案ID {plan_id} 不存在或不可用',
+                    plan_id=plan_id,
+                    product_id=product_id
+                )
         else:
             # 未指定plan_id，自动选择有效期最长的方案
             trial_plan = product.license_plans.filter(
@@ -248,7 +263,12 @@ class MemberLicenseApplicationService:
             ).first()
             
             if not trial_plan:
-                raise ValueError("该产品没有可用的试用方案")
+                raise LicenseException(
+                    error_code='NO_TRIAL_PLAN_AVAILABLE',
+                    detail=f'产品 {product.name} 没有可用的试用方案',
+                    product_id=product_id,
+                    product_name=product.name
+                )
         
         return product, trial_plan
     
@@ -269,22 +289,44 @@ class MemberLicenseApplicationService:
         ).exists()
         
         if existing:
-            raise ValueError("您已经拥有该产品的有效许可证")
+            raise LicenseException(
+                error_code='LICENSE_ALREADY_ASSIGNED',
+                detail='您已经拥有该产品的有效许可证',
+                member_id=member.id,
+                product_id=product.id
+            )
         
         # 检查用户状态
         if not member.is_active:
-            raise ValueError("用户账户已被禁用，无法申请许可证")
+            raise UserInactiveException(
+                detail=f'用户 {member.username} 账户已被禁用，无法申请许可证',
+                user_id=member.id,
+                username=member.username
+            )
         
         if getattr(member, 'status', 'active') != 'active':
-            raise ValueError("用户状态异常，无法申请许可证")
+            raise UserInactiveException(
+                detail=f'用户状态异常（{member.status}），无法申请许可证',
+                user_id=member.id,
+                status=getattr(member, 'status', 'unknown')
+            )
         
         # 检查租户状态
         if not member.tenant or not member.tenant.is_active:
-            raise ValueError("租户账户已被禁用，无法申请许可证")
+            raise TenantInactiveException(
+                detail='租户账户已被禁用，无法申请许可证',
+                tenant_id=member.tenant.id if member.tenant else None,
+                member_id=member.id
+            )
         
         # 检查用户是否被禁止申请许可证
         if hasattr(member, 'license_application_banned') and member.license_application_banned:
-            raise ValueError("您的账户已被禁止申请许可证")
+            raise LicenseException(
+                error_code='LICENSE_APPLICATION_BANNED',
+                detail='您的账户已被禁止申请许可证',
+                member_id=member.id,
+                banned=True
+            )
     
     def _check_quota_limits(self, member: Member, product: SoftwareProduct):
         """
@@ -303,7 +345,13 @@ class MemberLicenseApplicationService:
         
         if tenant_quota:
             if tenant_quota.current_licenses >= tenant_quota.max_licenses:
-                raise ValueError(f"租户许可证配额已满，当前配额: {tenant_quota.max_licenses}")
+                raise LicenseQuotaExceededException(
+                    detail=f'租户许可证配额已满，当前配额: {tenant_quota.max_licenses}',
+                    tenant_id=member.tenant.id,
+                    current_count=tenant_quota.current_licenses,
+                    max_count=tenant_quota.max_licenses,
+                    quota_type='tenant'
+                )
         
         # 检查用户个人配额（试用许可证限制）
         from licenses.config import TRIAL_LICENSE_QUOTAS
@@ -319,7 +367,13 @@ class MemberLicenseApplicationService:
         ).count()
         
         if user_trial_count >= max_trial_licenses:
-            raise ValueError(f"您的试用许可证数量已达上限（{max_trial_licenses}个）")
+            raise LicenseQuotaExceededException(
+                detail=f'您的试用许可证数量已达上限（{max_trial_licenses}个）',
+                member_id=member.id,
+                current_count=user_trial_count,
+                max_count=max_trial_licenses,
+                quota_type='user_trial'
+            )
         
         # 检查申请频率（从配置文件获取限制）
         from licenses.config import APPLICATION_RATE_LIMITS
@@ -333,7 +387,14 @@ class MemberLicenseApplicationService:
         ).count()
         
         if recent_applications >= business_limit:
-            raise ValueError(f"{cooldown_hours}小时内申请次数过多，请稍后再试（当前限制: {business_limit}次）")
+            raise LicenseException(
+                error_code='APPLICATION_RATE_LIMIT_EXCEEDED',
+                detail=f'{cooldown_hours}小时内申请次数过多，请稍后再试（当前限制: {business_limit}次）',
+                member_id=member.id,
+                cooldown_hours=cooldown_hours,
+                business_limit=business_limit,
+                recent_applications_count=recent_applications_count
+            )
     
     def _create_trial_license(
         self, 

@@ -18,6 +18,7 @@ from common.permissions import IsSuperAdmin, IsAdmin
 from common.pagination import StandardResultsSetPagination
 from common.authentication.jwt_auth import JWTAuthentication
 from common.viewsets import TenantModelViewSet
+from common.exceptions import CMSException, TenantException
 from common.utils.user_permissions import (
     is_super_admin, is_admin, is_member, can_create_content,
     can_edit_content, can_delete_content, can_moderate_comments,
@@ -266,7 +267,7 @@ class ArticleViewSet(TenantModelViewSet):
     filterset_fields = ['status', 'visibility', 'is_featured', 'is_pinned']
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['created_at', 'updated_at', 'published_at', 'title']
-    ordering = ['-published_at', '-created_at']
+    ordering = ['-is_pinned', '-created_at']
     queryset = Article.objects.all().select_related('author', 'tenant')  # 添加select_related优化查询
     
     def get_queryset(self):
@@ -994,7 +995,11 @@ class ArticleViewSet(TenantModelViewSet):
                 tenant_id = int(tenant_id)
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {tenant_id}")
-                raise ValidationError({"detail": f"无效的租户ID: {tenant_id}"})
+                raise TenantException(
+                    error_code='INVALID_TENANT_ID',
+                    detail=f'无效的租户ID格式: {tenant_id}',
+                    tenant_id=tenant_id
+                )
         
         # 根据权限获取可操作的文章
         if is_super_admin(user):
