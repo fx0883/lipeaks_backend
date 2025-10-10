@@ -278,6 +278,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://espressox.online",
     "https://espressox.online",
     "http://localhost:8848",
+    "http://backend.espressox.online",
+    "https://backend.espressox.online",
 ]
 CORS_ALLOW_CREDENTIALS = True  # 允许携带凭证（如 cookies）
 
