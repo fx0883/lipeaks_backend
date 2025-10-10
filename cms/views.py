@@ -267,7 +267,7 @@ class ArticleViewSet(TenantModelViewSet):
     filterset_fields = ['status', 'visibility', 'is_featured', 'is_pinned']
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['created_at', 'updated_at', 'published_at', 'title']
-    ordering = ['-published_at', '-created_at']
+    ordering = ['-is_pinned', '-created_at']
     queryset = Article.objects.all().select_related('author', 'tenant')  # 添加select_related优化查询
     
     def get_queryset(self):

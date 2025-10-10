@@ -164,8 +164,8 @@ class ArticleListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'excerpt', 'author', 'author_info',
             'status', 'is_featured', 'is_pinned', 'cover_image',
-            'published_at', 'categories', 'tags', 'comments_count',
-            'likes_count', 'views_count'
+            'published_at', 'created_at', 'updated_at', 'categories', 'tags', 
+            'comments_count', 'likes_count', 'views_count'
         ]
     
     def get_categories(self, obj) -> list:
