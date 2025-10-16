@@ -252,7 +252,7 @@ class AdminMemberListCreateView(generics.ListCreateAPIView):
                 requested_tenant = get_object_or_404(Tenant, pk=tenant_id)
                 if requested_tenant.id != user.tenant.id:
                     raise UserPermissionDeniedException(
-                        detail='您只能在自己的租户下创建用户',
+                        detail='You can only create users in your own tenant',
                         user_id=user.id,
                         user_tenant_id=user.tenant.id,
                         requested_tenant_id=tenant_id

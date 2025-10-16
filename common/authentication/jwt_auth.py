@@ -59,10 +59,10 @@ class JWTAuthentication(authentication.BaseAuthentication):
             )
         except jwt.ExpiredSignatureError:
             logger.warning("令牌已过期")
-            raise exceptions.AuthenticationFailed('令牌已过期')
+            raise exceptions.AuthenticationFailed('Token has expired')
         except jwt.InvalidTokenError:
             logger.warning("无效的令牌")
-            raise exceptions.AuthenticationFailed('无效的令牌')
+            raise exceptions.AuthenticationFailed('Invalid token')
         
         # 获取用户
         try:
@@ -76,23 +76,23 @@ class JWTAuthentication(authentication.BaseAuthentication):
                 
         except (User.DoesNotExist, Member.DoesNotExist) if Member else User.DoesNotExist:
             logger.warning(f"用户不存在或已被禁用: {user_id}")
-            raise exceptions.AuthenticationFailed('用户不存在或已被禁用')
+            raise exceptions.AuthenticationFailed('User not found or disabled')
         
         # 检查用户状态
         if user.status != 'active':
             logger.warning(f"用户状态异常: {user.username} ({user.status})")
-            raise exceptions.AuthenticationFailed('用户状态异常')
+            raise exceptions.AuthenticationFailed('User status is abnormal')
             
         # 检查是否为子账号
         if hasattr(user, 'parent') and user.parent:
             logger.warning(f"子账号尝试认证: {user.username}")
-            raise exceptions.AuthenticationFailed('子账号不允许登录')
+            raise exceptions.AuthenticationFailed('Sub-accounts are not allowed to log in')
         
         # 检查用户的租户状态
         if user.tenant and not getattr(user, 'is_super_admin', False):
             if user.tenant.status != 'active' or user.tenant.is_deleted:
                 logger.warning(f"用户 {user.username} 的租户 {user.tenant.name} 状态异常")
-                raise exceptions.AuthenticationFailed('您所属的租户已被禁用或删除')
+                raise exceptions.AuthenticationFailed('Your tenant has been disabled or deleted')
         
         return (user, token)
     
@@ -223,7 +223,7 @@ def refresh_jwt_token(refresh_token):
         # 检查令牌类型
         if payload.get('token_type') != 'refresh':
             logger.warning("非刷新令牌被用于刷新操作")
-            raise exceptions.ValidationError('无效的刷新令牌')
+            raise exceptions.ValidationError('Invalid refresh token')
         
         # 获取用户
         try:
@@ -237,12 +237,12 @@ def refresh_jwt_token(refresh_token):
                 
         except (User.DoesNotExist, Member.DoesNotExist) if Member else User.DoesNotExist:
             logger.warning(f"刷新令牌对应的用户不存在或已被禁用: {user_id}")
-            raise exceptions.ValidationError('用户不存在或已被禁用')
+            raise exceptions.ValidationError('User not found or disabled')
         
         # 检查用户状态
         if user.status != 'active':
             logger.warning(f"刷新令牌对应的用户状态异常: {user.username} ({user.status})")
-            raise exceptions.ValidationError('用户状态异常')
+            raise exceptions.ValidationError('User status is abnormal')
         
         # 生成新令牌
         token_expiry = datetime.now() + timedelta(seconds=settings.JWT_AUTH['JWT_EXPIRATION_DELTA'])
@@ -269,7 +269,7 @@ def refresh_jwt_token(refresh_token):
         
     except jwt.ExpiredSignatureError:
         logger.warning("刷新令牌已过期")
-        raise exceptions.ValidationError('刷新令牌已过期')
+        raise exceptions.ValidationError('Refresh token has expired')
     except jwt.InvalidTokenError:
-        logger.warning("无效的刷新令牌")
-        raise exceptions.ValidationError('无效的刷新令牌') 
+        logger.warning("Invalid refresh token")
+        raise exceptions.ValidationError('Invalid refresh token') 

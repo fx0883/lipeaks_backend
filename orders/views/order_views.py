@@ -382,7 +382,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         """
         执行软删除并记录历史
         """
-        # 获取当前用户
+        # 获取current用户
         user = self.request.user
         
         # 先记录历史
@@ -468,7 +468,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         导出订单数据（POST方法）
         
         可以通过JSON请求体传递order_ids数组来指定要导出的订单ID列表
-        如果不提供order_ids，则导出当前租户下所有订单
+        如果不提供order_ids，则导出current租户下所有订单
         """
         logger.info(f"开始处理订单导出请求，请求数据: {request.data}")
         

@@ -171,7 +171,7 @@ class Command(BaseCommand):
         except CommandError:
             raise
         except Exception as e:
-            raise CommandError(f'命令执行失败: {str(e)}')
+            raise CommandError(f'Command execution failed: {str(e)}')
 
     def _show_cleanup_preview(self, licenses_query, options):
         """显示清理预览"""

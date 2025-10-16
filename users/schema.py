@@ -116,7 +116,7 @@ login_response_examples = [
         value={
             "success": False,
             "code": 4002,
-            "message": "用户名/邮箱或密码错误",
+            "message": "Invalid username/email or password",
             "data": None
         },
         status_codes=["401"]
@@ -145,7 +145,7 @@ token_refresh_response_examples = [
         value={
             "success": True,
             "code": 2000,
-            "message": "刷新令牌成功",
+            "message": "Token refreshed successfully",
             "data": {
                 "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -159,7 +159,7 @@ token_refresh_response_examples = [
         value={
             "success": False,
             "code": 4001,
-            "message": "无效的刷新令牌",
+            "message": "Invalid refresh token",
             "data": None
         },
         status_codes=["401"]
@@ -375,7 +375,7 @@ login_responses = {
                 value={
                     "success": False,
                     "code": 4002,
-                    "message": "用户名/邮箱或密码错误",
+                    "message": "Invalid username/email or password",
                     "data": None
                 }
             )
@@ -390,14 +390,14 @@ token_refresh_responses = {
         examples=token_refresh_response_examples
     ),
     400: OpenApiResponse(
-        description="无效的刷新令牌",
+        description="Invalid refresh token",
         examples=[
             OpenApiExample(
                 name="无效令牌",
                 value={
                     "success": False,
                     "code": 4000,
-                    "message": "无效的刷新令牌",
+                    "message": "Invalid refresh token",
                     "data": None
                 }
             )
@@ -411,7 +411,7 @@ token_refresh_responses = {
                 value={
                     "success": False,
                     "code": 4001,
-                    "message": "无效的刷新令牌",
+                    "message": "Invalid refresh token",
                     "data": None
                 }
             ),
@@ -420,7 +420,7 @@ token_refresh_responses = {
                 value={
                     "success": False,
                     "code": 4001,
-                    "message": "用户不存在或已被禁用",
+                    "message": "User not found or disabled",
                     "data": None
                 }
             )
@@ -434,7 +434,7 @@ token_refresh_responses = {
                 value={
                     "success": False,
                     "code": 5000,
-                    "message": "刷新令牌失败",
+                    "message": "Token refresh failed",
                     "data": None
                 }
             )
@@ -500,7 +500,7 @@ change_password_responses = {
             OpenApiExample(
                 name="旧密码错误",
                 value={
-                    "old_password": ["旧密码不正确"]
+                    "old_password": ["Incorrect old password"]
                 }
             )
         ]
@@ -581,8 +581,8 @@ register_response_examples = [
             "code": 4000,
             "message": "注册失败",
             "data": {
-                "username": ["该用户名已被使用"],
-                "email": ["该邮箱已被注册"],
+                "username": ["Username already in use"],
+                "email": ["Email already registered"],
                 "password": ["密码至少需要包含8个字符，并且不能是常见密码"]
             }
         },
@@ -669,7 +669,7 @@ sub_account_create_responses = {
                     "code": 4000,
                     "message": "创建失败",
                     "data": {
-                        "username": ["该用户名已被使用"]
+                        "username": ["Username already in use"]
                     }
                 }
             ),
@@ -680,7 +680,7 @@ sub_account_create_responses = {
                     "code": 4000,
                     "message": "创建失败",
                     "data": {
-                        "email": ["该邮箱已被使用"]
+                        "email": ["Email already in use"]
                     }
                 }
             )
@@ -809,9 +809,9 @@ password_reset_request_responses = {
                 value={
                     "success": False,
                     "code": 4029,
-                    "message": "请求过于频繁，请稍后再试",
+                    "message": "Too many requests, please try again later",
                     "data": {
-                        "detail": "请求过于频繁，请稍后再试"
+                        "detail": "Too many requests, please try again later"
                     }
                 }
             )
@@ -851,7 +851,7 @@ password_reset_verify_response_examples = [
             "code": 4000,
             "message": "请求数据无效",
             "data": {
-                "token": ["无效的重置令牌"]
+                "token": ["Invalid reset token"]
             }
         },
         response_only=True
@@ -863,7 +863,7 @@ password_reset_verify_response_examples = [
             "code": 4000,
             "message": "请求数据无效",
             "data": {
-                "token": ["重置令牌已过期"]
+                "token": ["Reset token has expired"]
             }
         },
         response_only=True
@@ -898,7 +898,7 @@ password_reset_verify_responses = {
                     "code": 4000,
                     "message": "请求数据无效",
                     "data": {
-                        "token": ["无效的重置令牌"]
+                        "token": ["Invalid reset token"]
                     }
                 }
             ),
@@ -909,7 +909,7 @@ password_reset_verify_responses = {
                     "code": 4000,
                     "message": "请求数据无效",
                     "data": {
-                        "token": ["重置令牌已过期"]
+                        "token": ["Reset token has expired"]
                     }
                 }
             )
@@ -950,7 +950,7 @@ password_reset_confirm_response_examples = [
             "code": 4000,
             "message": "请求数据无效",
             "data": {
-                "confirm_password": ["两次输入的密码不一致"]
+                "confirm_password": ["Passwords do not match"]
             }
         },
         response_only=True
@@ -962,7 +962,7 @@ password_reset_confirm_response_examples = [
             "code": 4000,
             "message": "请求数据无效",
             "data": {
-                "token": ["无效的重置令牌"]
+                "token": ["Invalid reset token"]
             }
         },
         response_only=True
@@ -996,7 +996,7 @@ password_reset_confirm_responses = {
                     "code": 4000,
                     "message": "请求数据无效",
                     "data": {
-                        "confirm_password": ["两次输入的密码不一致"]
+                        "confirm_password": ["Passwords do not match"]
                     }
                 }
             ),
@@ -1007,7 +1007,7 @@ password_reset_confirm_responses = {
                     "code": 4000,
                     "message": "请求数据无效",
                     "data": {
-                        "token": ["无效的重置令牌"]
+                        "token": ["Invalid reset token"]
                     }
                 }
             )

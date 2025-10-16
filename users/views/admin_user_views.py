@@ -34,13 +34,13 @@ logger = logging.getLogger(__name__)
 
 class CurrentAdminUserView(APIView):
     """
-    获取和更新当前登录管理员用户信息
+    获取和更新current登录管理员用户信息
     """
     permission_classes = [permissions.IsAuthenticated, IsAdmin]
     
     @extend_schema(
-        summary="获取当前管理员信息",
-        description="获取当前登录管理员用户的详细信息。需要管理员权限。",
+        summary="获取current管理员信息",
+        description="获取current登录管理员用户的详细信息。需要管理员权限。",
         responses={
             200: OpenApiResponse(
                 description="成功获取管理员信息",
@@ -65,8 +65,8 @@ class CurrentAdminUserView(APIView):
         return Response(serializer.data)
     
     @extend_schema(
-        summary="更新当前管理员信息",
-        description="更新当前登录管理员用户的基本信息。需要管理员权限。",
+        summary="更新current管理员信息",
+        description="更新current登录管理员用户的基本信息。需要管理员权限。",
         request=UserSerializer,
         responses={
             200: OpenApiResponse(
@@ -81,7 +81,7 @@ class CurrentAdminUserView(APIView):
     )
     def put(self, request, *args, **kwargs):
         """
-        更新当前用户的基本信息
+        更新current用户的基本信息
         """
         # 检查用户是否为管理员
         if not is_admin(request.user):
@@ -321,7 +321,7 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
             # 非超级管理员只能在自己租户创建用户
             tenant = user.tenant
             if not tenant:
-                raise PermissionDenied("您没有关联的租户，无法创建管理员")
+                raise PermissionDenied("You have no associated tenant and cannot create an admin")
         
         # 如果传入了tenant_id参数并且是超级管理员
         tenant_id = self.request.data.get('tenant_id')
@@ -338,7 +338,7 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
                 tenant_id = int(tenant_id)
                 requested_tenant = get_object_or_404(Tenant, pk=tenant_id)
                 if requested_tenant.id != user.tenant.id:
-                    raise PermissionDenied("您只能在自己的租户下创建管理员")
+                    raise PermissionDenied("You can only create admins in your own tenant")
                 tenant = user.tenant
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {tenant_id}")
@@ -403,7 +403,7 @@ class AdminUserRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
         description="删除指定管理员（软删除）。权限要求：超级管理员可删除任何管理员（除自己外）；租户管理员只能删除自己租户的其他管理员。",
         responses={
             204: OpenApiResponse(description="成功删除管理员"),
-            400: OpenApiResponse(description="请求参数错误，例如尝试删除当前登录账号"),
+            400: OpenApiResponse(description="请求参数错误，例如尝试删除current登录账号"),
             403: OpenApiResponse(description="权限不足"),
             404: OpenApiResponse(description="管理员不存在")
         },
@@ -451,7 +451,7 @@ class AdminUserRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
         
         # 不允许非超级管理员修改 is_super_admin 字段
         if not is_super_admin(user) and 'is_super_admin' in serializer.validated_data:
-            raise PermissionDenied("只有超级管理员可以修改超级管理员标志")
+            raise PermissionDenied("Only super admins can modify the super admin flag")
             
         # 确保用户仍然是管理员
         serializer.validated_data['is_admin'] = True
@@ -471,12 +471,12 @@ class AdminUserRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
         # 检查是否尝试删除超级管理员
         if is_super_admin(instance) and not is_super_admin(user):
             logger.warning(f"用户 {user.username} 尝试删除超级管理员 {instance.username}，操作被拒绝")
-            raise PermissionDenied("只有超级管理员可以删除其他超级管理员")
+            raise PermissionDenied("Only super admins can delete other super admins")
         
-        # 检查是否尝试删除当前登录账号
+        # 检查是否尝试删除current登录账号
         if instance.pk == user.pk:
             logger.warning(f"用户 {user.username} 尝试删除自己的账号，操作被拒绝")
-            raise PermissionDenied("不能删除当前登录的账号")
+            raise PermissionDenied("Cannot delete the currently logged-in account")
         
         # 日志记录
         logger.info(f"用户 {user.username} 软删除管理员 {instance.username}")
@@ -683,7 +683,7 @@ class AdminPasswordUpdateView(generics.UpdateAPIView):
             # 检查旧密码
             if not user.check_password(serializer.validated_data['old_password']):
                 return Response(
-                    {"old_password": ["旧密码不正确"]},
+                    {"old_password": ["Incorrect old password"]},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -731,8 +731,8 @@ class AdminUserAvatarUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     
     @extend_schema(
-        summary="上传当前管理员头像",
-        description="上传并更新当前登录管理员用户的头像图片",
+        summary="上传current管理员头像",
+        description="上传并更新current登录管理员用户的头像图片",
         request={
             'multipart/form-data': {
                 'type': 'object',
@@ -1034,7 +1034,7 @@ class DeactivateAdminUserView(APIView):
                     )
                 ]
             ),
-            400: OpenApiResponse(description="请求参数错误，例如尝试停用当前登录账号"),
+            400: OpenApiResponse(description="请求参数错误，例如尝试停用current登录账号"),
             403: OpenApiResponse(description="权限不足"),
             404: OpenApiResponse(description="管理员不存在")
         },
@@ -1051,7 +1051,7 @@ class DeactivateAdminUserView(APIView):
             # 不允许停用自己
             if user.id == request.user.id:
                 return Response(
-                    {"detail": "不能停用当前登录的账号"},
+                    {"detail": "不能停用current登录的账号"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             

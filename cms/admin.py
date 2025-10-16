@@ -71,7 +71,7 @@ class ArticleAdmin(CMSAdminMixin, admin.ModelAdmin):
     
     def save_model(self, request, obj, form, change):
         if not change:  # 如果是创建新对象
-            obj.author = request.user  # 设置当前用户为作者
+            obj.author = request.user  # 设置current用户为作者
         super().save_model(request, obj, form, change)
     
     def get_queryset(self, request):

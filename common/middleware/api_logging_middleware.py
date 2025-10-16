@@ -119,7 +119,7 @@ class APILoggingMiddleware(MiddlewareMixin):
             'error_message': error_message,
         }
         
-        # 获取当前用户和租户
+        # 获取current用户和租户
         if hasattr(request, 'user') and request.user.is_authenticated:
             log_data['user'] = request.user
             log_data['tenant'] = getattr(request.user, 'tenant', None)

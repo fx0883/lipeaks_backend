@@ -346,7 +346,7 @@ class MemberLicenseApplicationService:
         if tenant_quota:
             if tenant_quota.current_licenses >= tenant_quota.max_licenses:
                 raise LicenseQuotaExceededException(
-                    detail=f'租户许可证配额已满，当前配额: {tenant_quota.max_licenses}',
+                    detail=f'租户许可证配额已满，current配额: {tenant_quota.max_licenses}',
                     tenant_id=member.tenant.id,
                     current_count=tenant_quota.current_licenses,
                     max_count=tenant_quota.max_licenses,
@@ -368,7 +368,7 @@ class MemberLicenseApplicationService:
         
         if user_trial_count >= max_trial_licenses:
             raise LicenseQuotaExceededException(
-                detail=f'您的试用许可证数量已达上限（{max_trial_licenses}个）',
+                detail=f'Your trial license quota has been reached（{max_trial_licenses}个）',
                 member_id=member.id,
                 current_count=user_trial_count,
                 max_count=max_trial_licenses,
@@ -389,7 +389,7 @@ class MemberLicenseApplicationService:
         if recent_applications >= business_limit:
             raise LicenseException(
                 error_code='APPLICATION_RATE_LIMIT_EXCEEDED',
-                detail=f'{cooldown_hours}小时内申请次数过多，请稍后再试（当前限制: {business_limit}次）',
+                detail=f'{cooldown_hours}hours. Too many applications, please try again later（Current limit: {business_limit}次）',
                 member_id=member.id,
                 cooldown_hours=cooldown_hours,
                 business_limit=business_limit,

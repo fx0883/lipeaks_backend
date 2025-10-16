@@ -70,7 +70,7 @@ class CustomerMemberRelationViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """
-        获取查询集，可以按客户ID过滤，并且根据当前租户进行过滤
+        获取查询集，可以按客户ID过滤，并且根据current租户进行过滤
         """
         queryset = CustomerMemberRelation.objects.all()  # 使用BaseModel的TenantManager自动过滤租户
         
@@ -90,7 +90,7 @@ class CustomerMemberRelationViewSet(viewsets.ModelViewSet):
         """
         创建关系时设置租户
         """
-        # 从请求上下文获取当前租户
+        # 从请求上下文获取current租户
         tenant = self.request.user.tenant
         serializer.save(tenant=tenant)
     

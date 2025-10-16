@@ -175,7 +175,7 @@ class MachineFingerprintService:
         
         Args:
             stored_fingerprint: 存储的指纹
-            current_fingerprint: 当前指纹
+            current_fingerprint: current指纹
             similarity_threshold: 相似度阈值
             
         Returns:

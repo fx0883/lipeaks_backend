@@ -143,7 +143,7 @@ class VipExpirationService:
             bool: 是否延长成功
         """
         if extend_days <= 0:
-            raise ValueError("延长天数必须大于0")
+            raise ValueError("Extension days must be greater than 0")
         
         try:
             # 延长期限

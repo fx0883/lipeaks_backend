@@ -504,7 +504,7 @@ class LicenseActivationService:
             machine_binding.status = 'inactive'
             machine_binding.save()
             
-            # 更新许可证的当前激活数
+            # 更新许可证的current激活数
             active_bindings_count = MachineBinding.objects.filter(
                 license=license_obj,
                 status='active'

@@ -110,7 +110,7 @@ class SoftwareProductViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """创建产品时自动设置租户信息"""
-        # 从中间件获取当前租户信息
+        # 从中间件获取current租户信息
         tenant_id = getattr(self.request, 'tenant_id', None)
         if tenant_id:
             from tenants.models import Tenant
@@ -288,7 +288,7 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """创建方案时自动设置租户信息"""
-        # 从中间件获取当前租户信息
+        # 从中间件获取current租户信息
         tenant_id = getattr(self.request, 'tenant_id', None)
         if tenant_id:
             from tenants.models import Tenant
@@ -373,7 +373,7 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
         ## 业务逻辑
         
         1. **产品自动关联**: product字段不需要提供，系统会从plan自动获取对应的产品
-        2. **租户自动关联**: tenant字段可选，如未提供将从当前用户的租户自动获取  
+        2. **租户自动关联**: tenant字段可选，如未提供将从current用户的租户自动获取  
         3. **许可证密钥生成**: 系统自动生成25字符格式的许可证密钥 (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)
         4. **过期时间计算**: 可通过validity_days指定有效期，否则使用方案的default_validity_days
         5. **激活限制**: max_activations可自定义，否则使用方案的default_max_activations
@@ -641,7 +641,7 @@ class LicenseViewSet(viewsets.ModelViewSet):
         
         # 自动获取tenant字段
         if not serializer.validated_data.get('tenant'):
-            # 尝试从中间件获取当前租户信息
+            # 尝试从中间件获取current租户信息
             tenant_id = getattr(self.request, 'tenant_id', None)
             if tenant_id:
                 from tenants.models import Tenant
@@ -706,7 +706,7 @@ class LicenseViewSet(viewsets.ModelViewSet):
             if days <= 0:
                 return Response({
                     'success': False,
-                    'error': '延长天数必须大于0'
+                    'error': 'Extension days must be greater than 0'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             # 延长有效期
@@ -786,7 +786,7 @@ class LicenseViewSet(viewsets.ModelViewSet):
                     }
                 ]
             ),
-            404: OpenApiResponse(description='许可证不存在'),
+            404: OpenApiResponse(description='License not found'),
             403: OpenApiResponse(description='无权限访问该许可证')
         }
     )
@@ -899,7 +899,7 @@ class LicenseViewSet(viewsets.ModelViewSet):
 
 重要信息:
 - 最大激活设备数: {license_obj.max_activations}
-- 当前已激活设备数: {license_obj.current_activations}
+- current已激活设备数: {license_obj.current_activations}
 - 许可证过期时间: {license_obj.expires_at.strftime('%Y年%m月%d日 %H:%M:%S')}
 - 许可证状态: {license_obj.get_status_display()}
 
@@ -944,7 +944,7 @@ class LicenseViewSet(viewsets.ModelViewSet):
 激活信息:
 --------
 最大激活数: {license_data['activation_info']['max_activations']}
-当前激活数: {license_data['activation_info']['current_activations']}
+current激活数: {license_data['activation_info']['current_activations']}
 许可证状态: {license_data['activation_info']['status']}
 
 有效期信息:
@@ -1073,7 +1073,7 @@ class LicenseViewSet(viewsets.ModelViewSet):
                                 results.append({
                                     'license_id': license_obj.id,
                                     'success': False,
-                                    'error': '延长天数必须大于0'
+                                    'error': 'Extension days must be greater than 0'
                                 })
                         
                         elif operation == 'suspend':

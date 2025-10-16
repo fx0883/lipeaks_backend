@@ -8,7 +8,7 @@ from users.views import member_views
 app_name = 'members'
 
 urlpatterns = [
-    # 当前登录的Member操作
+    # current登录的Member操作
     path('me/', member_views.CurrentMemberView.as_view(), name='current-member'),
     path('me/password/', member_views.MemberPasswordUpdateView.as_view(), name='member-password-update'),
     

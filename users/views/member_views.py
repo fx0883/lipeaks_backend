@@ -256,7 +256,7 @@ class MemberListCreateView(generics.ListCreateAPIView):
             tenant = user.tenant
             if not tenant:
                 raise UserPermissionDeniedException(
-                    detail='您没有关联的租户，无法创建普通用户',
+                    detail='You have no associated tenant and cannot create member',
                     user_id=user.id,
                     username=user.username
                 )
@@ -269,7 +269,7 @@ class MemberListCreateView(generics.ListCreateAPIView):
                 tenant = get_object_or_404(Tenant, pk=tenant_id)
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {tenant_id}")
-                raise serializers.ValidationError({"tenant_id": f"无效的租户ID: {tenant_id}"})
+                raise serializers.ValidationError({"tenant_id": f"Invalid tenant ID: {tenant_id}"})
         elif tenant_id and not is_super_admin(user):
             # 非超级管理员尝试指定租户ID
             try:
@@ -277,7 +277,7 @@ class MemberListCreateView(generics.ListCreateAPIView):
                 requested_tenant = get_object_or_404(Tenant, pk=tenant_id)
                 if requested_tenant.id != user.tenant.id:
                     raise UserPermissionDeniedException(
-                        detail='您只能在自己的租户下创建用户',
+                        detail='You can only create users in your own tenant',
                         user_id=user.id,
                         user_tenant_id=user.tenant.id,
                         requested_tenant_id=tenant_id
@@ -285,7 +285,7 @@ class MemberListCreateView(generics.ListCreateAPIView):
                 tenant = user.tenant
             except (ValueError, TypeError):
                 logger.error(f"无效的租户ID: {tenant_id}")
-                raise serializers.ValidationError({"tenant_id": f"无效的租户ID: {tenant_id}"})
+                raise serializers.ValidationError({"tenant_id": f"Invalid tenant ID: {tenant_id}"})
         
         logger.info(f"用户 {user.username} 创建新普通用户，租户设置为: {tenant.name if tenant else '无租户'}")
         serializer.save(tenant=tenant)
@@ -343,10 +343,10 @@ class MemberRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
     
     @extend_schema(
         summary="删除普通用户",
-        description="删除指定普通用户（软删除）。权限要求：超级管理员可删除任何普通用户；租户管理员只能删除自己租户的普通用户。不能删除当前登录的用户账号。",
+        description="删除指定普通用户（软删除）。权限要求：超级管理员可删除任何普通用户；租户管理员只能删除自己租户的普通用户。不能删除current登录的用户账号。",
         responses={
             204: OpenApiResponse(description="成功删除普通用户"),
-            400: OpenApiResponse(description="请求参数错误，例如尝试删除当前登录账号"),
+            400: OpenApiResponse(description="请求参数错误，例如尝试删除current登录账号"),
             403: OpenApiResponse(description="权限不足"),
             404: OpenApiResponse(description="普通用户不存在")
         },
@@ -405,11 +405,11 @@ class MemberRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
         """
         user = self.request.user
         
-        # 检查是否尝试删除当前登录账号
+        # 检查是否尝试删除current登录账号
         # 只有当用户是Member类型且ID相同时才拒绝操作
         if isinstance(user, Member) and instance.pk == user.pk:
             logger.warning(f"用户 {user.username} 尝试删除自己的账号，操作被拒绝")
-            raise PermissionDenied("不能删除当前登录的账号")
+            raise PermissionDenied("Cannot delete the currently logged-in account")
         
         # 日志记录
         logger.info(f"用户 {user.username} 软删除普通用户 {instance.username}")
@@ -420,7 +420,7 @@ class MemberRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
 
 class CurrentMemberView(APIView):
     """
-    获取和更新当前登录普通用户信息
+    获取和更新current登录普通用户信息
     """
     permission_classes = [permissions.IsAuthenticated]
     
@@ -431,10 +431,10 @@ class CurrentMemberView(APIView):
         return {'request': self.request}
     
     @extend_schema(
-        summary="获取当前登录普通用户信息",
-        description="获取当前登录普通用户的详细信息。",
+        summary="获取current登录普通用户信息",
+        description="获取current登录普通用户的详细信息。",
         responses={
-            200: OpenApiResponse(description="成功获取当前用户信息", response=MemberSerializer),
+            200: OpenApiResponse(description="成功获取current用户信息", response=MemberSerializer),
             403: OpenApiResponse(description="权限不足")
         },
         tags=["普通用户管理"]
@@ -442,7 +442,7 @@ class CurrentMemberView(APIView):
     def get(self, request, *args, **kwargs):
         user = request.user
         
-        # 检查当前用户是否为普通用户
+        # 检查current用户是否为普通用户
         if not isinstance(user, Member):
             logger.warning(f"非普通用户 {user.username} 尝试访问普通用户专属API")
             return Response(
@@ -454,11 +454,11 @@ class CurrentMemberView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     @extend_schema(
-        summary="更新当前登录普通用户信息",
-        description="更新当前登录普通用户的基本信息。",
+        summary="更新current登录普通用户信息",
+        description="更新current登录普通用户的基本信息。",
         request=MemberSerializer,
         responses={
-            200: OpenApiResponse(description="成功更新当前用户信息", response=MemberSerializer),
+            200: OpenApiResponse(description="成功更新current用户信息", response=MemberSerializer),
             400: OpenApiResponse(description="请求参数错误"),
             403: OpenApiResponse(description="权限不足")
         },
@@ -467,7 +467,7 @@ class CurrentMemberView(APIView):
     def put(self, request, *args, **kwargs):
         user = request.user
         
-        # 检查当前用户是否为普通用户
+        # 检查current用户是否为普通用户
         if not isinstance(user, Member):
             logger.warning(f"非普通用户 {user.username} 尝试访问普通用户专属API")
             return Response(
@@ -527,7 +527,7 @@ class MemberPasswordUpdateView(APIView):
     def post(self, request):
         user = request.user
         
-        # 检查当前用户是否为普通用户
+        # 检查current用户是否为普通用户
         if not isinstance(user, Member):
             logger.warning(f"非普通用户 {user.username} 尝试访问普通用户专属API")
             return Response(
@@ -568,7 +568,7 @@ class SubAccountListCreateView(generics.ListCreateAPIView):
     
     @extend_schema(
         summary="获取子账号列表",
-        description="获取当前用户的子账号列表。普通用户只能查看自己的子账号；管理员可根据权限查看系统中的子账号。",
+        description="获取current用户的子账号列表。普通用户只能查看自己的子账号；管理员可根据权限查看系统中的子账号。",
         responses={
             200: OpenApiResponse(
                 description="获取子账号列表成功",
@@ -619,7 +619,7 @@ class SubAccountListCreateView(generics.ListCreateAPIView):
     
     @extend_schema(
         summary="创建新子账号",
-        description="创建一个与当前用户关联的新子账号。子账号默认不能登录，仅用于数据关联。",
+        description="创建一个与current用户关联的新子账号。子账号默认不能登录，仅用于数据关联。",
         request=SubAccountCreateSerializer,
         responses={
             201: OpenApiResponse(
@@ -840,8 +840,8 @@ class MemberAvatarUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     
     @extend_schema(
-        summary="上传当前普通用户头像",
-        description="上传并更新当前登录普通用户的头像图片",
+        summary="上传current普通用户头像",
+        description="上传并更新current登录普通用户的头像图片",
         request={
             'multipart/form-data': {
                 'type': 'object',
@@ -1043,7 +1043,7 @@ class MemberSpecificAvatarUploadView(APIView):
         # 权限检查
         current_user = request.user
         
-        # 如果当前用户是Member类型
+        # 如果current用户是Member类型
         if isinstance(current_user, Member):
             # 只能为自己的子账号上传头像
             if target_user.parent != current_user:
@@ -1051,7 +1051,7 @@ class MemberSpecificAvatarUploadView(APIView):
                     {"detail": "您只能为自己的子账号上传头像"},
                     status=status.HTTP_403_FORBIDDEN
                 )
-        # 如果当前用户是管理员
+        # 如果current用户是管理员
         elif is_admin(current_user):
             # 超级管理员可以为任何普通用户上传头像
             if not is_super_admin(current_user) and current_user.tenant != target_user.tenant:
@@ -1124,7 +1124,7 @@ class MemberSpecificAvatarUploadView(APIView):
             target_user.avatar = relative_url
             target_user.save(update_fields=['avatar'])
             
-            # 根据当前用户类型记录日志
+            # 根据current用户类型记录日志
             if isinstance(current_user, Member):
                 logger.info(f"普通用户 {current_user.username} 为其子账号 {target_user.username} 上传了新头像")
             else:

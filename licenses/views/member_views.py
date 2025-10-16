@@ -48,12 +48,12 @@ class MemberAPIThrottle(UserRateThrottle):
     tags=['Member许可证API'],
     summary='获取可申请的试用产品列表',
     description='''
-    获取当前Member用户可以申请试用许可证的产品列表
+    获取currentMember用户可以申请试用许可证的产品列表
 
     ## 业务规则
 
     1. **产品筛选** - 只显示有试用方案且状态为活跃的产品
-    2. **租户隔离** - 仅显示当前用户租户下的产品
+    2. **租户隔离** - 仅显示current用户租户下的产品
     3. **申请状态** - 标记用户是否已申请过该产品
     4. **方案信息** - 包含试用方案的详细配置信息
 
@@ -243,7 +243,7 @@ def available_products(request):
                     'Already Applied',
                     value={
                         'success': False,
-                        'error': '您已经申请过该产品的许可证',
+                        'error': 'You have already applied for a license for this product',
                         'code': 'APPLICATION_FAILED'
                     }
                 ),
@@ -251,7 +251,7 @@ def available_products(request):
                     'Quota Exceeded',
                     value={
                         'success': False,
-                        'error': '您的试用许可证数量已达上限（1个）',
+                        'error': 'Your trial license quota has been reached（1个）',
                         'code': 'APPLICATION_FAILED'
                     }
                 ),
@@ -259,7 +259,7 @@ def available_products(request):
                     'Rate Limited',
                     value={
                         'success': False,
-                        'error': '24小时内申请次数过多，请稍后再试',
+                        'error': '24hours. Too many applications, please try again later',
                         'code': 'APPLICATION_FAILED'
                     }
                 )
@@ -361,7 +361,7 @@ def apply_trial_license(request):
     tags=['Member许可证API'],
     summary='查看我的许可证',
     description='''
-    获取当前Member用户的所有许可证列表及统计信息
+    获取currentMember用户的所有许可证列表及统计信息
 
     ## 返回信息
 
@@ -374,8 +374,8 @@ def apply_trial_license(request):
 
     - **基本信息**: 产品名称、版本、方案类型
     - **许可证密钥**: 仅显示部分密钥，保护隐私
-    - **状态信息**: 当前状态、分配时间、过期时间
-    - **激活信息**: 当前激活数、最大激活数、可用配额
+    - **状态信息**: current状态、分配时间、过期时间
+    - **激活信息**: current激活数、最大激活数、可用配额
     - **使用权限**: 激活权限、停用权限、共享权限
 
     ## 权限要求

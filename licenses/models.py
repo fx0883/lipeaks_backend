@@ -121,7 +121,7 @@ class License(BaseModel):
     
     # 许可证配置
     max_activations = models.PositiveIntegerField(_("最大激活数"), default=1)
-    current_activations = models.PositiveIntegerField(_("当前激活数"), default=0)
+    current_activations = models.PositiveIntegerField(_("current激活数"), default=0)
     
     # 时间控制
     issued_at = models.DateTimeField(_("签发时间"), auto_now_add=True)
@@ -220,7 +220,7 @@ class License(BaseModel):
         from datetime import timedelta
         
         if days <= 0:
-            raise ValueError("延长天数必须大于0")
+            raise ValueError("Extension days must be greater than 0")
         
         old_expires_at = self.expires_at
         self.expires_at += timedelta(days=days)
@@ -239,7 +239,7 @@ class License(BaseModel):
             new_plan (LicensePlan): 新的许可证计划
         """
         if new_plan.product != self.product:
-            raise ValueError(f"新计划 {new_plan.id} 不属于当前产品 {self.product.id}")
+            raise ValueError(f"New plan {new_plan.id} does not belong to current product {self.product.id}")
         
         old_plan = self.plan
         self.plan = new_plan
@@ -423,7 +423,7 @@ class TenantLicenseQuota(BaseModel):
     
     # 配额限制
     max_licenses = models.PositiveIntegerField(_("最大许可证数"), default=10)
-    current_licenses = models.PositiveIntegerField(_("当前许可证数"), default=0)
+    current_licenses = models.PositiveIntegerField(_("current许可证数"), default=0)
     
     # 时间限制
     quota_start_date = models.DateField(_("配额开始日期"))
@@ -694,10 +694,10 @@ class LicenseAssignment(BaseModel):
     def activate(self):
         """激活分配"""
         if self.status != 'pending':
-            raise ValueError(f"只能激活待激活状态的分配，当前状态: {self.get_status_display()}")
+            raise ValueError(f"只能激活待激活状态的分配，Current status: {self.get_status_display()}")
         
         if not self.can_activate:
-            raise ValueError("当前分配不允许激活")
+            raise ValueError("Current assignment does not allow activation")
         
         # 检查许可证状态
         if self.license.status not in ['generated', 'activated']:
@@ -707,10 +707,10 @@ class LicenseAssignment(BaseModel):
         from django.utils import timezone
         now = timezone.now()
         if self.expires_at and now > self.expires_at:
-            raise ValueError("分配已过期，无法激活")
+            raise ValueError("Assignment has expired and cannot be activated")
         
         if self.license.expires_at and now > self.license.expires_at:
-            raise ValueError("许可证已过期，无法激活")
+            raise ValueError("License has expired and cannot be activated")
         
         # 执行激活
         self.status = 'active'
@@ -722,7 +722,7 @@ class LicenseAssignment(BaseModel):
     def revoke(self, reason="", operator=None):
         """撤销分配"""
         if self.status in ['revoked', 'expired']:
-            raise ValueError(f"无法撤销已撤销或已过期的分配，当前状态: {self.get_status_display()}")
+            raise ValueError(f"无法撤销已撤销或已过期的分配，Current status: {self.get_status_display()}")
         
         from django.utils import timezone
         
@@ -843,12 +843,12 @@ class LicenseAssignment(BaseModel):
         """
         # 验证租户一致性
         if member.tenant_id != license.tenant_id:
-            raise ValueError(f"成员租户({member.tenant_id})与许可证租户({license.tenant_id})不一致")
+            raise ValueError(f"Member tenant({member.tenant_id})does not match license tenant({license.tenant_id})不一致")
         
         # 检查是否已存在分配
         existing = cls.objects.filter(member=member, license=license).first()
         if existing and existing.status == 'active':
-            raise ValueError(f"成员 {member.username} 已分配许可证 {license.license_key}")
+            raise ValueError(f"Member {member.username} already assigned license {license.license_key}")
         
         # 创建分配
         assignment = cls.objects.create(

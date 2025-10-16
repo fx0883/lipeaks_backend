@@ -11,7 +11,7 @@ urlpatterns = [
     path('', admin_user_views.AdminUserListCreateView.as_view(), name='admin-user-list-create'),
     path('<int:pk>/', admin_user_views.AdminUserRetrieveUpdateDeleteView.as_view(), name='admin-user-detail'),
     
-    # 当前登录的管理员用户操作
+    # current登录的管理员用户操作
     path('me/', admin_user_views.CurrentAdminUserView.as_view(), name='current-admin-user'),
     path('me/password/', admin_user_views.AdminPasswordUpdateView.as_view(), name='admin-user-password-update'),
     

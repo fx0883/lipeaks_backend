@@ -280,7 +280,7 @@ def get_user_tenant(user):
 
 def ensure_tenant_isolation(request, queryset):
     """
-    确保查询集只包含当前用户租户的数据
+    确保查询集只包含current用户租户的数据
     """
     user_tenant = get_user_tenant(request.user)
     

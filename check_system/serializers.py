@@ -24,13 +24,13 @@ class TaskCategorySerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
     
     def get_translated_name(self, obj) -> str:
-        """获取当前语言的名称"""
+        """获取current语言的名称"""
         request = self.context.get('request')
         language = request.headers.get('Accept-Language', 'zh-hans').split(',')[0]
         return obj.get_translated_name(language)
     
     def get_translated_description(self, obj) -> str:
-        """获取当前语言的描述"""
+        """获取current语言的描述"""
         request = self.context.get('request')
         language = request.headers.get('Accept-Language', 'zh-hans').split(',')[0]
         return obj.get_translated_description(language)
@@ -85,7 +85,7 @@ class CheckRecordSerializer(serializers.ModelSerializer):
         task = data.get('task')
         check_date = data.get('check_date')
         
-        # 如果是更新操作，排除当前记录
+        # 如果是更新操作，排除current记录
         instance = self.instance
         if instance is None:  # 创建操作
             if CheckRecord.objects.filter(
@@ -117,13 +117,13 @@ class TaskTemplateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
     
     def get_translated_name(self, obj) -> str:
-        """获取当前语言的名称"""
+        """获取current语言的名称"""
         request = self.context.get('request')
         language = request.headers.get('Accept-Language', 'zh-hans').split(',')[0]
         return obj.get_translated_name(language)
     
     def get_translated_description(self, obj) -> str:
-        """获取当前语言的描述"""
+        """获取current语言的描述"""
         request = self.context.get('request')
         language = request.headers.get('Accept-Language', 'zh-hans').split(',')[0]
         return obj.get_translated_description(language)

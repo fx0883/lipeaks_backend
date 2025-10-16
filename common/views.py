@@ -226,7 +226,7 @@ class PaginationInfoSerializer(serializers.Serializer):
     next = serializers.CharField(help_text="下一页链接", allow_null=True)
     previous = serializers.CharField(help_text="上一页链接", allow_null=True)
     page_size = serializers.IntegerField(help_text="每页大小")
-    current_page = serializers.IntegerField(help_text="当前页码")
+    current_page = serializers.IntegerField(help_text="current页码")
     total_pages = serializers.IntegerField(help_text="总页数")
 
 class ResultItemSerializer(serializers.Serializer):

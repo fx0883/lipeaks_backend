@@ -60,7 +60,7 @@ class TenantAwareLicenseAssignmentService:
         """
         # 1. 验证租户一致性
         if member.tenant_id != license.tenant_id:
-            raise ValidationError("成员和许可证必须属于同一租户")
+            raise ValidationError("Member and license must belong to the same tenant")
         
         # 2. 权限验证
         permission_check = self.permission_validator.validate_license_assignment(
@@ -454,7 +454,7 @@ class TenantAwareLicenseAssignmentService:
         if license.expires_at and now > license.expires_at:
             return {
                 'is_valid': False,
-                'message': "许可证已过期"
+                'message': "License has expired"
             }
         
         # 检查激活配额

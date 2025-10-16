@@ -77,7 +77,7 @@ class CMSBasePermission(permissions.BasePermission):
         # 检查普通用户是否关联租户
         if not hasattr(user, 'tenant') or not user.tenant:
             logger.warning(f"用户 {user.username} 未关联租户，拒绝访问 {request.path}")
-            raise PermissionDenied("用户未关联租户，无法访问CMS系统")
+            raise PermissionDenied("User has no associated tenant and cannot access CMS system")
         
         # 租户管理员可以操作其租户内的所有资源
         if user.is_admin:
@@ -120,8 +120,8 @@ class CMSBasePermission(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             # 验证对象所属租户与请求租户一致
             if hasattr(obj, 'tenant') and str(obj.tenant.id) != str(request.tenant_id):
-                logger.warning(f"尝试访问不属于当前租户的资源: {obj.__class__.__name__} #{getattr(obj, 'id', 'unknown')}")
-                raise PermissionDenied("不能访问其他租户的资源")
+                logger.warning(f"尝试访问不属于current租户的资源: {obj.__class__.__name__} #{getattr(obj, 'id', 'unknown')}")
+                raise PermissionDenied("Cannot access resources of other tenants")
             return True
         
         # 超级管理员特殊处理：允许通过X-Tenant-ID请求头指定租户进行操作
@@ -129,18 +129,18 @@ class CMSBasePermission(permissions.BasePermission):
             # 验证对象所属租户与请求租户一致
             if hasattr(obj, 'tenant') and str(obj.tenant.id) != str(request.tenant_id):
                 logger.warning(f"超级管理员 {user.username} 尝试操作不属于指定租户的对象")
-                raise PermissionDenied("不能操作其他租户的资源")
+                raise PermissionDenied("Cannot operate resources of other tenants")
             return True
         
         # 检查普通用户是否关联租户
         if not hasattr(user, 'tenant') or not user.tenant:
             logger.warning(f"用户 {user.username} 未关联租户，拒绝访问对象 {obj.__class__.__name__} #{getattr(obj, 'id', 'unknown')}")
-            raise PermissionDenied("用户未关联租户，无法访问CMS系统")
+            raise PermissionDenied("User has no associated tenant and cannot access CMS system")
         
         # 验证对象所属租户与用户租户一致
         if hasattr(obj, 'tenant') and obj.tenant != user.tenant:
             logger.warning(f"用户 {user.username} 尝试操作不属于其租户的对象 {obj.__class__.__name__} #{getattr(obj, 'id', 'unknown')}")
-            raise PermissionDenied("不能操作其他租户的资源")
+            raise PermissionDenied("Cannot operate resources of other tenants")
         
         # 租户管理员可以操作其租户内的所有资源
         if user.is_admin and hasattr(obj, 'tenant') and obj.tenant == user.tenant:
@@ -184,8 +184,8 @@ class ArticlePermission(CMSBasePermission):
         if request.method in permissions.SAFE_METHODS:
             # 验证对象所属租户与请求租户一致
             if hasattr(obj, 'tenant') and str(obj.tenant.id) != str(request.tenant_id):
-                logger.warning(f"尝试访问不属于当前租户的文章: #{getattr(obj, 'id', 'unknown')}")
-                raise PermissionDenied("不能访问其他租户的资源")
+                logger.warning(f"尝试访问不属于current租户的文章: #{getattr(obj, 'id', 'unknown')}")
+                raise PermissionDenied("Cannot access resources of other tenants")
                 
             if obj.status == 'published' and obj.visibility == 'public':
                 return True

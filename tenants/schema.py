@@ -560,7 +560,7 @@ tenant_quota_update_responses = {
             "data": {
                 "type": "object",
                 "example": {
-                    "max_user_count": ["该值不能小于当前已有用户数"],
+                    "max_user_count": ["该值不能小于current已有用户数"],
                     "max_storage_size": ["存储空间必须是整数"]
                 }
             }

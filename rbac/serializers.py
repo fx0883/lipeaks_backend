@@ -21,7 +21,7 @@ class PermissionSerializer(serializers.ModelSerializer):
     def validate_code(self, value):
         """验证权限代码格式"""
         if ':' not in value:
-            raise serializers.ValidationError("权限代码应采用'resource:action'格式")
+            raise serializers.ValidationError("Permission code should follow 'resource:action' format")
         return value
 
     def validate(self, attrs):
@@ -36,7 +36,7 @@ class PermissionSerializer(serializers.ModelSerializer):
         if instance and instance.is_system:
             # 不允许将系统权限改为非系统权限
             if 'is_system' in attrs and not attrs['is_system']:
-                raise serializers.ValidationError({"is_system": "不允许将系统权限修改为非系统权限"})
+                raise serializers.ValidationError({"is_system": "Cannot modify system permission to non-system permission"})
         
         return attrs
 
@@ -80,7 +80,7 @@ class RoleSerializer(serializers.ModelSerializer):
         if instance and instance.is_system:
             # 不允许修改系统角色的租户
             if 'tenant' in attrs and attrs['tenant'] != instance.tenant:
-                raise serializers.ValidationError({"tenant": "不允许修改系统角色的租户"})
+                raise serializers.ValidationError({"tenant": "Cannot modify tenant of system role"})
         
         return attrs
 
@@ -143,7 +143,7 @@ class UserRoleSerializer(serializers.ModelSerializer):
         end_date = attrs.get('end_date')
         
         if start_date and end_date and start_date > end_date:
-            raise serializers.ValidationError({"end_date": "结束日期必须大于等于开始日期"})
+            raise serializers.ValidationError({"end_date": "End date must be greater than or equal to start date"})
         
         return attrs
 
@@ -160,7 +160,7 @@ class UserRoleCreateSerializer(serializers.Serializer):
     def validate_role_id(self, value):
         """验证角色ID是否存在"""
         if not Role.objects.filter(id=value).exists():
-            raise serializers.ValidationError(f"角色ID {value} 不存在")
+            raise serializers.ValidationError(f"Role ID {value} not found")
         return value
     
     def validate(self, attrs):
@@ -172,7 +172,7 @@ class UserRoleCreateSerializer(serializers.Serializer):
         end_date = attrs.get('end_date')
         
         if start_date and end_date and start_date > end_date:
-            raise serializers.ValidationError({"end_date": "结束日期必须大于等于开始日期"})
+            raise serializers.ValidationError({"end_date": "End date must be greater than or equal to start date"})
         
         return attrs
 
@@ -227,7 +227,7 @@ class TenantRoleCreateFromTemplateSerializer(serializers.Serializer):
         try:
             role = Role.objects.get(id=value)
             if role.tenant is not None:
-                raise serializers.ValidationError("模板角色必须是系统角色")
+                raise serializers.ValidationError("Template role must be a system role")
             return value
         except Role.DoesNotExist:
-            raise serializers.ValidationError(f"系统角色ID {value} 不存在") 
+            raise serializers.ValidationError(f"System role ID {value} not found") 

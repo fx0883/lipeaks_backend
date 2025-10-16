@@ -221,7 +221,7 @@ class TenantQuotaAdmin(TenantAdminMixin, admin.ModelAdmin):
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         """
         重写formfield_for_foreignkey方法，限制租户选择
-        对于租户字段，限制只能选择当前用户关联的租户（除非是超级管理员）
+        对于租户字段，限制只能选择current用户关联的租户（除非是超级管理员）
         """
         if db_field.name == 'tenant':
             # 超级管理员可以选择所有租户
@@ -243,7 +243,7 @@ class TenantQuotaAdmin(TenantAdminMixin, admin.ModelAdmin):
         """
         # 如果是新建记录且没有指定租户
         if not change and not obj.tenant:
-            # 非超级管理员用户，使用当前用户的租户
+            # 非超级管理员用户，使用current用户的租户
             if not (request.user.is_superuser or getattr(request.user, 'is_super_admin', False)):
                 obj.tenant = getattr(request.user, 'tenant', None)
         
@@ -259,7 +259,7 @@ class TenantQuotaAdmin(TenantAdminMixin, admin.ModelAdmin):
         if request.user.is_superuser or getattr(request.user, 'is_super_admin', False):
             return True
         
-        # 获取当前用户关联的租户
+        # 获取current用户关联的租户
         tenant = getattr(request.user, 'tenant', None)
         if not tenant:
             return False
@@ -284,7 +284,7 @@ class TenantQuotaAdmin(TenantAdminMixin, admin.ModelAdmin):
         if obj is None:
             return True
         
-        # 获取当前用户关联的租户
+        # 获取current用户关联的租户
         tenant = getattr(request.user, 'tenant', None)
         if not tenant:
             return False

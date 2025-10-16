@@ -49,7 +49,7 @@ class TenantMiddleware(MiddlewareMixin):
     
     def process_request(self, request):
         """
-        处理请求，设置当前租户
+        处理请求，设置current租户
         
         Args:
             request: HTTP请求对象
@@ -122,7 +122,7 @@ class TenantMiddleware(MiddlewareMixin):
     
     def process_response(self, request, response):
         """
-        处理响应，清除当前租户
+        处理响应，清除current租户
         
         Args:
             request: HTTP请求对象

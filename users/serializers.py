@@ -108,7 +108,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         验证密码一致性
         """
         if data['password'] != data.pop('password_confirm'):
-            raise serializers.ValidationError({"password_confirm": "两次输入的密码不一致"})
+            raise serializers.ValidationError({"password_confirm": "Passwords do not match"})
         
         # 验证密码强度
         validate_password(data['password'])
@@ -192,7 +192,7 @@ class UserPasswordUpdateSerializer(serializers.Serializer):
         """
         user = self.context['request'].user
         if not user.check_password(value):
-            raise serializers.ValidationError("旧密码不正确")
+            raise serializers.ValidationError("Incorrect old password")
         return value
     
     def validate(self, data):
@@ -200,7 +200,7 @@ class UserPasswordUpdateSerializer(serializers.Serializer):
         验证新密码的一致性和强度
         """
         if data['new_password'] != data['new_password_confirm']:
-            raise serializers.ValidationError({"new_password_confirm": "两次输入的新密码不一致"})
+            raise serializers.ValidationError({"new_password_confirm": "New passwords do not match"})
         
         # 验证新密码强度
         validate_password(data['new_password'])
@@ -231,7 +231,7 @@ class ChangePasswordSerializer(serializers.Serializer):
         """
         user = self.context['request'].user
         if not user.check_password(value):
-            raise serializers.ValidationError("旧密码不正确")
+            raise serializers.ValidationError("Incorrect old password")
         return value
     
     def validate(self, data):
@@ -239,7 +239,7 @@ class ChangePasswordSerializer(serializers.Serializer):
         验证新密码的一致性和强度
         """
         if data['new_password'] != data['new_password_confirm']:
-            raise serializers.ValidationError({"new_password_confirm": "两次输入的新密码不一致"})
+            raise serializers.ValidationError({"new_password_confirm": "New passwords do not match"})
         
         # 验证新密码强度
         validate_password(data['new_password'])
@@ -257,7 +257,7 @@ class UserRoleUpdateSerializer(serializers.Serializer):
         """
         验证角色变更权限
         """
-        # 检查当前用户是否有权限更改角色
+        # 检查current用户是否有权限更改角色
         request_user = self.context['request'].user
         target_user = self.instance
         
@@ -266,15 +266,15 @@ class UserRoleUpdateSerializer(serializers.Serializer):
             not is_admin(request_user) or 
             request_user.tenant != target_user.tenant
         ):
-            raise serializers.ValidationError("您没有权限更改此用户的角色")
+            raise serializers.ValidationError("You do not have permission to change this user's role")
         
         # 不能取消自己的管理员权限
         if request_user == target_user and not data['is_admin'] and is_admin(request_user):
-            raise serializers.ValidationError("您不能取消自己的管理员权限")
+            raise serializers.ValidationError("You cannot remove your own admin privileges")
         
         # 租户管理员不能修改超级管理员的角色
         if is_super_admin(target_user) and not is_super_admin(request_user):
-            raise serializers.ValidationError("您不能修改超级管理员的角色")
+            raise serializers.ValidationError("You cannot modify the super admin role")
         
         return data
     
@@ -286,7 +286,7 @@ class UserRoleUpdateSerializer(serializers.Serializer):
         if validated_data['is_admin'] and not is_admin(instance) and instance.tenant:
             quota = instance.tenant.quota
             if not quota.can_add_user(is_admin=True):
-                raise serializers.ValidationError({"is_admin": "租户管理员配额已满"})
+                raise serializers.ValidationError({"is_admin": "Tenant admin quota is full"})
         
         # 更新角色
         instance.is_admin = validated_data['is_admin']
@@ -316,7 +316,7 @@ class UserRoleSerializer(serializers.ModelSerializer):
         """
         # 检查是否至少有一个角色
         if not data.get('is_admin') and not data.get('is_member', True):
-            raise serializers.ValidationError({"non_field_errors": "用户必须至少有一个角色"})
+            raise serializers.ValidationError({"non_field_errors": "User must have at least one role"})
         return data
     
     def update(self, instance, validated_data):
@@ -410,7 +410,7 @@ class LoginSerializer(serializers.Serializer):
                     # 管理员/超管携带Header登录，返回4001
                     raise TenantHeaderInvalidOrMissing()
                 # 其他情况按通用失败处理
-                raise serializers.ValidationError("用户名/邮箱或密码错误")
+                raise serializers.ValidationError("Invalid username/email or password")
         else:
             # 无 Header => 仅允许管理员/超管流程；成员必须使用Header
             user = authenticate(username=identifier, password=password)
@@ -427,20 +427,20 @@ class LoginSerializer(serializers.Serializer):
                 raise TenantHeaderInvalidOrMissing()
 
         if not user:
-            raise serializers.ValidationError("用户名/邮箱或密码错误")
+            raise serializers.ValidationError("Invalid username/email or password")
 
         # 通用状态校验
         if not user.is_active:
-            raise serializers.ValidationError("用户已被禁用")
+            raise serializers.ValidationError("User is disabled")
         if user.is_deleted:
-            raise serializers.ValidationError("用户已被删除")
+            raise serializers.ValidationError("User has been deleted")
         # 子账号限制
         if hasattr(user, 'parent') and user.parent:
-            raise serializers.ValidationError("子账号不允许登录")
+            raise serializers.ValidationError("Sub-accounts are not allowed to log in")
         # 租户状态校验（非超管）
         if user.tenant and not getattr(user, 'is_super_admin', False):
             if user.tenant.status != 'active':
-                raise serializers.ValidationError("所属租户已被禁用或暂停")
+                raise serializers.ValidationError("Tenant has been disabled or suspended")
 
         data['user'] = user
         return data
@@ -592,11 +592,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         tenant_id = self.initial_data.get('tenant_id')
         if tenant_id:
             if User.objects.filter(email=value, tenant_id=tenant_id, is_deleted=False).exists():
-                raise serializers.ValidationError("该租户下此邮箱已被注册")
+                raise serializers.ValidationError("Email already registered in this tenant")
         else:
             # 对于没有指定租户的情况，只检查超级管理员（无租户用户）中是否有重复
             if User.objects.filter(email=value, tenant__isnull=True, is_deleted=False).exists():
-                raise serializers.ValidationError("该邮箱已被注册")
+                raise serializers.ValidationError("Email already registered")
         return value
     
     def validate_username(self, value):
@@ -606,11 +606,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         tenant_id = self.initial_data.get('tenant_id')
         if tenant_id:
             if User.objects.filter(username=value, tenant_id=tenant_id, is_deleted=False).exists():
-                raise serializers.ValidationError("该租户下此用户名已被使用")
+                raise serializers.ValidationError("Username already used in this tenant")
         else:
             # 对于没有指定租户的情况，只检查超级管理员（无租户用户）中是否有重复
             if User.objects.filter(username=value, tenant__isnull=True, is_deleted=False).exists():
-                raise serializers.ValidationError("该用户名已被使用")
+                raise serializers.ValidationError("Username already in use")
         return value
     
     def validate_phone(self, value):
@@ -620,11 +620,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         tenant_id = self.initial_data.get('tenant_id')
         if value and tenant_id:
             if User.objects.filter(phone=value, tenant_id=tenant_id, is_deleted=False).exists():
-                raise serializers.ValidationError("该租户下此手机号已被注册")
+                raise serializers.ValidationError("Phone number already registered in this tenant")
         elif value and not tenant_id:
             # 对于没有指定租户的情况，只检查超级管理员（无租户用户）中是否有重复
             if User.objects.filter(phone=value, tenant__isnull=True, is_deleted=False).exists():
-                raise serializers.ValidationError("该手机号已被注册")
+                raise serializers.ValidationError("Phone number already registered")
         return value
     
     def validate(self, data):
@@ -637,7 +637,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise TenantHeaderInvalidOrMissing()
 
         if data['password'] != data.pop('password_confirm'):
-            raise serializers.ValidationError({"password_confirm": "两次输入的密码不一致"})
+            raise serializers.ValidationError({"password_confirm": "Passwords do not match"})
         
         # 验证密码强度
         validate_password(data['password'])
@@ -649,7 +649,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 tenant = Tenant.objects.get(id=tenant_id, status='active', is_deleted=False)
                 data['tenant'] = tenant
             except Tenant.DoesNotExist:
-                raise serializers.ValidationError({"tenant_id": "无效的租户ID"})
+                raise serializers.ValidationError({"tenant_id": "Invalid tenant ID"})
         
         return data
     
@@ -696,7 +696,7 @@ class SubAccountCreateSerializer(serializers.ModelSerializer):
         验证用户名是否已存在
         """
         if Member.objects.filter(username=value).exists():
-            raise serializers.ValidationError("该用户名已被使用")
+            raise serializers.ValidationError("Username already in use")
         return value
 
     def validate_email(self, value):
@@ -704,14 +704,14 @@ class SubAccountCreateSerializer(serializers.ModelSerializer):
         验证邮箱是否已存在
         """
         if Member.objects.filter(email=value).exists():
-            raise serializers.ValidationError("该邮箱已被使用")
+            raise serializers.ValidationError("Email already in use")
         return value
     
     def create(self, validated_data):
         """
         创建子账号
         """
-        # 获取当前用户作为父账号
+        # 获取current用户作为父账号
         parent = self.context['request'].user
         
         # 创建子账号，不设置密码
@@ -790,9 +790,9 @@ class PasswordResetVerifySerializer(serializers.Serializer):
         from users.models import PasswordResetToken
         token_obj = PasswordResetToken.objects.filter(token=value, is_used=False).first()
         if not token_obj:
-            raise serializers.ValidationError("无效的重置令牌")
+            raise serializers.ValidationError("Invalid reset token")
         if token_obj.is_expired():
-            raise serializers.ValidationError("重置令牌已过期")
+            raise serializers.ValidationError("Reset token has expired")
         return value
 
 
@@ -810,15 +810,15 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         """
         # 验证密码是否匹配
         if data['new_password'] != data['confirm_password']:
-            raise serializers.ValidationError({"confirm_password": ["两次输入的密码不一致"]})
+            raise serializers.ValidationError({"confirm_password": ["Passwords do not match"]})
         
         # 验证令牌是否有效
         from users.models import PasswordResetToken
         token_obj = PasswordResetToken.objects.filter(token=data['token'], is_used=False).first()
         if not token_obj:
-            raise serializers.ValidationError({"token": ["无效的重置令牌"]})
+            raise serializers.ValidationError({"token": ["Invalid reset token"]})
         if token_obj.is_expired():
-            raise serializers.ValidationError({"token": ["重置令牌已过期"]})
+            raise serializers.ValidationError({"token": ["Reset token has expired"]})
         
         # 将token对象添加到验证后的数据中
         data['token_obj'] = token_obj
@@ -882,7 +882,7 @@ class MemberSerializer(serializers.ModelSerializer):
 class MemberCreateSerializer(serializers.ModelSerializer):
     """
     管理端创建普通成员序列化器
-    - 超级管理员可通过 body 的 tenant_id 指定租户；否则使用当前管理员的 tenant
+    - 超级管理员可通过 body 的 tenant_id 指定租户；否则使用current管理员的 tenant
     - 校验密码一致性与强度
     - 在目标租户下校验 username/email/phone 唯一
     """
@@ -910,22 +910,22 @@ class MemberCreateSerializer(serializers.ModelSerializer):
             try:
                 return int(input_tenant_id)
             except (TypeError, ValueError):
-                raise serializers.ValidationError({"tenant_id": "无效的租户ID"})
+                raise serializers.ValidationError({"tenant_id": "Invalid tenant ID"})
         # 未提供 tenant_id，则从请求用户推断
         if request and hasattr(request.user, 'is_super_admin'):
             if is_super_admin(request.user):
                 # 超级管理员必须显式提供 tenant_id
-                raise serializers.ValidationError({"tenant_id": "超级管理员创建成员时必须提供租户ID"})
+                raise serializers.ValidationError({"tenant_id": "Super admin must provide tenant ID when creating member"})
             # 非超级管理员必须有绑定租户
             if not request.user.tenant:
-                raise serializers.ValidationError({"tenant_id": "当前管理员未关联租户，无法创建成员"})
+                raise serializers.ValidationError({"tenant_id": "Current admin has no associated tenant and cannot create member"})
             return request.user.tenant.id
         return None
 
     def validate(self, data):
         # 密码一致性
         if data['password'] != data.pop('password_confirm'):
-            raise serializers.ValidationError({"password_confirm": "两次输入的密码不一致"})
+            raise serializers.ValidationError({"password_confirm": "Passwords do not match"})
 
         # 密码强度
         validate_password(data['password'])
@@ -935,18 +935,18 @@ class MemberCreateSerializer(serializers.ModelSerializer):
         try:
             tenant = Tenant.objects.get(id=tenant_id, status='active', is_deleted=False)
         except Tenant.DoesNotExist:
-            raise serializers.ValidationError({"tenant_id": "无效的租户ID"})
+            raise serializers.ValidationError({"tenant_id": "Invalid tenant ID"})
 
         # 唯一性校验（在该租户内）
         username = data.get('username')
         email = data.get('email')
         phone = data.get('phone')
         if username and Member.objects.filter(username=username, tenant_id=tenant_id, is_deleted=False).exists():
-            raise serializers.ValidationError({"username": "该租户下此用户名已被使用"})
+            raise serializers.ValidationError({"username": "Username already used in this tenant"})
         if email and Member.objects.filter(email=email, tenant_id=tenant_id, is_deleted=False).exists():
-            raise serializers.ValidationError({"email": "该租户下此邮箱已被注册"})
+            raise serializers.ValidationError({"email": "Email already registered in this tenant"})
         if phone and Member.objects.filter(phone=phone, tenant_id=tenant_id, is_deleted=False).exists():
-            raise serializers.ValidationError({"phone": "该租户下此手机号已被注册"})
+            raise serializers.ValidationError({"phone": "Phone number already registered in this tenant"})
 
         # 注入租户对象供 create 使用
         data['tenant'] = tenant
@@ -1009,7 +1009,7 @@ class MemberSelfRegisterSerializer(serializers.ModelSerializer):
     def validate(self, data):
         # 密码一致性
         if data['password'] != data.pop('password_confirm'):
-            raise serializers.ValidationError({"password_confirm": "两次输入的密码不一致"})
+            raise serializers.ValidationError({"password_confirm": "Passwords do not match"})
 
         # 密码强度
         validate_password(data['password'])
@@ -1030,7 +1030,7 @@ class MemberSelfRegisterSerializer(serializers.ModelSerializer):
         try:
             tenant = Tenant.objects.get(id=tenant_id, status='active', is_deleted=False)
         except Tenant.DoesNotExist:
-            raise serializers.ValidationError({"tenant_id": "无效的租户ID"})
+            raise serializers.ValidationError({"tenant_id": "Invalid tenant ID"})
 
         # 在该租户内做唯一性校验（仅针对 Member 模型）
         username = data.get('username')
@@ -1038,11 +1038,11 @@ class MemberSelfRegisterSerializer(serializers.ModelSerializer):
         phone = data.get('phone')
 
         if username and Member.objects.filter(username=username, tenant_id=tenant_id, is_deleted=False).exists():
-            raise serializers.ValidationError({"username": "该租户下此用户名已被使用"})
+            raise serializers.ValidationError({"username": "Username already used in this tenant"})
         if email and Member.objects.filter(email=email, tenant_id=tenant_id, is_deleted=False).exists():
-            raise serializers.ValidationError({"email": "该租户下此邮箱已被注册"})
+            raise serializers.ValidationError({"email": "Email already registered in this tenant"})
         if phone and Member.objects.filter(phone=phone, tenant_id=tenant_id, is_deleted=False).exists():
-            raise serializers.ValidationError({"phone": "该租户下此手机号已被注册"})
+            raise serializers.ValidationError({"phone": "Phone number already registered in this tenant"})
 
         # 注入解析出的租户对象
         data['tenant'] = tenant
@@ -1119,7 +1119,7 @@ class SubAccountCreateSerializer(serializers.ModelSerializer):
         验证用户名是否已存在
         """
         if Member.objects.filter(username=value).exists():
-            raise serializers.ValidationError("该用户名已被使用")
+            raise serializers.ValidationError("Username already in use")
         return value
 
     def validate_email(self, value):
@@ -1127,14 +1127,14 @@ class SubAccountCreateSerializer(serializers.ModelSerializer):
         验证邮箱是否已存在
         """
         if Member.objects.filter(email=value).exists():
-            raise serializers.ValidationError("该邮箱已被使用")
+            raise serializers.ValidationError("Email already in use")
         return value
     
     def create(self, validated_data):
         """
         创建子账号
         """
-        # 获取当前用户作为父账号
+        # 获取current用户作为父账号
         parent = self.context['request'].user
         
         # 创建子账号，不设置密码

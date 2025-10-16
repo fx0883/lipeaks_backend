@@ -124,7 +124,7 @@ class User(BaseUserModel):
                 # 检查配额
                 if not quota.can_add_user(is_admin=True):
                     logger.warning(f"租户 {self.tenant.name} 的管理员配额已满，无法创建更多管理员")
-                    raise PermissionDenied("租户管理员配额已满，无法创建更多管理员")
+                    raise PermissionDenied("Tenant admin quota is full, cannot create more admins")
             except Exception as e:
                 # 出现错误时记录错误
                 logger.error(f"检查租户 {self.tenant.name} 的配额时发生错误: {str(e)}")
@@ -206,7 +206,7 @@ class Member(BaseUserModel):
                 # 检查配额
                 if not quota.can_add_user(is_admin=False):
                     logger.warning(f"租户 {self.tenant.name} 的成员配额已满，无法创建更多成员")
-                    raise PermissionDenied("租户成员配额已满，无法创建更多成员")
+                    raise PermissionDenied("Tenant member quota is full, cannot create more members")
             except Exception as e:
                 # 出现错误时记录错误
                 logger.error(f"检查租户 {self.tenant.name} 的配额时发生错误: {str(e)}")

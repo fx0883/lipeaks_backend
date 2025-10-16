@@ -9,14 +9,14 @@ logger = logging.getLogger(__name__)
 
 class TenantManager(models.Manager):
     """
-    租户模型管理器，自动根据当前租户过滤查询集
+    租户模型管理器，自动根据current租户过滤查询集
     """
     def get_queryset(self):
         """
-        重写查询集方法，自动按当前租户过滤
+        重写查询集方法，自动按current租户过滤
         
         Returns:
-            按当前租户过滤后的查询集，如果没有当前租户上下文则返回全部
+            按current租户过滤后的查询集，如果没有current租户上下文则返回全部
         """
         queryset = super().get_queryset()
         tenant = get_current_tenant()

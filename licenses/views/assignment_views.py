@@ -176,7 +176,7 @@ class LicenseAssignmentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def my_assignments(self, request):
-        """获取当前用户的所有许可证分配"""
+        """获取current用户的所有许可证分配"""
         # 这个端点允许Member用户查看自己的分配
         if hasattr(request.user, 'license_assignments'):
             assignments = request.user.license_assignments.filter(
@@ -283,7 +283,7 @@ class LicenseAssignmentViewSet(viewsets.ModelViewSet):
                 if assignments.count() != len(assignment_ids):
                     return Response({
                         'success': False,
-                        'message': '部分分配ID不存在或不属于当前租户'
+                        'message': '部分分配ID不存在或不属于current租户'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
                 revoked_count = 0

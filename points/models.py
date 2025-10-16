@@ -41,7 +41,7 @@ class TenantUserProfile(models.Model):
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
-        verbose_name=_("当前等级")
+        verbose_name=_("current等级")
     )
     level_updated_at = models.DateTimeField(_("等级更新时间"), null=True, blank=True)
     
@@ -51,7 +51,7 @@ class TenantUserProfile(models.Model):
     points_expired_total = models.PositiveIntegerField(_("历史总过期积分"), default=0)
     
     # 活跃度信息
-    last_points_update = models.DateTimeField(_("最后积分变动时间"), null=True, blank=True)
+    last_points_update = models.DateTimeField(_("最后积分Change时间"), null=True, blank=True)
     last_level_check = models.DateTimeField(_("最后等级检查时间"), null=True, blank=True)
     consecutive_login_days = models.PositiveIntegerField(_("连续登录天数"), default=0)
     last_login_date = models.DateField(_("最后登录日期"), null=True, blank=True)
@@ -126,7 +126,7 @@ class TenantUserProfile(models.Model):
             source_type: 来源类型
         """
         if points <= 0:
-            raise ValueError("积分数量必须大于0")
+            raise ValueError("Points amount must be greater than 0")
         
         # 应用积分倍数
         actual_points = int(points * self.points_multiplier)
@@ -152,10 +152,10 @@ class TenantUserProfile(models.Model):
             reason: 消费原因
         """
         if points <= 0:
-            raise ValueError("积分数量必须大于0")
+            raise ValueError("Points amount must be greater than 0")
         
         if self.available_points < points:
-            raise ValueError(f"积分不足，可用积分: {self.available_points}, 需要: {points}")
+            raise ValueError(f"积分不足，Available points: {self.available_points}, Required: {points}")
         
         # 更新积分
         self.available_points -= points
@@ -201,7 +201,7 @@ class TenantUserProfile(models.Model):
         更新连续登录天数
         
         Returns:
-            int: 当前连续登录天数
+            int: current连续登录天数
         """
         today = timezone.now().date()
         
@@ -286,7 +286,7 @@ class UserLevel(models.Model):
     
     def is_points_in_range(self, points):
         """
-        检查积分是否在当前等级范围内
+        检查积分是否在current等级范围内
         
         Args:
             points: 积分数量
@@ -331,9 +331,9 @@ class UserLevel(models.Model):
 
 class TenantUserPoints(models.Model):
     """
-    租户用户积分记录表，记录用户在租户下的积分变动记录
+    租户用户积分记录表，记录用户在租户下的积分Change记录
     
-    这个表记录所有积分变动的历史，支持积分获取、消费、过期、调整等操作
+    这个表记录所有积分Change的历史，支持积分获取、消费、过期、调整等操作
     """
     
     POINT_TYPE_CHOICES = [
@@ -391,7 +391,7 @@ class TenantUserPoints(models.Model):
     subcategory = models.CharField(_("子分类"), max_length=50, blank=True)
     
     # 积分数值
-    points = models.IntegerField(_("积分变动数量"))  # 正数为获得，负数为消费
+    points = models.IntegerField(_("积分Change数量"))  # 正数为获得，负数为消费
     balance_before = models.PositiveIntegerField(_("操作前积分余额"))
     balance_after = models.PositiveIntegerField(_("操作后积分余额"))
     
@@ -434,7 +434,7 @@ class TenantUserPoints(models.Model):
         ordering = ['-created_at']
         constraints = [
             models.CheckConstraint(
-                check=models.Q(points__gt=0) | models.Q(points__lt=0),  # 积分变动不能为0
+                check=models.Q(points__gt=0) | models.Q(points__lt=0),  # 积分Change不能为0
                 name='points_not_zero'
             ),
             models.CheckConstraint(
@@ -517,7 +517,7 @@ class TenantUserPoints(models.Model):
             reason: 过期原因
         """
         if self.status != 'active':
-            raise ValueError(f"只能标记有效积分为过期，当前状态: {self.status}")
+            raise ValueError(f"只能标记有效积分为过期，Current status: {self.status}")
         
         self.status = 'expired'
         self.expired_at = timezone.now()
@@ -535,7 +535,7 @@ class TenantUserPoints(models.Model):
             reason: 取消原因
         """
         if self.status != 'active':
-            raise ValueError(f"只能取消有效积分，当前状态: {self.status}")
+            raise ValueError(f"只能取消有效积分，Current status: {self.status}")
         
         self.status = 'cancelled'
         self.operation_reason = f"{self.operation_reason} | 取消原因: {reason}"
@@ -553,7 +553,7 @@ class TenantUserPoints(models.Model):
             tenant_user_profile: 租户用户档案
             point_type: 积分类型
             category: 业务分类
-            points: 积分变动数量
+            points: 积分Change数量
             **kwargs: 其他可选参数
             
         Returns:
@@ -564,7 +564,7 @@ class TenantUserPoints(models.Model):
         balance_after = balance_before + points
         
         if balance_after < 0:
-            raise ValueError(f"积分余额不足: 当前{balance_before}, 变动{points}")
+            raise ValueError(f"积分余额不足: current{balance_before}, Change{points}")
         
         # 创建记录
         record = cls.objects.create(
@@ -956,10 +956,10 @@ class TenantUserTypeTag(models.Model):
             reason: 延长原因
         """
         if extend_days <= 0:
-            raise ValueError("延长天数必须大于0")
+            raise ValueError("Extension days must be greater than 0")
         
         if self.expires_at:
-            # 从当前过期时间延长
+            # 从current过期时间延长
             self.expires_at = self.expires_at + timedelta(days=extend_days)
         else:
             # 永久标签设置过期时间
