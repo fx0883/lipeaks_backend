@@ -64,19 +64,10 @@ FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER = get_env_with_validation(
     'FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER', lambda x: x.lower() == 'true', 'True'
 )
 
-# 从环境变量读取ALLOWED_HOSTS，并添加espressox.online
-# allowed_hosts_from_env = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1',).split(',')
-# ALLOWED_HOSTS = allowed_hosts_from_env + ['espressox.online', '*.localhost.charlesproxy.com']
+# 允许所有主机访问（开发环境）
+# 警告：生产环境应指定具体域名，例如 ['yourdomain.com', 'www.yourdomain.com']
+ALLOWED_HOSTS = ['*']
 
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1', 
-    'myapp.localhost.charlesproxy.com',
-    '*.localhost.charlesproxy.com',  # 支持Charles Proxy的所有子域名
-    'espressox.online',
-    'backend.espressox.online',
-    'admin.espressox.online',
-]
 # Application definition
 
 INSTALLED_APPS = [
@@ -272,19 +263,21 @@ JWT_AUTH = {
 
 # CORS 配置
 CORS_ALLOW_ALL_ORIGINS = False  # 改为False使用白名单模式
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://localhost:3000",  # 前端应用
-    "http://127.0.0.1:3000",
-    "http://espressox.online",
-    "https://espressox.online",
-    "http://localhost:8848",
-    "http://backend.espressox.online",
-    "https://backend.espressox.online",
-    "http://admin.espressox.online",
-    "https://admin.espressox.online",
-]
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:8000",
+#     "http://127.0.0.1:8000",
+#     "http://localhost:3000",  # 前端应用
+#     "http://127.0.0.1:3000",
+#     "http://espressox.online",
+#     "https://espressox.online",
+#     "http://localhost:8848",
+#     "http://backend.espressox.online",
+#     "https://backend.espressox.online",
+#     "http://admin.espressox.online",
+#     "https://admin.espressox.online",
+# ]
+
+
 CORS_ALLOW_CREDENTIALS = True  # 允许携带凭证（如 cookies）
 
 CORS_ALLOW_HEADERS = [
@@ -310,16 +303,29 @@ CSRF_COOKIE_SAMESITE = 'Lax'  # 重要：设置为Lax而不是Strict
 CSRF_COOKIE_SECURE = False if DEBUG else True  # 开发环境设为False
 CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'
 CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
-    'http://espressox.online',
-    'https://espressox.online',
-    "http://backend.espressox.online",
-    "https://backend.espressox.online",
-    "http://admin.espressox.online",
-    "https://admin.espressox.online",
-]  # 添加受信任的源
+# CSRF_TRUSTED_ORIGINS = [
+#     'http://localhost:8000',
+#     'http://127.0.0.1:8000',
+#     'http://espressox.online',
+#     'https://espressox.online',
+#     "http://backend.espressox.online",
+#     "https://backend.espressox.online",
+#     "http://admin.espressox.online",
+#     "https://admin.espressox.online",
+# ]  # 添加受信任的源
+CORS_ALLOW_ALL_ORIGINS = True
+# CSRF_TRUSTED_ORIGINS = [
+#     'http://localhost:8000',
+#     'http://127.0.0.1:8000',
+#     'http://espressox.online',
+#     'https://espressox.online',
+#     "http://backend.espressox.online",
+#     "https://backend.espressox.online",
+#     "http://admin.espressox.online",
+#     "https://admin.espressox.online",
+# ]  # 添加受信任的源
+
+
 CSRF_USE_SESSIONS = False
 
 # Spectacular API 文档设置

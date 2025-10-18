@@ -16,9 +16,12 @@ from drf_spectacular.types import OpenApiTypes
 
 from licenses.serializers import (
     AvailableProductSerializer, LicenseApplicationSerializer,
-    MemberLicenseSerializer, MemberLicenseListSerializer
+    MemberLicenseSerializer, MemberLicenseListSerializer,
+    MemberMachineBindingSerializer, UnbindDeviceRequestSerializer
 )
-from licenses.services.member_license_service import MemberLicenseApplicationService
+from licenses.services.member_license_service import (
+    MemberLicenseApplicationService, MemberLicenseManagementService
+)
 from licenses.models import SoftwareProduct
 from common.permissions import IsMemberUser, CanApplyTrialLicense
 import logging
@@ -558,3 +561,405 @@ def my_licenses(request):
             'error': '获取许可证列表失败，请稍后重试',
             'code': 'FETCH_LICENSES_FAILED'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['Member许可证API'],
+    summary='查看许可证的设备列表',
+    description='''
+    获取Member用户指定许可证的所有设备绑定列表及统计信息
+    
+    ## 业务说明
+    
+    1. **权限验证** - 仅能查看自己拥有的许可证设备
+    2. **设备信息** - 返回所有绑定设备的详细信息
+    3. **状态统计** - 活跃、非活跃、已阻止设备的数量统计
+    4. **许可证信息** - 包含激活配额和有效期信息
+    
+    ## 权限要求
+    
+    - 需要JWT认证
+    - 必须是Member用户身份
+    - 只能查看自己被分配的许可证
+    
+    ## 租户隔离
+    
+    - 自动按用户租户过滤数据
+    - 确保跨租户数据安全
+    
+    ## 使用场景
+    
+    - 用户查看已激活的设备列表
+    - 管理设备激活配额
+    - 准备解绑不使用的设备
+    ''',
+    parameters=[
+        OpenApiParameter(
+            name='license_id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.PATH,
+            description='许可证分配ID（从 my-licenses 接口返回的 id 字段）',
+            required=True
+        )
+    ],
+    responses={
+        200: OpenApiResponse(
+            description='获取成功',
+            examples=[
+                OpenApiExample(
+                    'Success Response',
+                    value={
+                        'success': True,
+                        'data': {
+                            'license_info': {
+                                'id': 123,
+                                'product_name': 'PDF压缩工具',
+                                'plan_name': '试用版',
+                                'max_activations': 3,
+                                'current_activations': 2,
+                                'available_slots': 1,
+                                'expires_at': '2024-02-15T10:30:00Z'
+                            },
+                            'statistics': {
+                                'total': 3,
+                                'active': 2,
+                                'inactive': 1,
+                                'blocked': 0
+                            },
+                            'devices': [
+                                {
+                                    'id': 456,
+                                    'machine_id': 'MACHINE-ABC123',
+                                    'machine_fingerprint': 'fp-hash-12345',
+                                    'os_name': 'Windows 11',
+                                    'os_info': {'os_name': 'Windows', 'os_version': '11'},
+                                    'hardware_summary': {'cpu': 'Intel i7', 'ram': '16GB'},
+                                    'last_ip_address': '192.168.1.100',
+                                    'status': 'active',
+                                    'status_display': '活跃',
+                                    'first_seen_at': '2024-01-15T10:30:00Z',
+                                    'last_seen_at': '2024-01-20T14:25:30Z',
+                                    'days_since_last_seen': 0
+                                }
+                            ],
+                            'permissions': {
+                                'can_unbind': True
+                            }
+                        }
+                    }
+                )
+            ]
+        ),
+        400: OpenApiResponse(
+            description='请求错误',
+            examples=[
+                OpenApiExample(
+                    'License Not Found',
+                    value={
+                        'success': False,
+                        'error': '许可证不存在或您无权访问',
+                        'code': 'LICENSE_NOT_FOUND'
+                    }
+                )
+            ]
+        ),
+        401: OpenApiResponse(
+            description='未认证',
+            examples=[
+                OpenApiExample(
+                    'Unauthorized',
+                    value={'detail': 'Authentication credentials were not provided.'}
+                )
+            ]
+        ),
+        403: OpenApiResponse(
+            description='权限不足',
+            examples=[
+                OpenApiExample(
+                    'Permission Denied',
+                    value={'detail': 'You do not have permission to perform this action.'}
+                )
+            ]
+        ),
+        500: OpenApiResponse(
+            description='服务器内部错误',
+            examples=[
+                OpenApiExample(
+                    'Internal Error',
+                    value={
+                        'success': False,
+                        'error': '获取设备列表失败，请稍后重试',
+                        'code': 'FETCH_DEVICES_FAILED'
+                    }
+                )
+            ]
+        )
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsMemberUser])
+@throttle_classes([MemberAPIThrottle])
+def my_license_devices(request, license_id):
+    """
+    查看许可证的设备列表
+    
+    GET /api/v1/licenses/member/my-licenses/<license_id>/devices/
+    """
+    try:
+        # 调用服务获取设备列表
+        management_service = MemberLicenseManagementService()
+        result = management_service.get_license_devices(request.user, license_id)
+        
+        # 序列化设备数据
+        devices_serializer = MemberMachineBindingSerializer(
+            result['devices'],
+            many=True,
+            context={'request': request}
+        )
+        
+        response_data = {
+            'license_info': result['license_info'],
+            'statistics': result['statistics'],
+            'devices': devices_serializer.data,
+            'permissions': result['permissions']
+        }
+        
+        logger.info(
+            f"Member {request.user.username} 查看许可证 {license_id} 的设备列表，"
+            f"共 {result['statistics']['total']} 台设备"
+        )
+        
+        return Response({
+            'success': True,
+            'data': response_data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        from common.exceptions import LicenseException
+        
+        if isinstance(e, LicenseException):
+            logger.warning(f"查看设备列表失败: {e.detail}")
+            return Response({
+                'success': False,
+                'error': e.detail,
+                'code': e.error_code
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.error(f"查看设备列表失败: {str(e)}")
+        return Response({
+            'success': False,
+            'error': '获取设备列表失败，请稍后重试',
+            'code': 'FETCH_DEVICES_FAILED'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['Member许可证API'],
+    summary='解绑设备',
+    description='''
+    Member用户解绑自己许可证下的指定设备，释放激活配额
+    
+    ## 业务流程
+    
+    1. **权限验证** - 验证许可证归属和用户权限
+    2. **设备验证** - 确认设备属于该许可证且状态为活跃
+    3. **执行解绑** - 将设备状态设为非活跃
+    4. **更新配额** - 减少许可证的当前激活数
+    5. **审计记录** - 记录解绑操作到安全审计日志
+    
+    ## 权限要求
+    
+    - 需要JWT认证
+    - 必须是Member用户身份
+    - 只能解绑自己拥有的许可证设备
+    
+    ## 业务规则
+    
+    - 只能解绑状态为"活跃"的设备
+    - 解绑后设备状态变为"非活跃"
+    - 自动更新许可证的可用激活配额
+    - 保留设备绑定记录用于审计
+    
+    ## 安全机制
+    
+    - 记录详细的审计日志
+    - 频率限制防止滥用
+    - 租户隔离自动校验
+    
+    ## 使用场景
+    
+    - 用户更换设备前解绑旧设备
+    - 释放激活配额给新设备使用
+    - 清理不再使用的设备绑定
+    ''',
+    request=UnbindDeviceRequestSerializer,
+    responses={
+        200: OpenApiResponse(
+            description='解绑成功',
+            examples=[
+                OpenApiExample(
+                    'Unbind Success',
+                    value={
+                        'success': True,
+                        'message': '设备解绑成功',
+                        'data': {
+                            'license_id': 123,
+                            'machine_binding_id': 456,
+                            'machine_id': 'MACHINE-ABC123',
+                            'unbound_at': '2024-01-20T15:30:00Z',
+                            'reason': '用户主动解绑',
+                            'remaining_activations': 1,
+                            'max_activations': 3,
+                            'available_slots': 2
+                        }
+                    }
+                )
+            ]
+        ),
+        400: OpenApiResponse(
+            description='解绑失败 - 参数错误或业务规则限制',
+            examples=[
+                OpenApiExample(
+                    'License Not Found',
+                    value={
+                        'success': False,
+                        'error': '许可证不存在或您无权访问',
+                        'code': 'LICENSE_NOT_FOUND'
+                    }
+                ),
+                OpenApiExample(
+                    'Device Not Found',
+                    value={
+                        'success': False,
+                        'error': '设备不存在或不属于该许可证',
+                        'code': 'DEVICE_NOT_FOUND'
+                    }
+                ),
+                OpenApiExample(
+                    'Device Not Active',
+                    value={
+                        'success': False,
+                        'error': '设备当前状态为非活跃，无法解绑',
+                        'code': 'DEVICE_NOT_ACTIVE'
+                    }
+                )
+            ]
+        ),
+        401: OpenApiResponse(
+            description='未认证',
+            examples=[
+                OpenApiExample(
+                    'Unauthorized',
+                    value={'detail': 'Authentication credentials were not provided.'}
+                )
+            ]
+        ),
+        403: OpenApiResponse(
+            description='权限不足',
+            examples=[
+                OpenApiExample(
+                    'Permission Denied',
+                    value={'detail': 'You do not have permission to perform this action.'}
+                )
+            ]
+        ),
+        429: OpenApiResponse(
+            description='请求频率限制',
+            examples=[
+                OpenApiExample(
+                    'Throttled',
+                    value={'detail': 'Request was throttled. Expected available in 3600 seconds.'}
+                )
+            ]
+        ),
+        500: OpenApiResponse(
+            description='服务器内部错误',
+            examples=[
+                OpenApiExample(
+                    'Internal Error',
+                    value={
+                        'success': False,
+                        'error': '设备解绑失败，请稍后重试',
+                        'code': 'UNBIND_FAILED'
+                    }
+                )
+            ]
+        )
+    }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsMemberUser])
+@throttle_classes([MemberAPIThrottle])
+@csrf_exempt
+def unbind_device(request):
+    """
+    解绑设备
+    
+    POST /api/v1/licenses/member/unbind-device/
+    """
+    # 验证请求数据
+    serializer = UnbindDeviceRequestSerializer(data=request.data)
+    
+    if not serializer.is_valid():
+        logger.warning(f"Member {request.user.username} 解绑设备数据验证失败: {serializer.errors}")
+        return Response({
+            'success': False,
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # 提取请求数据
+        license_id = serializer.validated_data['license_id']
+        machine_binding_id = serializer.validated_data['machine_binding_id']
+        reason = serializer.validated_data.get('reason', '用户主动解绑')
+        
+        # 构建客户端信息
+        client_info = {
+            'ip_address': get_client_ip(request),
+            'user_agent': request.META.get('HTTP_USER_AGENT', '')
+        }
+        
+        # 调用服务执行解绑
+        management_service = MemberLicenseManagementService()
+        result = management_service.unbind_device(
+            member=request.user,
+            license_id=license_id,
+            machine_binding_id=machine_binding_id,
+            reason=reason,
+            client_info=client_info
+        )
+        
+        logger.info(
+            f"Member {request.user.username} 成功解绑设备: "
+            f"许可证 {license_id}, 设备 {machine_binding_id}"
+        )
+        
+        return Response(result, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        from common.exceptions import LicenseException
+        
+        if isinstance(e, LicenseException):
+            logger.warning(f"解绑设备失败: {e.detail}")
+            return Response({
+                'success': False,
+                'error': e.detail,
+                'code': e.error_code
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.error(f"解绑设备失败: {str(e)}")
+        return Response({
+            'success': False,
+            'error': '设备解绑失败，请稍后重试',
+            'code': 'UNBIND_FAILED'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def get_client_ip(request):
+    """获取客户端IP地址"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip

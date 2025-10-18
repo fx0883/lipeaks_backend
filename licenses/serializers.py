@@ -1034,10 +1034,26 @@ class MemberLicenseSerializer(serializers.ModelSerializer):
     def get_activation_info(self, obj):
         """获取激活信息"""
         if obj.license:
+            # 查询实际的活跃设备数，确保数据准确性
+            from licenses.models import MachineBinding
+            actual_active_count = MachineBinding.objects.filter(
+                license=obj.license,
+                status='active'
+            ).count()
+            
+            # 如果发现数据不一致，记录警告（但不在序列化器中修改数据库）
+            if obj.license.current_activations != actual_active_count:
+                import logging
+                logger = logging.getLogger('licenses.member')
+                logger.warning(
+                    f"许可证 {obj.license.id} 的 current_activations 不一致: "
+                    f"数据库值={obj.license.current_activations}, 实际值={actual_active_count}"
+                )
+            
             return {
-                'current_activations': obj.license.current_activations,
+                'current_activations': actual_active_count,  # 使用实际查询的活跃设备数
                 'max_activations': obj.license.max_activations,
-                'available_slots': max(0, obj.license.max_activations - obj.license.current_activations)
+                'available_slots': max(0, obj.license.max_activations - actual_active_count)
             }
         return None
 
@@ -1053,3 +1069,57 @@ class MemberLicenseListSerializer(serializers.Serializer):
     
     class Meta:
         fields = ['count', 'active_count', 'trial_count', 'expiring_soon_count', 'licenses']
+
+
+class MemberMachineBindingSerializer(serializers.ModelSerializer):
+    """Member用户设备绑定序列化器"""
+    
+    os_name = serializers.SerializerMethodField()
+    days_since_last_seen = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = MachineBinding
+        fields = [
+            'id', 'machine_id', 'machine_fingerprint',
+            'os_name', 'os_info', 'hardware_summary',
+            'last_ip_address', 'status', 'status_display',
+            'first_seen_at', 'last_seen_at', 'days_since_last_seen'
+        ]
+        read_only_fields = ['id', 'machine_id', 'machine_fingerprint', 'first_seen_at', 'last_seen_at']
+    
+    def get_os_name(self, obj):
+        """获取操作系统名称"""
+        os_info = obj.os_info or {}
+        os_name = os_info.get('os_name', 'Unknown')
+        os_version = os_info.get('os_version', '')
+        if os_version:
+            return f"{os_name} {os_version}"
+        return os_name
+    
+    def get_days_since_last_seen(self, obj):
+        """获取距离最后活跃的天数"""
+        if obj.last_seen_at:
+            delta = timezone.now() - obj.last_seen_at
+            return delta.days
+        return None
+
+
+class UnbindDeviceRequestSerializer(serializers.Serializer):
+    """Member用户解绑设备请求序列化器"""
+    
+    license_id = serializers.IntegerField(
+        min_value=1,
+        help_text="许可证分配ID（LicenseAssignment.id，从 my-licenses 接口返回的 id 字段）"
+    )
+    machine_binding_id = serializers.IntegerField(
+        min_value=1,
+        help_text="机器绑定ID"
+    )
+    reason = serializers.CharField(
+        max_length=500,
+        required=False,
+        allow_blank=True,
+        default="用户主动解绑",
+        help_text="解绑原因（可选）"
+    )

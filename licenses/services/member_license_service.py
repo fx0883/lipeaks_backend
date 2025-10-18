@@ -171,9 +171,10 @@ class MemberLicenseApplicationService:
             Dict[str, Any]: 许可证列表和统计信息
         """
         try:
-            # 获取用户的所有许可证分配
+            # 获取用户的所有许可证分配（必须过滤租户）
             assignments = LicenseAssignment.objects.filter(
-                member=member
+                member=member,
+                tenant=member.tenant  # 添加租户过滤，确保租户隔离
             ).select_related(
                 'license', 'license__product', 'license__plan'
             ).order_by('-created_at')
@@ -285,7 +286,8 @@ class MemberLicenseApplicationService:
             member=member,
             license__product=product,
             license__is_deleted=False,  # 排除已删除的许可证
-            status__in=['active', 'pending']
+            status__in=['active', 'pending'],
+            tenant=member.tenant  # 添加租户过滤，确保租户隔离
         ).exists()
         
         if existing:
@@ -363,7 +365,8 @@ class MemberLicenseApplicationService:
         user_trial_count = LicenseAssignment.objects.filter(
             member=member,
             license__plan__plan_type='trial',
-            status='active'
+            status='active',
+            tenant=member.tenant  # 添加租户过滤，确保租户隔离
         ).count()
         
         if user_trial_count >= max_trial_licenses:
@@ -383,7 +386,8 @@ class MemberLicenseApplicationService:
         
         recent_applications = LicenseAssignment.objects.filter(
             member=member,
-            created_at__gte=timezone.now() - timedelta(hours=cooldown_hours)
+            created_at__gte=timezone.now() - timedelta(hours=cooldown_hours),
+            tenant=member.tenant  # 添加租户过滤，确保租户隔离
         ).count()
         
         if recent_applications >= business_limit:
@@ -605,3 +609,247 @@ class MemberLicenseStatisticsService:
                 'activation_rate': 0,
                 'product_statistics': {}
             }
+
+
+class MemberLicenseManagementService:
+    """Member许可证设备管理服务"""
+    
+    @staticmethod
+    def get_license_devices(member: Member, license_id: int) -> Dict[str, Any]:
+        """
+        获取Member用户指定许可证的设备绑定列表
+        
+        Args:
+            member: Member用户实例
+            license_id: 许可证分配ID (LicenseAssignment.id)
+            
+        Returns:
+            Dict[str, Any]: 设备列表和统计信息
+        """
+        from licenses.models import MachineBinding
+        
+        try:
+            # 1. 验证许可证归属
+            assignment = LicenseAssignment.objects.filter(
+                id=license_id,  # 参数实际是 LicenseAssignment.id
+                member=member,
+                status='active',
+                tenant=member.tenant  # 添加租户过滤，确保租户隔离
+            ).select_related('license', 'license__product', 'license__plan').first()
+            
+            if not assignment:
+                raise LicenseException(
+                    error_code='LICENSE_NOT_FOUND',
+                    detail='许可证不存在或您无权访问',
+                    member_id=member.id,
+                    license_id=license_id
+                )
+            
+            license_obj = assignment.license
+            
+            # 2. 获取该许可证的所有机器绑定
+            devices = MachineBinding.objects.filter(
+                license=license_obj
+            ).order_by('-last_seen_at')
+            
+            # 3. 统计信息
+            total_devices = devices.count()
+            active_devices = devices.filter(status='active').count()
+            inactive_devices = devices.filter(status='inactive').count()
+            blocked_devices = devices.filter(status='blocked').count()
+            
+            # 4. 数据一致性检查和自动修复
+            if license_obj.current_activations != active_devices:
+                logger.warning(
+                    f"许可证 {license_obj.id} 的 current_activations 不一致: "
+                    f"数据库值={license_obj.current_activations}, 实际值={active_devices}，正在自动修复"
+                )
+                license_obj.current_activations = active_devices
+                license_obj.save(update_fields=['current_activations', 'updated_at'])
+            
+            logger.info(
+                f"Member {member.username} 查看许可证 {license_id} 的设备列表，"
+                f"共 {total_devices} 台设备，{active_devices} 台活跃"
+            )
+            
+            return {
+                'success': True,
+                'license_info': {
+                    'id': license_obj.id,
+                    'product_name': license_obj.product.name,
+                    'plan_name': license_obj.plan.name,
+                    'max_activations': license_obj.max_activations,
+                    'current_activations': active_devices,  # 使用实际查询的活跃设备数
+                    'available_slots': license_obj.max_activations - active_devices,
+                    'expires_at': license_obj.expires_at.isoformat() if license_obj.expires_at else None
+                },
+                'statistics': {
+                    'total': total_devices,
+                    'active': active_devices,
+                    'inactive': inactive_devices,
+                    'blocked': blocked_devices
+                },
+                'devices': list(devices),
+                'permissions': {
+                    'can_unbind': assignment.can_deactivate or active_devices > 0
+                }
+            }
+            
+        except LicenseException:
+            raise
+        except Exception as e:
+            logger.error(f"获取许可证设备列表失败: {str(e)}")
+            raise LicenseException(
+                error_code='FETCH_DEVICES_FAILED',
+                detail='获取设备列表失败，请稍后重试',
+                member_id=member.id,
+                license_id=license_id
+            )
+    
+    @staticmethod
+    @transaction.atomic
+    def unbind_device(
+        member: Member,
+        license_id: int,
+        machine_binding_id: int,
+        reason: str = "用户主动解绑",
+        client_info: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Member用户解绑指定设备
+        
+        Args:
+            member: Member用户实例
+            license_id: 许可证分配ID (LicenseAssignment.id)
+            machine_binding_id: 机器绑定ID
+            reason: 解绑原因
+            client_info: 客户端信息（IP、User-Agent等）
+            
+        Returns:
+            Dict[str, Any]: 解绑结果
+        """
+        from licenses.models import MachineBinding, SecurityAuditLog
+        
+        try:
+            # 1. 验证许可证归属和权限
+            assignment = LicenseAssignment.objects.filter(
+                id=license_id,  # 参数实际是 LicenseAssignment.id
+                member=member,
+                status='active',
+                tenant=member.tenant  # 添加租户过滤，确保租户隔离
+            ).select_related('license', 'license__product').first()
+            
+            if not assignment:
+                logger.warning(f"Member {member.username} 尝试访问无权访问的许可证 {license_id}")
+                raise LicenseException(
+                    error_code='LICENSE_NOT_FOUND',
+                    detail='许可证不存在或您无权访问',
+                    member_id=member.id,
+                    license_id=license_id
+                )
+            
+            license_obj = assignment.license
+            
+            # 2. 检查解绑权限
+            # 注意：对于自己的设备，即使 can_deactivate=False，也应该允许解绑
+            # 这里我们放宽限制，允许member解绑自己的设备
+            
+            # 3. 查找机器绑定
+            try:
+                machine_binding = MachineBinding.objects.get(
+                    id=machine_binding_id,
+                    license=license_obj
+                )
+            except MachineBinding.DoesNotExist:
+                logger.warning(
+                    f"Member {member.username} 尝试解绑不存在的设备 {machine_binding_id}，"
+                    f"许可证 {license_id}"
+                )
+                raise LicenseException(
+                    error_code='DEVICE_NOT_FOUND',
+                    detail='设备不存在或不属于该许可证',
+                    member_id=member.id,
+                    license_id=license_id,
+                    machine_binding_id=machine_binding_id
+                )
+            
+            # 4. 检查设备状态
+            if machine_binding.status != 'active':
+                raise LicenseException(
+                    error_code='DEVICE_NOT_ACTIVE',
+                    detail=f'设备当前状态为 {machine_binding.get_status_display()}，无法解绑',
+                    member_id=member.id,
+                    machine_binding_id=machine_binding_id,
+                    current_status=machine_binding.status
+                )
+            
+            # 5. 执行解绑操作
+            old_status = machine_binding.status
+            machine_binding.status = 'inactive'
+            machine_binding.save(update_fields=['status', 'updated_at'])
+            
+            # 6. 更新许可证的当前激活数
+            active_bindings_count = MachineBinding.objects.filter(
+                license=license_obj,
+                status='active'
+            ).count()
+            
+            license_obj.current_activations = active_bindings_count
+            license_obj.save(update_fields=['current_activations', 'updated_at'])
+            
+            # 7. 记录安全审计日志
+            SecurityAuditLog.objects.create(
+                event_type='license_deactivated',
+                severity='LOW',
+                user_id=member.id,
+                tenant_id=member.tenant.id if member.tenant else None,
+                ip_address=client_info.get('ip_address') if client_info else None,
+                user_agent=client_info.get('user_agent', '') if client_info else '',
+                details={
+                    'event': 'member_unbind_device',
+                    'member_id': member.id,
+                    'member_username': member.username,
+                    'license_id': license_obj.id,
+                    'machine_binding_id': machine_binding.id,
+                    'machine_id': machine_binding.machine_id,
+                    'product': license_obj.product.code,
+                    'reason': reason,
+                    'old_status': old_status,
+                    'new_status': 'inactive',
+                    'remaining_activations': active_bindings_count,
+                    'max_activations': license_obj.max_activations
+                }
+            )
+            
+            logger.info(
+                f"Member {member.username} 成功解绑设备: "
+                f"许可证 {license_obj.id}, 设备 {machine_binding.machine_id}, "
+                f"原因: {reason}, 剩余激活数: {active_bindings_count}/{license_obj.max_activations}"
+            )
+            
+            return {
+                'success': True,
+                'message': '设备解绑成功',
+                'data': {
+                    'license_id': license_obj.id,
+                    'machine_binding_id': machine_binding.id,
+                    'machine_id': machine_binding.machine_id,
+                    'unbound_at': timezone.now().isoformat(),
+                    'reason': reason,
+                    'remaining_activations': active_bindings_count,
+                    'max_activations': license_obj.max_activations,
+                    'available_slots': license_obj.max_activations - active_bindings_count
+                }
+            }
+            
+        except LicenseException:
+            raise
+        except Exception as e:
+            logger.error(f"设备解绑失败: {str(e)}")
+            raise LicenseException(
+                error_code='UNBIND_FAILED',
+                detail='设备解绑失败，请稍后重试',
+                member_id=member.id,
+                license_id=license_id,
+                machine_binding_id=machine_binding_id
+            )
