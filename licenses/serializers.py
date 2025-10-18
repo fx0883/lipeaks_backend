@@ -831,17 +831,32 @@ class AvailableProductSerializer(serializers.ModelSerializer):
         return plans_data if plans_data else None
     
     def get_already_applied(self, obj):
-        """检查是否已经申请过（排除已删除的许可证）"""
+        """检查是否已经申请过（只包含有效和待激活状态）"""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
         
-        return LicenseAssignment.objects.filter(
+        # 查询该用户该产品的有效许可证分配
+        # 只包含 active（有效）和 pending（待激活）状态
+        # 排除 revoked（已撤销）、expired（已过期）、suspended（已挂起）等状态
+        assignments = LicenseAssignment.objects.filter(
             member=request.user,
             license__product=obj,
             license__is_deleted=False,  # 排除已删除的许可证
-            status__in=['active', 'pending']
-        ).exists()
+            status__in=['active', 'pending']  # 只包含有效和待激活状态
+        )
+        
+        # 添加调试日志，帮助排查问题
+        if assignments.exists():
+            import logging
+            logger = logging.getLogger('licenses.member')
+            assignment_info = list(assignments.values('id', 'status', 'license_id', 'created_at'))
+            logger.info(
+                f"[already_applied=True] Member {request.user.username} 对产品 {obj.name}(ID:{obj.id}) "
+                f"有 {assignments.count()} 个有效许可证分配: {assignment_info}"
+            )
+        
+        return assignments.exists()
 
 
 class LicenseApplicationSerializer(serializers.Serializer):

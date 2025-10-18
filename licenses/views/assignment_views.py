@@ -115,17 +115,25 @@ class LicenseAssignmentViewSet(viewsets.ModelViewSet):
         
         try:
             with transaction.atomic():
-                TenantAwareLicenseAssignmentService.revoke_license_from_member(
+                # 修正方法名：revoke_license_assignment
+                service = TenantAwareLicenseAssignmentService()
+                result = service.revoke_license_assignment(
                     assignment=assignment,
                     reason=reason,
                     operator=request.user
                 )
                 
-                return Response({
-                    'success': True,
-                    'message': '许可证分配撤销成功',
-                    'revoked_at': assignment.revoked_at
-                })
+                if result['success']:
+                    return Response({
+                        'success': True,
+                        'message': '许可证分配撤销成功',
+                        'revoked_at': result.get('revoked_at')
+                    })
+                else:
+                    return Response({
+                        'success': False,
+                        'message': result.get('message', '撤销失败')
+                    }, status=status.HTTP_400_BAD_REQUEST)
                 
         except Exception as e:
             return Response({
@@ -287,13 +295,15 @@ class LicenseAssignmentViewSet(viewsets.ModelViewSet):
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
                 revoked_count = 0
+                service = TenantAwareLicenseAssignmentService()
                 for assignment in assignments:
-                    TenantAwareLicenseAssignmentService.revoke_license_from_member(
+                    result = service.revoke_license_assignment(
                         assignment=assignment,
                         reason=reason,
                         operator=request.user
                     )
-                    revoked_count += 1
+                    if result['success']:
+                        revoked_count += 1
                 
                 return Response({
                     'success': True,

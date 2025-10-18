@@ -728,7 +728,7 @@ class MemberLicenseManagementService:
         Returns:
             Dict[str, Any]: 解绑结果
         """
-        from licenses.models import MachineBinding, SecurityAuditLog
+        from licenses.models import MachineBinding, SecurityAuditLog, LicenseActivation
         
         try:
             # 1. 验证许可证归属和权限
@@ -788,6 +788,19 @@ class MemberLicenseManagementService:
             machine_binding.status = 'inactive'
             machine_binding.save(update_fields=['status', 'updated_at'])
             
+            # ✅ 删除该设备的所有激活记录，防止使用旧的 activation_code 继续验证
+            deleted_activations = LicenseActivation.objects.filter(
+                machine_binding=machine_binding,
+                result='success'
+            ).delete()
+            
+            deleted_count = deleted_activations[0] if deleted_activations else 0
+            if deleted_count > 0:
+                logger.info(
+                    f"已删除 {deleted_count} 条激活记录，"
+                    f"machine_binding_id: {machine_binding.id}"
+                )
+            
             # 6. 更新许可证的当前激活数
             active_bindings_count = MachineBinding.objects.filter(
                 license=license_obj,
@@ -816,6 +829,7 @@ class MemberLicenseManagementService:
                     'reason': reason,
                     'old_status': old_status,
                     'new_status': 'inactive',
+                    'deleted_activation_records': deleted_count,  # 记录删除的激活记录数
                     'remaining_activations': active_bindings_count,
                     'max_activations': license_obj.max_activations
                 }
@@ -852,4 +866,142 @@ class MemberLicenseManagementService:
                 member_id=member.id,
                 license_id=license_id,
                 machine_binding_id=machine_binding_id
+            )
+    
+    @staticmethod
+    @transaction.atomic
+    def delete_license_assignment(
+        member: Member,
+        license_id: int,
+        reason: str = "用户主动删除",
+        client_info: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Member用户删除自己的许可证分配
+        
+        Args:
+            member: Member用户实例
+            license_id: 许可证分配ID (LicenseAssignment.id)
+            reason: 删除原因
+            client_info: 客户端信息（IP、User-Agent等）
+            
+        Returns:
+            Dict[str, Any]: 删除结果
+        """
+        from licenses.models import MachineBinding, SecurityAuditLog
+        
+        try:
+            # 1. 验证许可证归属
+            assignment = LicenseAssignment.objects.filter(
+                id=license_id,  # 参数实际是 LicenseAssignment.id
+                member=member,
+                tenant=member.tenant  # 租户隔离
+            ).select_related('license', 'license__product').first()
+            
+            if not assignment:
+                logger.warning(f"Member {member.username} 尝试删除无权访问的许可证 {license_id}")
+                raise LicenseException(
+                    error_code='LICENSE_NOT_FOUND',
+                    detail='许可证不存在或您无权访问',
+                    member_id=member.id,
+                    license_id=license_id
+                )
+            
+            # 检查许可证状态，已撤销或已过期的不能删除
+            if assignment.status in ['revoked', 'expired']:
+                raise LicenseException(
+                    error_code='LICENSE_ALREADY_REVOKED',
+                    detail=f'许可证已{assignment.get_status_display()}，无法删除',
+                    member_id=member.id,
+                    license_id=license_id,
+                    current_status=assignment.status
+                )
+            
+            license_obj = assignment.license
+            
+            # 2. 删除所有关联的机器绑定
+            machine_bindings = MachineBinding.objects.filter(license=license_obj)
+            deleted_devices_count = machine_bindings.count()
+            deleted_devices_info = [
+                {
+                    'id': mb.id,
+                    'machine_id': mb.machine_id,
+                    'status': mb.status
+                } for mb in machine_bindings
+            ]
+            
+            # 执行删除
+            machine_bindings.delete()
+            
+            logger.info(
+                f"删除许可证 {license_obj.id} 的 {deleted_devices_count} 个设备绑定"
+            )
+            
+            # 3. 更新许可证的激活数
+            license_obj.current_activations = 0
+            license_obj.save(update_fields=['current_activations', 'updated_at'])
+            
+            # 4. 撤销许可证分配（保留记录用于审计）
+            assignment_data = {
+                'id': assignment.id,
+                'license_id': license_obj.id,
+                'license_key': license_obj.license_key,
+                'product_name': license_obj.product.name,
+                'plan_name': license_obj.plan.name,
+                'assigned_at': assignment.assigned_at.isoformat() if assignment.assigned_at else None,
+                'status_before_delete': assignment.status
+            }
+            
+            assignment.revoke(reason=reason, operator=None)
+            
+            # 5. 记录安全审计日志
+            SecurityAuditLog.objects.create(
+                event_type='license_deleted',
+                severity='MEDIUM',
+                user_id=member.id,
+                tenant_id=member.tenant.id if member.tenant else None,
+                ip_address=client_info.get('ip_address') if client_info else None,
+                user_agent=client_info.get('user_agent', '') if client_info else '',
+                details={
+                    'event': 'member_delete_license_assignment',
+                    'member_id': member.id,
+                    'member_username': member.username,
+                    'assignment_id': assignment.id,
+                    'license_id': license_obj.id,
+                    'license_key': license_obj.license_key,
+                    'product': license_obj.product.code,
+                    'plan_type': license_obj.plan.plan_type,
+                    'reason': reason,
+                    'deleted_devices_count': deleted_devices_count,
+                    'deleted_devices': deleted_devices_info
+                }
+            )
+            
+            logger.info(
+                f"Member {member.username} 成功删除许可证分配: "
+                f"分配ID {assignment.id}, 许可证 {license_obj.id}, "
+                f"删除 {deleted_devices_count} 个设备绑定"
+            )
+            
+            return {
+                'success': True,
+                'message': '许可证删除成功',
+                'data': {
+                    'assignment_id': assignment.id,
+                    'license_info': assignment_data,
+                    'deleted_devices_count': deleted_devices_count,
+                    'deleted_at': timezone.now().isoformat(),
+                    'reason': reason
+                }
+            }
+            
+        except LicenseException:
+            raise
+        except Exception as e:
+            logger.error(f"删除许可证失败: {str(e)}", exc_info=True)
+            raise LicenseException(
+                error_code='DELETE_LICENSE_FAILED',
+                detail='许可证删除失败，请稍后重试',
+                member_id=member.id,
+                license_id=license_id
             )

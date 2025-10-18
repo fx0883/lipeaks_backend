@@ -725,6 +725,9 @@ class LicenseAssignment(BaseModel):
             raise ValueError(f"无法撤销已撤销或已过期的分配，Current status: {self.get_status_display()}")
         
         from django.utils import timezone
+        import logging
+        
+        logger = logging.getLogger('licenses.models')
         
         self.status = 'revoked'
         self.revoked_at = timezone.now()
@@ -732,8 +735,31 @@ class LicenseAssignment(BaseModel):
         if operator:
             self.revoked_by = operator
         
-        # 更新License的current_activations计数
+        # ✅ 删除该许可证的所有激活记录，防止继续使用 activation_code
         if self.license:
+            deleted_activations = LicenseActivation.objects.filter(
+                license=self.license,
+                result='success'
+            ).delete()
+            
+            activation_count = deleted_activations[0] if deleted_activations else 0
+            if activation_count > 0:
+                logger.info(
+                    f"撤销许可证分配 {self.id}：删除了 {activation_count} 条激活记录"
+                )
+            
+            # 禁用该许可证的所有机器绑定
+            updated_bindings = MachineBinding.objects.filter(
+                license=self.license,
+                status='active'
+            ).update(status='inactive')
+            
+            if updated_bindings > 0:
+                logger.info(
+                    f"撤销许可证分配 {self.id}：禁用了 {updated_bindings} 个机器绑定"
+                )
+            
+            # 更新License的current_activations计数
             active_assignments = LicenseAssignment.objects.filter(
                 license=self.license,
                 status='active'

@@ -963,3 +963,206 @@ def get_client_ip(request):
     else:
         ip = request.META.get('REMOTE_ADDR')
     return ip
+
+
+@extend_schema(
+    tags=['Member许可证API'],
+    summary='删除我的许可证',
+    description='''
+    Member用户删除自己的许可证分配，删除后所有绑定的设备也会被删除
+    
+    ## 业务流程
+    
+    1. **权限验证** - 验证许可证归属和用户权限
+    2. **状态检查** - 确认许可证未被撤销或过期
+    3. **删除设备** - 删除所有关联的设备绑定
+    4. **撤销分配** - 撤销许可证分配（保留记录用于审计）
+    5. **更新配额** - 更新许可证的当前激活数
+    6. **审计记录** - 记录删除操作到安全审计日志
+    
+    ## 权限要求
+    
+    - 需要JWT认证
+    - 必须是Member用户身份
+    - 只能删除自己的许可证
+    
+    ## 业务规则
+    
+    - 只能删除状态为"active"、"pending"或"suspended"的许可证
+    - 已撤销或已过期的许可证不能删除
+    - 删除后许可证分配状态变为"revoked"
+    - 所有设备绑定将被永久删除
+    - 保留许可证分配记录用于审计
+    
+    ## 安全机制
+    
+    - 记录详细的审计日志
+    - 频率限制防止滥用
+    - 租户隔离自动校验
+    - 删除操作不可逆
+    
+    ## 使用场景
+    
+    - 用户不再需要该许可证
+    - 清理过期的试用许可证
+    - 管理个人许可证列表
+    ''',
+    parameters=[
+        OpenApiParameter(
+            name='license_id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.PATH,
+            description='许可证分配ID（从 my-licenses 接口返回的 id 字段）',
+            required=True
+        ),
+        OpenApiParameter(
+            name='reason',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='删除原因（可选）',
+            required=False
+        )
+    ],
+    responses={
+        200: OpenApiResponse(
+            description='删除成功',
+            examples=[
+                OpenApiExample(
+                    'Delete Success',
+                    value={
+                        'success': True,
+                        'message': '许可证删除成功',
+                        'data': {
+                            'assignment_id': 7,
+                            'license_info': {
+                                'id': 7,
+                                'license_id': 31,
+                                'license_key': 'A83B5...9E98D',
+                                'product_name': 'Lipeaks',
+                                'plan_name': '123',
+                                'assigned_at': '2025-10-18T02:07:56.364667Z',
+                                'status_before_delete': 'active'
+                            },
+                            'deleted_devices_count': 2,
+                            'deleted_at': '2025-10-18T04:30:00Z',
+                            'reason': '用户主动删除'
+                        }
+                    }
+                )
+            ]
+        ),
+        400: OpenApiResponse(
+            description='删除失败 - 参数错误或业务规则限制',
+            examples=[
+                OpenApiExample(
+                    'License Not Found',
+                    value={
+                        'success': False,
+                        'error': '许可证不存在或您无权访问',
+                        'code': 'LICENSE_NOT_FOUND'
+                    }
+                ),
+                OpenApiExample(
+                    'License Already Revoked',
+                    value={
+                        'success': False,
+                        'error': '许可证已撤销，无法删除',
+                        'code': 'LICENSE_ALREADY_REVOKED'
+                    }
+                )
+            ]
+        ),
+        401: OpenApiResponse(
+            description='未认证',
+            examples=[
+                OpenApiExample(
+                    'Unauthorized',
+                    value={'detail': 'Authentication credentials were not provided.'}
+                )
+            ]
+        ),
+        403: OpenApiResponse(
+            description='权限不足',
+            examples=[
+                OpenApiExample(
+                    'Permission Denied',
+                    value={'detail': 'You do not have permission to perform this action.'}
+                )
+            ]
+        ),
+        429: OpenApiResponse(
+            description='请求频率限制',
+            examples=[
+                OpenApiExample(
+                    'Throttled',
+                    value={'detail': 'Request was throttled. Expected available in 3600 seconds.'}
+                )
+            ]
+        ),
+        500: OpenApiResponse(
+            description='服务器内部错误',
+            examples=[
+                OpenApiExample(
+                    'Internal Error',
+                    value={
+                        'success': False,
+                        'error': '许可证删除失败，请稍后重试',
+                        'code': 'DELETE_LICENSE_FAILED'
+                    }
+                )
+            ]
+        )
+    }
+)
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated, IsMemberUser])
+@throttle_classes([MemberAPIThrottle])
+def delete_my_license(request, license_id):
+    """
+    删除我的许可证
+    
+    DELETE /api/v1/licenses/member/my-licenses/<license_id>/
+    """
+    try:
+        # 获取删除原因（可选）
+        reason = request.query_params.get('reason', '用户主动删除')
+        
+        # 构建客户端信息
+        client_info = {
+            'ip_address': get_client_ip(request),
+            'user_agent': request.META.get('HTTP_USER_AGENT', '')
+        }
+        
+        # 调用服务执行删除
+        management_service = MemberLicenseManagementService()
+        result = management_service.delete_license_assignment(
+            member=request.user,
+            license_id=license_id,
+            reason=reason,
+            client_info=client_info
+        )
+        
+        logger.info(
+            f"Member {request.user.username} 成功删除许可证: "
+            f"分配ID {license_id}, 删除了 {result['data']['deleted_devices_count']} 个设备"
+        )
+        
+        return Response(result, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        from common.exceptions import LicenseException
+        
+        if isinstance(e, LicenseException):
+            logger.warning(f"删除许可证失败: {e.detail}")
+            return Response({
+                'success': False,
+                'error': e.detail,
+                'code': e.error_code
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.error(f"删除许可证失败: {str(e)}")
+        return Response({
+            'success': False,
+            'error': '许可证删除失败，请稍后重试',
+            'code': 'DELETE_LICENSE_FAILED'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
