@@ -12,12 +12,16 @@ from common.views import (
     TestErrorResponseView,
     TestAuthErrorResponseView,
     TestPaginationResponseView,
-    FileUploadView
+    FileUploadView,
+    SystemInfoView
 )
 
 app_name = 'common'
 
 urlpatterns = [
+    # 系统信息
+    path('system-info/', SystemInfoView.as_view(), name='system-info'),
+    
     # API日志列表
     path('api-logs/', views.APILogListView.as_view(), name='api-log-list'),
     
