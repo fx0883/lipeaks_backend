@@ -247,39 +247,47 @@ REST_FRAMEWORK = {
 JWT_AUTH = {
     'JWT_SECRET_KEY': SECRET_KEY,
     'JWT_ALGORITHM': 'HS256',
-    'JWT_EXPIRATION_DELTA': 24 * 3600,  # 24小时有效期
-    'JWT_REFRESH_EXPIRATION_DELTA': 7 * 24 * 3600,  # 7天刷新期
+    'JWT_EXPIRATION_DELTA': 7 * 24 * 3600,  # 24小时有效期
+    'JWT_REFRESH_EXPIRATION_DELTA': 28 * 24 * 3600,  # 7天刷新期
 }
 
-# CORS 设置
-# CORS_ALLOW_ALL_ORIGINS = DEBUG
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "http://127.0.0.1:3000",
-#     "http://localhost:8000",
-#     "http://espressox.online",
-#     "https://espressox.online",
-# ]
+# ============================================
+# CORS 跨域配置
+# ============================================
+# 开发环境允许所有来源，生产环境建议使用白名单
+CORS_ALLOW_ALL_ORIGINS = True  # 允许所有来源（适用于开发和API服务）
 
-# CORS 配置
-CORS_ALLOW_ALL_ORIGINS = False  # 改为False使用白名单模式
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:8000",
-#     "http://127.0.0.1:8000",
-#     "http://localhost:3000",  # 前端应用
-#     "http://127.0.0.1:3000",
-#     "http://espressox.online",
-#     "https://espressox.online",
-#     "http://localhost:8848",
-#     "http://backend.espressox.online",
-#     "https://backend.espressox.online",
-#     "http://admin.espressox.online",
-#     "https://admin.espressox.online",
-# ]
-
+# 如果需要白名单模式，设置 CORS_ALLOW_ALL_ORIGINS = False 并配置以下列表
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:8848",
+    "http://43.142.76.105",
+    "http://43.142.76.105:8000",
+    "http://43.142.76.105:3000",
+    "http://espressox.online",
+    "https://espressox.online",
+    "http://backend.espressox.online",
+    "https://backend.espressox.online",
+    "http://admin.espressox.online",
+    "https://admin.espressox.online",
+]
 
 CORS_ALLOW_CREDENTIALS = True  # 允许携带凭证（如 cookies）
 
+# 允许的 HTTP 方法
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# 允许的 HTTP 请求头
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
@@ -293,6 +301,12 @@ CORS_ALLOW_HEADERS = [
     "x-tenant-id",
 ]
 
+# 允许前端访问的响应头
+CORS_EXPOSE_HEADERS = [
+    "content-type",
+    "x-csrftoken",
+]
+
 # CSRF 安全配置
 CSRF_COOKIE_AGE = 31449600  # 1年
 CSRF_COOKIE_DOMAIN = None
@@ -303,28 +317,23 @@ CSRF_COOKIE_SAMESITE = 'Lax'  # 重要：设置为Lax而不是Strict
 CSRF_COOKIE_SECURE = False if DEBUG else True  # 开发环境设为False
 CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'
 CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
-# CSRF_TRUSTED_ORIGINS = [
-#     'http://localhost:8000',
-#     'http://127.0.0.1:8000',
-#     'http://espressox.online',
-#     'https://espressox.online',
-#     "http://backend.espressox.online",
-#     "https://backend.espressox.online",
-#     "http://admin.espressox.online",
-#     "https://admin.espressox.online",
-# ]  # 添加受信任的源
-CORS_ALLOW_ALL_ORIGINS = True
-# CSRF_TRUSTED_ORIGINS = [
-#     'http://localhost:8000',
-#     'http://127.0.0.1:8000',
-#     'http://espressox.online',
-#     'https://espressox.online',
-#     "http://backend.espressox.online",
-#     "https://backend.espressox.online",
-#     "http://admin.espressox.online",
-#     "https://admin.espressox.online",
-# ]  # 添加受信任的源
 
+# CSRF 受信任的源（重要：解决跨域CSRF问题）
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://43.142.76.105',
+    'http://43.142.76.105:8000',
+    'http://43.142.76.105:3000',
+    'http://espressox.online',
+    'https://espressox.online',
+    'http://backend.espressox.online',
+    'https://backend.espressox.online',
+    'http://admin.espressox.online',
+    'https://admin.espressox.online',
+]
 
 CSRF_USE_SESSIONS = False
 
