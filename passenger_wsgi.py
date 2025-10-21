@@ -2,6 +2,13 @@ import os
 import sys
 import pymysql
 
+# 限制 OpenBLAS 线程数，避免在 cPanel 共享主机环境中耗尽资源
+# 必须在导入 numpy/pandas 之前设置
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
+
 # 获取当前脚本目录
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
