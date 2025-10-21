@@ -273,6 +273,15 @@ CORS_ALLOWED_ORIGINS = [
     "https://backend.espressox.online",
     "http://admin.espressox.online",
     "https://admin.espressox.online",
+
+    "http://compressx.online",
+    "https://compressx.online",
+    "http://backend.compressx.online",
+    "https://backend.compressx.online",
+    "http://admin.compressx.online",
+    "https://admin.compressx.online",
+    "http://stg.compressx.online",
+    "https://stg.compressx.online",
 ]
 
 CORS_ALLOW_CREDENTIALS = True  # 允许携带凭证（如 cookies）
@@ -333,6 +342,15 @@ CSRF_TRUSTED_ORIGINS = [
     'https://backend.espressox.online',
     'http://admin.espressox.online',
     'https://admin.espressox.online',
+
+    "http://compressx.online",
+    "https://compressx.online",
+    "http://backend.compressx.online",
+    "https://backend.compressx.online",
+    "http://admin.compressx.online",
+    "https://admin.compressx.online",
+    "http://stg.compressx.online",
+    "https://stg.compressx.online",
 ]
 
 CSRF_USE_SESSIONS = False
