@@ -2,7 +2,8 @@
 订单视图
 """
 import logging
-import pandas as pd
+# pandas 延迟导入：只在需要导入导出功能时才加载，避免在每个请求时都初始化
+# import pandas as pd  # 移到需要的函数内部
 from datetime import datetime, timedelta
 from django.db.models import Q, Sum, F, ExpressionWrapper, DecimalField, Count
 from django.http import HttpResponse
@@ -470,6 +471,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         可以通过JSON请求体传递order_ids数组来指定要导出的订单ID列表
         如果不提供order_ids，则导出current租户下所有订单
         """
+        # 延迟导入 pandas，只在导出功能被调用时才加载
+        import pandas as pd
+        
         logger.info(f"开始处理订单导出请求，请求数据: {request.data}")
         
         # 获取基础查询集
@@ -660,6 +664,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         """
         导入订单数据
         """
+        # 延迟导入 pandas，只在导入功能被调用时才加载
+        import pandas as pd
+        
         # 检查是否上传了文件
         if 'file' not in request.FILES:
             return Response(
