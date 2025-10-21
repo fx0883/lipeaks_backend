@@ -195,10 +195,7 @@ class LicenseActivationService:
             # 1. 查找许可证记录
             try:
                 license_hash = self.security_service.hash_manager.hash_data(license_key)
-                license_obj = License.objects.get(
-                    license_hash=license_hash,
-                    status__in=['generated', 'activated']
-                )
+                license_obj = License.objects.get(license_hash=license_hash)
             except License.DoesNotExist:
                 return {
                     'success': False,
@@ -206,12 +203,25 @@ class LicenseActivationService:
                     'code': 'LICENSE_NOT_FOUND'
                 }
             
-            # 2. 检查许可证状态
+            # 2. 检查许可证状态（必须先检查是否被撤销）
             if license_obj.status == 'revoked':
+                logger.warning(f"尝试激活已撤销的许可证: {license_hash[:16]}...")
                 return {
                     'success': False,
                     'error': 'License has been revoked',
                     'code': 'LICENSE_REVOKED'
+                }
+            
+            # 检查许可证状态是否允许激活
+            if license_obj.status not in ['generated', 'activated']:
+                logger.warning(
+                    f"许可证状态不允许激活: status={license_obj.status}, "
+                    f"license_hash={license_hash[:16]}..."
+                )
+                return {
+                    'success': False,
+                    'error': f'License status is {license_obj.status}, cannot be activated',
+                    'code': 'INVALID_LICENSE_STATUS'
                 }
             
             if license_obj.expires_at < timezone.now():
@@ -363,6 +373,19 @@ class LicenseActivationService:
                     'code': 'ACTIVATION_NOT_FOUND'
                 }
             
+            # ✅ 检查机器绑定状态（防御性检查）
+            if activation.machine_binding.status != 'active':
+                logger.warning(
+                    f"激活验证失败: 设备已解绑 - activation_code: {activation_code}, "
+                    f"machine_binding status: {activation.machine_binding.status}"
+                )
+                return {
+                    'valid': False,
+                    'error': 'Device has been unbound',
+                    'code': 'DEVICE_UNBOUND',
+                    'binding_status': activation.machine_binding.status
+                }
+            
             # 验证机器指纹（已禁用）
             # TODO: 机器指纹验证已禁用，后续根据需要重新启用
             # fingerprint_match = self.fingerprint_service.verify_fingerprint_match(
@@ -504,7 +527,17 @@ class LicenseActivationService:
             machine_binding.status = 'inactive'
             machine_binding.save()
             
-            # 更新许可证的当前激活数
+            # ✅ 删除或作废激活记录，防止使用旧的 activation_code 继续验证
+            # 方案1: 删除激活记录（推荐）
+            activation.delete()
+            logger.info(f"已删除激活记录: {activation_code}")
+            
+            # 方案2: 或者将激活结果标记为失败（保留记录用于审计）
+            # activation.result = 'failed'
+            # activation.error_message = f'设备已解绑: {reason}'
+            # activation.save()
+            
+            # 更新许可证的current激活数
             active_bindings_count = MachineBinding.objects.filter(
                 license=license_obj,
                 status='active'
@@ -670,6 +703,17 @@ class LicenseManagementService:
             license_obj.notes = f"撤销原因: {reason}"
             license_obj.save()
             
+            # ✅ 删除所有激活记录，防止使用旧的 activation_code 继续验证
+            deleted_activations = LicenseActivation.objects.filter(
+                license=license_obj,
+                result='success'
+            ).delete()
+            
+            activation_count = deleted_activations[0] if deleted_activations else 0
+            logger.info(
+                f"撤销许可证 {license_id}：删除了 {activation_count} 条激活记录"
+            )
+            
             # 禁用所有机器绑定
             MachineBinding.objects.filter(license=license_obj).update(
                 status='blocked'
@@ -684,7 +728,8 @@ class LicenseManagementService:
                 details={
                     'license_id': license_obj.id,
                     'reason': reason,
-                    'product': license_obj.product.code
+                    'product': license_obj.product.code,
+                    'deleted_activation_records': activation_count  # 记录删除的激活记录数
                 }
             )
             

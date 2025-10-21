@@ -86,11 +86,11 @@ class APIAuthMiddleware(MiddlewareMixin):
                     if hasattr(jwt_user, 'is_super_admin'):
                         # 如果用户是超级管理员，确保没有关联租户
                         if is_super_admin and getattr(jwt_user, 'tenant', None) is not None:
-                            logger.warning(f"[API认证中间件] 警告：超级管理员 {jwt_user.username} 不应关联租户，但当前关联了租户")
+                            logger.warning(f"[API认证中间件] 警告：超级管理员 {jwt_user.username} 不应关联租户，但current关联了租户")
                         
                         # 如果用户是租户管理员，确保关联了租户
                         if is_tenant_admin and getattr(jwt_user, 'tenant', None) is None:
-                            logger.warning(f"[API认证中间件] 警告：租户管理员 {jwt_user.username} 应关联租户，但当前未关联租户")
+                            logger.warning(f"[API认证中间件] 警告：租户管理员 {jwt_user.username} 应关联租户，但current未关联租户")
                     
                     # 记录用户租户信息
                     user_tenant = getattr(jwt_user, 'tenant', None)

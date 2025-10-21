@@ -197,7 +197,7 @@ class PointsEngine:
         
         if tenant_user_profile.available_points < points:
             raise PointsInsufficientException(
-                detail=f'积分余额不足，当前可用: {tenant_user_profile.available_points}，需要: {points}',
+                detail=f'积分余额不足，current可用: {tenant_user_profile.available_points}，Required: {points}',
                 user_id=tenant_user_profile.member.id,
                 available_points=tenant_user_profile.available_points,
                 required_points=points
@@ -553,13 +553,13 @@ class UserLevelService:
         获取下一个等级
         
         Args:
-            current_level: 当前等级
+            current_level: current等级
             
         Returns:
             UserLevel: 下一个等级，None表示已是最高等级
         """
         if not current_level:
-            # 如果当前无等级，返回最低等级
+            # 如果current无等级，返回最低等级
             return UserLevel.objects.filter(is_active=True).order_by('level_order').first()
         
         return UserLevel.objects.filter(

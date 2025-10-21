@@ -58,6 +58,7 @@ cd D:\GitHub\lipeaks_backend  # 替换为您的实际项目路径
 
 ```powershell
 docker build -t lipeaks_backend:latest .
+docker build -t lipeaks_backend:v1.0.2 .
 ```
 
 3. 检查构建的镜像：
@@ -101,12 +102,15 @@ docker login
 
 ```powershell
 docker tag lipeaks_backend:latest fx0883/lipeaks_backend:latest
+
+docker tag lipeaks_backend:v1.0.2 fx0883/lipeaks_backend:v1.0.2
 ```
 
 3. 推送镜像到 Docker Hub：
 
 ```powershell
 docker push fx0883/lipeaks_backend:latest
+docker push fx0883/lipeaks_backend:v1.0.2
 ```
 
 4. 验证推送结果：访问 `https://hub.docker.com/r/your_username/lipeaks_backend`

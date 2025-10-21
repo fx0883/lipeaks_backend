@@ -59,7 +59,7 @@ class RSASecurityManager:
             
         except Exception as e:
             logger.error(f"RSA密钥对生成失败: {str(e)}")
-            raise Exception(f"密钥对生成失败: {str(e)}")
+            raise Exception(f"Key pair generation failed: {str(e)}")
     
     @staticmethod
     def sign_data(private_key_pem: bytes, data: str) -> bytes:
@@ -95,7 +95,7 @@ class RSASecurityManager:
             
         except Exception as e:
             logger.error(f"数据签名失败: {str(e)}")
-            raise Exception(f"签名失败: {str(e)}")
+            raise Exception(f"Signature failed: {str(e)}")
     
     @staticmethod
     def verify_signature(public_key_pem: bytes, data: str, signature: bytes) -> bool:
@@ -168,7 +168,7 @@ class AESSecurityManager:
             
         except Exception as e:
             logger.error(f"AES密钥生成失败: {str(e)}")
-            raise Exception(f"密钥生成失败: {str(e)}")
+            raise Exception(f"Key generation failed: {str(e)}")
     
     @staticmethod
     def encrypt_data(data: Any, encryption_password: str) -> Dict[str, str]:
@@ -202,7 +202,7 @@ class AESSecurityManager:
             
         except Exception as e:
             logger.error(f"数据加密失败: {str(e)}")
-            raise Exception(f"加密失败: {str(e)}")
+            raise Exception(f"Encryption failed: {str(e)}")
     
     @staticmethod
     def decrypt_data(encrypted_data: str, salt: str, decryption_password: str) -> Any:
@@ -239,7 +239,7 @@ class AESSecurityManager:
                 
         except Exception as e:
             logger.error(f"数据解密失败: {str(e)}")
-            raise Exception(f"解密失败: {str(e)}")
+            raise Exception(f"Decryption failed: {str(e)}")
 
 
 class HashManager:
@@ -283,13 +283,13 @@ class HashManager:
             elif algorithm == 'sha512':
                 hash_obj = hashlib.sha512(data_with_salt.encode('utf-8'))
             else:
-                raise ValueError(f"不支持的哈希算法: {algorithm}")
+                raise ValueError(f"Unsupported hash algorithm: {algorithm}")
             
             return hash_obj.hexdigest()
             
         except Exception as e:
             logger.error(f"哈希计算失败: {str(e)}")
-            raise Exception(f"哈希计算失败: {str(e)}")
+            raise Exception(f"Hash calculation failed: {str(e)}")
     
     @staticmethod
     def verify_hash(data: str, expected_hash: str, salt: str = None, algorithm: str = 'sha256') -> bool:

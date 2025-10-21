@@ -150,8 +150,8 @@ class PermissionViewSet(viewsets.ModelViewSet):
         return Response(list(categories))
     
     @extend_schema(
-        summary="检查当前用户权限",
-        description="检查当前用户是否拥有指定权限",
+        summary="检查current用户权限",
+        description="检查current用户是否拥有指定权限",
         parameters=[
             OpenApiParameter(name='code', description='权限代码', required=True, type=str),
         ],
@@ -160,7 +160,7 @@ class PermissionViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'])
     def check(self, request):
-        """检查当前用户是否拥有指定权限"""
+        """检查current用户是否拥有指定权限"""
         code = request.query_params.get('code')
         if not code:
             return Response(
@@ -176,14 +176,14 @@ class PermissionViewSet(viewsets.ModelViewSet):
     
     @extend_schema(
         summary="批量检查权限",
-        description="批量检查当前用户是否拥有多个权限",
+        description="批量检查current用户是否拥有多个权限",
         request=PermissionBatchCheckSerializer,
         responses={200: PermissionBatchCheckResponseSerializer},
         tags=["RBAC系统"]
     )
     @action(detail=False, methods=['post'])
     def batch_check(self, request):
-        """批量检查当前用户是否拥有多个权限"""
+        """批量检查current用户是否拥有多个权限"""
         serializer = PermissionBatchCheckSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         
@@ -197,7 +197,7 @@ class PermissionViewSet(viewsets.ModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         summary="获取角色列表",
-        description="获取角色列表，根据当前用户租户上下文过滤",
+        description="获取角色列表，根据current用户租户上下文过滤",
         parameters=[
             OpenApiParameter(name='search', description='搜索关键词(针对name, code, description)', required=False, type=str),
             OpenApiParameter(name='tenant_id', description='按租户过滤(超管可用)', required=False, type=int),
@@ -302,7 +302,7 @@ class RoleViewSet(viewsets.ModelViewSet):
         """创建角色时设置租户"""
         user = self.request.user
         
-        # 如果前端没有提供tenant_id或当前用户不是超级管理员，使用当前用户租户
+        # 如果前端没有提供tenant_id或current用户不是超级管理员，使用current用户租户
         tenant_id = serializer.validated_data.get('tenant')
         if tenant_id is None and not getattr(user, 'is_super_admin', False):
             serializer.validated_data['tenant_id'] = getattr(user, 'tenant_id', None)

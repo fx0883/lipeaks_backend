@@ -80,7 +80,7 @@ class OrderCreateSerializer(OrderSerializer):
         if 'customer_total_amount' not in data or data.get('customer_total_amount', 0) == 0:
             customer_count = data.get('customer_count')
             if not customer_count:
-                raise serializers.ValidationError({'customer_count': _('客户数量不能为空')})
+                raise serializers.ValidationError({'customer_count': _('Customer count cannot be empty')})
         
         return data
     
@@ -267,7 +267,7 @@ class OrderCompareSerializer(serializers.Serializer):
         version2 = data.get('version2')
         
         if version1 == version2:
-            raise serializers.ValidationError({'version2': _('不能与version1相同')})
+            raise serializers.ValidationError({'version2': _('Cannot be the same as version1')})
         
         # 检查是否存在对应的历史记录
         order_id = self.context.get('order_id')

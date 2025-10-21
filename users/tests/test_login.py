@@ -149,7 +149,7 @@ class LoginTests(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("message"), "子账号不允许登录")
+        self.assertEqual(resp.data.get("message"), "Sub-accounts are not allowed to log in")
 
     def test_member_tenant_status_enforced(self):
         # suspended tenant member should not login
@@ -161,7 +161,7 @@ class LoginTests(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("message"), "所属租户已被禁用或暂停")
+        self.assertEqual(resp.data.get("message"), "Tenant has been disabled or suspended")
 
     def test_admin_login_with_header_forbidden(self):
         # 管理员/超管携带 Header 登录 -> 4001

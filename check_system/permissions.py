@@ -116,7 +116,7 @@ class CheckSystemBasePermission(permissions.BasePermission):
         # 验证对象所属租户与用户租户一致
         if hasattr(obj, 'tenant') and obj.tenant != user.tenant:
             logger.warning(f"用户 {user.username} 尝试操作不属于其租户的对象 {obj.__class__.__name__} #{getattr(obj, 'id', 'unknown')}")
-            raise PermissionDenied("不能操作其他租户的资源")
+            raise PermissionDenied("Cannot operate resources of other tenants")
         
         # 租户管理员可以操作其租户内的所有资源
         if user.is_admin and hasattr(obj, 'tenant') and obj.tenant == user.tenant:

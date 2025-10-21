@@ -99,7 +99,7 @@ class TenantUserProfileSerializer(serializers.ModelSerializer):
         return None
     
     def get_current_level_info(self, obj):
-        """获取当前等级详细信息"""
+        """获取current等级详细信息"""
         if obj.current_level:
             return {
                 'id': obj.current_level.id,
@@ -391,7 +391,7 @@ class UserPointsSummarySerializer(serializers.Serializer):
     """用户积分摘要序列化器"""
     
     total_points = serializers.IntegerField(help_text="总积分")
-    current_level = serializers.CharField(help_text="当前等级", allow_null=True)
+    current_level = serializers.CharField(help_text="current等级", allow_null=True)
     points_multiplier = serializers.DecimalField(max_digits=3, decimal_places=2, help_text="积分倍数")
     summary_period_days = serializers.IntegerField(help_text="统计周期天数")
     

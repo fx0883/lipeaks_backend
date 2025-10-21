@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 @extend_schema_view(
     list=extend_schema(
-        summary="获取当前用户的菜单",
-        description="获取当前登录用户能够访问的菜单列表，返回树形结构的菜单数据",
+        summary="获取current用户的菜单",
+        description="获取current登录用户能够访问的菜单列表，返回树形结构的菜单数据",
         tags=["用户菜单"],
         responses={
             200: OpenApiResponse(
@@ -74,7 +74,7 @@ class UserMenuViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     """
     用户菜单视图集
     
-    提供当前登录用户的菜单数据，包括：
+    提供current登录用户的菜单数据，包括：
     - 超级管理员：可访问所有激活的菜单
     - 管理员：可访问分配给自己的菜单
     - 普通用户：可访问分配给自己的菜单
@@ -84,7 +84,7 @@ class UserMenuViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     
     def get_queryset(self):
         """
-        获取当前用户的菜单
+        获取current用户的菜单
         """
         user = self.request.user
         
@@ -119,7 +119,7 @@ class UserMenuViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     
     def list(self, request, *args, **kwargs):
         """
-        获取当前用户的菜单
+        获取current用户的菜单
         """
         queryset = self.get_queryset()
         

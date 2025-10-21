@@ -284,7 +284,7 @@ class LoginView(APIView):
         return Response({
             'success': False,
             'code': 4002,
-            'message': '用户名/邮箱或密码错误',
+            'message': 'Invalid username/email or password',
             'data': None
         }, status=status.HTTP_401_UNAUTHORIZED)
     
@@ -323,7 +323,7 @@ class TokenRefreshView(APIView):
             return Response({
                 'success': False,
                 'code': 4000,
-                'message': '无效的刷新令牌',
+                'message': 'Invalid refresh token',
                 'data': None
             }, status=status.HTTP_400_BAD_REQUEST)
         
@@ -339,12 +339,12 @@ class TokenRefreshView(APIView):
             
             # 确认是刷新令牌
             if payload.get('token_type') != 'refresh':
-                raise jwt.InvalidTokenError('令牌类型错误')
+                raise jwt.InvalidTokenError('Token type error')
             
             # 获取用户
             user_id = payload.get('user_id')
             if not user_id:
-                raise jwt.InvalidTokenError('令牌中缺少用户ID')
+                raise jwt.InvalidTokenError('User ID is missing in token')
             
             # 根据model_type确定用户模型
             model_type = payload.get('model_type', 'user')
@@ -361,18 +361,18 @@ class TokenRefreshView(APIView):
             # 检查用户状态
             if user.status != 'active':
                 logger.warning(f"刷新令牌时发现用户状态异常: {user.username} ({user.status})")
-                raise jwt.InvalidTokenError('用户状态异常')
+                raise jwt.InvalidTokenError('User status is abnormal')
                 
             # 检查是否为子账号
             if hasattr(user, 'parent') and user.parent:
                 logger.warning(f"子账号尝试刷新令牌: {user.username}")
-                raise jwt.InvalidTokenError('子账号不允许登录')
+                raise jwt.InvalidTokenError('Sub-accounts are not allowed to log in')
             
             # 检查用户的租户状态
             if user.tenant and not getattr(user, 'is_super_admin', False):
                 if user.tenant.status != 'active' or user.tenant.is_deleted:
                     logger.warning(f"用户 {user.username} 的租户状态异常")
-                    raise jwt.InvalidTokenError('所属租户已被禁用或删除')
+                    raise jwt.InvalidTokenError('Tenant has been disabled or deleted')
             
             # 生成新的令牌
             tokens = generate_jwt_token(user)
@@ -383,7 +383,7 @@ class TokenRefreshView(APIView):
             return Response({
                 'success': True,
                 'code': 2000,
-                'message': '刷新令牌成功',
+                'message': 'Token refreshed successfully',
                 'data': {
                     'token': tokens['access_token'],
                     'refresh_token': tokens['refresh_token']
@@ -395,7 +395,7 @@ class TokenRefreshView(APIView):
             return Response({
                 'success': False,
                 'code': 4001,
-                'message': '无效的刷新令牌',
+                'message': 'Invalid refresh token',
                 'data': None
             }, status=status.HTTP_401_UNAUTHORIZED)
         except (User.DoesNotExist, Member.DoesNotExist) as e:
@@ -403,7 +403,7 @@ class TokenRefreshView(APIView):
             return Response({
                 'success': False,
                 'code': 4001,
-                'message': '用户不存在或已被禁用',
+                'message': 'User not found or disabled',
                 'data': None
             }, status=status.HTTP_401_UNAUTHORIZED)
         except Exception as e:
@@ -411,7 +411,7 @@ class TokenRefreshView(APIView):
             return Response({
                 'success': False,
                 'code': 5000,
-                'message': '刷新令牌失败',
+                'message': 'Token refresh failed',
                 'data': None
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -424,14 +424,14 @@ class TokenVerifyView(APIView):
     
     @extend_schema(
         summary="验证访问令牌",
-        description="验证当前令牌是否有效，返回用户信息",
+        description="验证current令牌是否有效，返回用户信息",
         responses=token_verify_responses,
         examples=token_verify_response_examples,
         tags=["认证"]
     )
     def get(self, request):
         """
-        验证当前用户令牌
+        验证current用户令牌
         """
         user = request.user
         
@@ -564,7 +564,7 @@ class AdminChangePasswordSerializer(serializers.Serializer):
         验证两次输入的密码是否一致
         """
         if data['new_password'] != data['confirm_password']:
-            raise serializers.ValidationError({"confirm_password": "两次输入的密码不一致"})
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
         
         # 验证新密码强度
         from django.contrib.auth.password_validation import validate_password
@@ -587,11 +587,11 @@ class AdminChangePasswordView(generics.UpdateAPIView):
     
     def check_permissions(self, request):
         """
-        检查当前用户是否有权限修改指定用户密码
+        检查current用户是否有权限修改指定用户密码
         """
         super().check_permissions(request)
         if not (is_admin(request.user) or is_super_admin(request.user)):
-            raise PermissionDenied("只有管理员才能修改其他用户的密码")
+            raise PermissionDenied("Only administrators can change other users' passwords")
     
     @extend_schema(
         summary="管理员修改用户密码",
@@ -623,7 +623,7 @@ class AdminChangePasswordView(generics.UpdateAPIView):
                             "code": 4000,
                             "message": "请求数据无效",
                             "data": {
-                                "confirm_password": ["两次输入的密码不一致"]
+                                "confirm_password": ["Passwords do not match"]
                             }
                         }
                     )
@@ -639,7 +639,7 @@ class AdminChangePasswordView(generics.UpdateAPIView):
                             "code": 4003,
                             "message": "权限不足",
                             "data": {
-                                "detail": "只有管理员才能修改其他用户的密码"
+                                "detail": "Only administrators can change other users' passwords"
                             }
                         }
                     )
@@ -740,7 +740,7 @@ class PasswordResetRequestView(APIView):
         
         if request_count >= 3:
             logger.warning(f"IP {ip} 请求密码重置过于频繁")
-            raise Throttled(detail="请求过于频繁，请稍后再试")
+            raise Throttled(detail="Too many requests, please try again later")
         
         # 增加请求计数并设置过期时间
         cache.set(cache_key, request_count + 1, 600)  # 10分钟 = 600秒
@@ -917,9 +917,9 @@ class PasswordResetVerifyView(APIView):
                 return Response({
                     'success': False,
                     'code': 4000,
-                    'message': '重置令牌已过期',
+                    'message': 'Reset token has expired',
                     'data': {
-                        'token': ['重置令牌已过期']
+                        'token': ['Reset token has expired']
                     }
                 }, status=status.HTTP_400_BAD_REQUEST)
             
@@ -927,9 +927,9 @@ class PasswordResetVerifyView(APIView):
             return Response({
                 'success': False,
                 'code': 4000,
-                'message': '无效的重置令牌',
+                'message': 'Invalid reset token',
                 'data': {
-                    'token': ['无效的重置令牌']
+                    'token': ['Invalid reset token']
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
         

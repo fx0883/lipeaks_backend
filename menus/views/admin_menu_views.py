@@ -216,7 +216,7 @@ class AdminMenuViewSet(mixins.ListModelMixin,
         
         assigned_menus = []
         with transaction.atomic():
-            # 首先禁用不在当前列表中的所有菜单
+            # 首先禁用不在current列表中的所有菜单
             UserMenu.objects.filter(user=user).exclude(menu_id__in=menu_ids).update(is_active=False)
             
             # 然后添加或激活请求中的菜单

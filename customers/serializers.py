@@ -30,19 +30,19 @@ class CustomerSerializer(serializers.ModelSerializer):
         """
         验证客户名称的唯一性
         """
-        # 获取当前实例（如果是更新操作）
+        # 获取current实例（如果是更新操作）
         instance = getattr(self, 'instance', None)
         
         # 构建查询条件：名称相同且未删除的客户
         query = Customer.objects.filter(name=value, is_deleted=False)
         
-        # 如果是更新操作，排除当前实例
+        # 如果是更新操作，排除current实例
         if instance:
             query = query.exclude(pk=instance.pk)
         
         # 检查是否存在重名客户
         if query.exists():
-            raise serializers.ValidationError("客户名称已存在，请使用其他名称")
+            raise serializers.ValidationError("Customer name already exists, please use another name")
         
         return value
 
@@ -130,7 +130,7 @@ class CustomerTenantRelationSerializer(serializers.ModelSerializer):
         end_date = data.get('end_date')
         
         if start_date and end_date and end_date < start_date:
-            raise serializers.ValidationError({"end_date": "结束日期不能早于开始日期"})
+            raise serializers.ValidationError({"end_date": "End date cannot be earlier than start date"})
         
         return data
 
@@ -185,7 +185,7 @@ class BulkCustomerCreateSerializer(serializers.Serializer):
         
         # 检查批量创建中是否有重复名称
         if len(names) != len(set(names)):
-            raise serializers.ValidationError("批量创建的客户中存在重复名称")
+            raise serializers.ValidationError("Duplicate names found in batch customer creation")
         
         # 检查与数据库中已有客户是否重名
         existing_names = Customer.objects.filter(
@@ -195,7 +195,7 @@ class BulkCustomerCreateSerializer(serializers.Serializer):
         
         if existing_names:
             duplicate_names = ", ".join(existing_names)
-            raise serializers.ValidationError(f"以下客户名称已存在: {duplicate_names}")
+            raise serializers.ValidationError(f"The following customer names already exist: {duplicate_names}")
         
         return value
     
@@ -229,7 +229,7 @@ class BulkCustomerUpdateSerializer(serializers.Serializer):
         # 验证每个客户数据都包含id字段
         for customer_data in value:
             if 'id' not in customer_data:
-                raise serializers.ValidationError("每个客户数据必须包含id字段")
+                raise serializers.ValidationError("Each customer data must contain id field")
         
         # 收集要更新的客户ID和名称
         name_id_map = {}
@@ -243,7 +243,7 @@ class BulkCustomerUpdateSerializer(serializers.Serializer):
         
         # 检查批量更新中是否有重复名称
         if len(name_id_map) != len(set(name_id_map.keys())):
-            raise serializers.ValidationError("批量更新的客户中存在重复名称")
+            raise serializers.ValidationError("Duplicate names found in batch customer update")
         
         # 检查与数据库中已有客户是否重名
         existing_customers = Customer.objects.filter(
@@ -253,7 +253,7 @@ class BulkCustomerUpdateSerializer(serializers.Serializer):
         
         if existing_customers.exists():
             duplicate_names = ", ".join(existing_customers.values_list('name', flat=True))
-            raise serializers.ValidationError(f"以下客户名称已存在: {duplicate_names}")
+            raise serializers.ValidationError(f"The following customer names already exist: {duplicate_names}")
         
         return value
     

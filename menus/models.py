@@ -72,8 +72,8 @@ class Menu(models.Model):
         if self.pk and self.parent:
             # 检查是否存在循环引用
             if self._check_circular_reference(self.parent_id, self.pk):
-                logger.error(f"检测到循环引用: 菜单 {self.title} 不能将 {self.parent.title} 设为父菜单")
-                raise ValueError(f"检测到循环引用: 菜单 '{self.title}' 不能将 '{self.parent.title}' 设为父菜单")
+                logger.error(f"Circular reference detected: menu {self.title} cannot set {self.parent.title} as parent menu")
+                raise ValueError(f"Circular reference detected: menu '{self.title}' cannot set '{self.parent.title}' as parent menu")
         
         is_new = self.pk is None
         action = "创建" if is_new else "更新"
@@ -87,7 +87,7 @@ class Menu(models.Model):
         
         Args:
             parent_id: 父菜单ID
-            menu_id: 当前菜单ID
+            menu_id: current菜单ID
             
         Returns:
             布尔值，指示是否存在循环引用
@@ -103,7 +103,7 @@ class Menu(models.Model):
 
     def get_descendants(self, include_self=False):
         """
-        获取当前菜单的所有后代菜单
+        获取current菜单的所有后代菜单
         
         Args:
             include_self: 是否包含自身

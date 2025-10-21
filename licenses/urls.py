@@ -42,6 +42,9 @@ urlpatterns = [
     path('member/available-products/', member_views.available_products, name='member_available_products'),
     path('member/apply/', member_views.apply_trial_license, name='member_apply_trial_license'),
     path('member/my-licenses/', member_views.my_licenses, name='member_my_licenses'),
+    path('member/my-licenses/<int:license_id>/', member_views.delete_my_license, name='member_delete_license'),
+    path('member/my-licenses/<int:license_id>/devices/', member_views.my_license_devices, name='member_license_devices'),
+    path('member/unbind-device/', member_views.unbind_device, name='member_unbind_device'),
     
     # 报告和统计API
     path('reports/generate/', report_views.generate_report, name='generate_report'),

@@ -31,7 +31,7 @@ class BusinessException(APIException):
         # 方式2：使用通用类+错误码（低频错误）
         raise LicenseException(
             error_code='ACTIVATION_DEVICE_MISMATCH',
-            detail='设备指纹不匹配',
+            detail='Device fingerprint mismatch',
             expected=expected_fp,
             actual=actual_fp
         )
@@ -47,7 +47,7 @@ class BusinessException(APIException):
     status_code = 400
     
     # 默认错误消息
-    default_detail = '业务操作失败'
+    default_detail = 'Business operation failed'
     
     def __init__(self, detail=None, code=None, **extra):
         """

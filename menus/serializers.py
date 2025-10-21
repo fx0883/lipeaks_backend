@@ -41,12 +41,12 @@ class MenuSerializer(serializers.ModelSerializer):
         
         if instance and parent:
             if instance.id == parent.id:
-                raise serializers.ValidationError({"parent_id": "菜单不能将自己设为父菜单"})
+                raise serializers.ValidationError({"parent_id": "Menu cannot set itself as parent menu"})
             
-            # 检查父菜单是否是当前菜单的子菜单
+            # 检查父菜单是否是current菜单的子菜单
             descendants = instance.get_descendants()
             if parent in descendants:
-                raise serializers.ValidationError({"parent_id": "不能将子菜单设为父菜单，这会导致循环引用"})
+                raise serializers.ValidationError({"parent_id": "Cannot set child menu as parent menu, this will cause circular reference"})
         
         return data
 

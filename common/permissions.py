@@ -181,7 +181,7 @@ class IsOwnerOrAdmin(permissions.BasePermission):
         ):
             return True
         
-        # 检查对象是否属于当前用户
+        # 检查对象是否属于current用户
         is_owner = False
         if hasattr(obj, 'user_id'):
             is_owner = obj.user_id == request.user.id
@@ -353,7 +353,7 @@ class IsMemberUser(permissions.BasePermission):
         
         if not has_permission:
             if not is_authenticated:
-                reason = "用户未认证"
+                reason = "User is not authenticated"
             elif not is_member_user:
                 reason = "不是Member用户"
             elif not is_active:

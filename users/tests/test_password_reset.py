@@ -191,7 +191,7 @@ class PasswordResetTests(TestCase):
         resp = self.client.post(self.url_verify, {"token": "invalid"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("message"), "无效的重置令牌")
+        self.assertEqual(resp.data.get("message"), "Invalid reset token")
 
     def test_verify_expired_token(self):
         expired = PasswordResetToken.objects.create(
@@ -202,7 +202,7 @@ class PasswordResetTests(TestCase):
         resp = self.client.post(self.url_verify, {"token": expired.token}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("message"), "重置令牌已过期")
+        self.assertEqual(resp.data.get("message"), "Reset token has expired")
 
     def test_confirm_invalid_token(self):
         resp = self.client.post(

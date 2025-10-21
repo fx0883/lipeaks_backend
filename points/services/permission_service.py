@@ -509,7 +509,7 @@ class PermissionValidator:
         
         max_licenses = permissions['license']['max_licenses']
         
-        # 查询当前已分配的许可证数量
+        # 查询current已分配的许可证数量
         from licenses.models import LicenseAssignment
         current_assignments = LicenseAssignment.objects.filter(
             member=member,
@@ -564,7 +564,7 @@ class PermissionValidator:
             member, tenant, 'storage_mb'
         )
         
-        # 这里应该查询当前已使用的存储空间
+        # 这里应该查询current已使用的存储空间
         # 简化处理，假设已使用存储为0
         used_storage = 0
         available_storage = storage_quota - used_storage

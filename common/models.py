@@ -14,7 +14,7 @@ class BaseModel(models.Model):
     - 租户关联：通过tenant字段关联到特定租户
     - 创建/更新时间：自动记录创建和更新时间
     - 软删除：通过is_deleted字段实现软删除
-    - 租户过滤管理器：默认只显示当前租户的数据
+    - 租户过滤管理器：默认只显示current租户的数据
     
     使用示例：
         class MyModel(BaseModel):

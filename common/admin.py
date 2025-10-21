@@ -38,7 +38,7 @@ class TenantAdminMixin:
         """
         重写save_model方法，自动设置租户
         """
-        # 如果是新对象且模型有租户字段，则设置当前用户的租户
+        # 如果是新对象且模型有租户字段，则设置current用户的租户
         if not change and hasattr(obj, 'tenant') and obj.tenant is None:
             obj.tenant = getattr(request.user, 'tenant', None)
         
@@ -47,7 +47,7 @@ class TenantAdminMixin:
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         """
         重写formfield_for_foreignkey方法，过滤外键选项
-        对于租户相关的外键字段，只显示当前租户的数据
+        对于租户相关的外键字段，只显示current租户的数据
         """
         # 获取用户关联的租户
         tenant = getattr(request.user, 'tenant', None)

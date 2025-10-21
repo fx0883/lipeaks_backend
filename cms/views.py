@@ -354,7 +354,7 @@ class ArticleViewSet(TenantModelViewSet):
     
     def perform_create(self, serializer):
         """
-        创建文章时设置作者为当前用户
+        创建文章时设置作者为current用户
         
         租户ID已通过TenantModelViewSet自动处理
         """
@@ -362,9 +362,9 @@ class ArticleViewSet(TenantModelViewSet):
         
         # 检查用户是否有创建权限
         if not can_create_content(user):
-            raise serializers.ValidationError(_("您没有权限创建文章"))
+            raise serializers.ValidationError(_("You do not have permission to create articles"))
         
-        # 设置作者为当前用户
+        # 设置作者为current用户
         serializer.save(author=self.request.user)
         
         # 记录操作日志
@@ -442,13 +442,13 @@ class ArticleViewSet(TenantModelViewSet):
         
         # 检查用户是否有编辑权限
         if not can_edit_content(user, instance.author):
-            raise serializers.ValidationError(_("您没有权限编辑此文章"))
+            raise serializers.ValidationError(_("You do not have permission to edit this article"))
         
         # 验证作者权限
         if 'author' in serializer.validated_data:
             new_author = serializer.validated_data['author']
             if new_author != instance.author and not (is_super_admin(user) or is_admin(user)):
-                raise serializers.ValidationError(_("您没有权限更改文章作者"))
+                raise serializers.ValidationError(_("You do not have permission to change article author"))
         
         # 更新文章
         article = serializer.save()
@@ -482,7 +482,7 @@ class ArticleViewSet(TenantModelViewSet):
         
         # 检查用户是否有删除权限
         if not can_delete_content(user, instance.author):
-            raise serializers.ValidationError(_("您没有权限删除此文章"))
+            raise serializers.ValidationError(_("You do not have permission to delete this article"))
         
         # 检查是否强制删除
         force_delete = self.request.query_params.get('force', 'false').lower() == 'true'
@@ -1204,7 +1204,7 @@ class CategoryViewSet(TenantModelViewSet):
         """
         执行分类创建操作
         
-        - 自动设置当前租户
+        - 自动设置current租户
         - 记录操作日志
         """
         user = self.request.user
@@ -1275,12 +1275,12 @@ class CategoryViewSet(TenantModelViewSet):
         # 检查是否有文章关联到该分类
         has_articles = ArticleCategory.objects.filter(category=instance).exists()
         if has_articles:
-            raise serializers.ValidationError(_("无法删除已关联文章的分类，请先移除关联的文章"))
+            raise serializers.ValidationError(_("Cannot delete category with associated articles, please remove associated articles first"))
         
         # 检查是否有子分类
         has_children = Category.objects.filter(parent=instance).exists()
         if has_children:
-            raise serializers.ValidationError(_("无法删除有子分类的分类，请先删除所有子分类"))
+            raise serializers.ValidationError(_("Cannot delete category with sub-categories, please delete all sub-categories first"))
         
         # 记录操作日志
         try:
@@ -1302,7 +1302,7 @@ class CategoryViewSet(TenantModelViewSet):
     
     @extend_schema(
         summary="获取分类树",
-        description="以树形结构获取当前租户的所有分类",
+        description="以树形结构获取current租户的所有分类",
         tags=["CMS-分类管理"],
         parameters=[
             OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=False, type=str, location=OpenApiParameter.HEADER),
@@ -1336,7 +1336,7 @@ class CategoryViewSet(TenantModelViewSet):
             OpenApiExample(
                 'Category Tree Example',
                 summary='分类树示例',
-                description='获取当前租户的分类树结构',
+                description='获取current租户的分类树结构',
                 value=[
                     {
                         'id': 1,
@@ -1542,7 +1542,7 @@ class TagGroupViewSet(TenantModelViewSet):
         """
         执行标签组创建操作
         
-        - 自动设置当前租户
+        - 自动设置current租户
         - 记录操作日志
         """
         user = self.request.user
@@ -1613,7 +1613,7 @@ class TagGroupViewSet(TenantModelViewSet):
         # 检查是否有标签关联到该标签组
         has_tags = Tag.objects.filter(group=instance).exists()
         if has_tags:
-            raise serializers.ValidationError(_("无法删除已关联标签的标签组，请先移除关联的标签"))
+            raise serializers.ValidationError(_("Cannot delete tag group with associated tags, please remove associated tags first"))
         
         # 记录操作日志
         try:
@@ -1780,7 +1780,7 @@ class TagViewSet(TenantModelViewSet):
         """
         执行标签创建操作
         
-        - 自动设置当前租户
+        - 自动设置current租户
         - 记录操作日志
         """
         user = self.request.user
@@ -1789,10 +1789,10 @@ class TagViewSet(TenantModelViewSet):
         # 设置租户ID
         serializer.validated_data['tenant'] = tenant
         
-        # 验证标签组是否属于当前租户
+        # 验证标签组是否属于current租户
         group = serializer.validated_data.get('group')
         if group and group.tenant != tenant:
-            raise serializers.ValidationError(_("标签组不属于当前租户"))
+            raise serializers.ValidationError(_("Tag group does not belong to current tenant"))
         
         # 创建标签
         tag = serializer.save()
@@ -1823,10 +1823,10 @@ class TagViewSet(TenantModelViewSet):
         user = self.request.user
         tenant = user.tenant
         
-        # 验证标签组是否属于当前租户
+        # 验证标签组是否属于current租户
         group = serializer.validated_data.get('group')
         if group and group.tenant != tenant:
-            raise serializers.ValidationError(_("标签组不属于当前租户"))
+            raise serializers.ValidationError(_("Tag group does not belong to current tenant"))
         
         # 更新标签
         tag = serializer.save()
@@ -1861,7 +1861,7 @@ class TagViewSet(TenantModelViewSet):
         # 检查是否有文章关联到该标签
         has_articles = ArticleTag.objects.filter(tag=instance).exists()
         if has_articles:
-            raise serializers.ValidationError(_("无法删除已关联文章的标签，请先移除关联的文章"))
+            raise serializers.ValidationError(_("Cannot delete tag with associated articles, please remove associated articles first"))
         
         # 记录操作日志
         try:
@@ -2100,7 +2100,7 @@ class CommentViewSet(TenantModelViewSet):
         """
         执行评论创建操作
         
-        - 自动设置当前用户和租户
+        - 自动设置current用户和租户
         - 设置初始状态
         - 记录IP和User-Agent
         - 记录操作日志
@@ -2120,9 +2120,9 @@ class CommentViewSet(TenantModelViewSet):
         try:
             article = Article.objects.get(id=article_id, tenant=tenant)
             if not article.allow_comment:
-                raise serializers.ValidationError(_("该文章不允许评论"))
+                raise serializers.ValidationError(_("This article does not allow comments"))
         except Article.DoesNotExist:
-            raise serializers.ValidationError(_("文章不存在或无权限访问"))
+            raise serializers.ValidationError(_("Article does not exist or no permission to access"))
         
         # 设置初始状态（管理员和作者的评论自动批准，其他需要审核）
         if is_super_admin(user) or is_admin(user) or user.id == article.author_id:

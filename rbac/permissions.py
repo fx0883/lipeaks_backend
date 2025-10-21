@@ -157,7 +157,7 @@ def rbac_permission_required(permission_code):
                     f"用户 {request.user.username if request.user.is_authenticated else 'Anonymous'} "
                     f"尝试访问需要 {permission_code} 权限的视图，但权限检查未通过"
                 )
-                raise exceptions.PermissionDenied(f"需要 {permission_code} 权限")
+                raise exceptions.PermissionDenied(f"Required permission: {permission_code} ")
         return wrapped_view
     return decorator
 

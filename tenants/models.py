@@ -168,8 +168,8 @@ class TenantQuota(models.Model):
     max_storage_mb = models.IntegerField(_('最大存储空间(MB)'), default=1024)  # 默认1GB
     max_products = models.IntegerField(_('最大产品数'), default=100)
     
-    # 跟踪当前使用情况
-    current_storage_used_mb = models.IntegerField(_('当前已用存储空间(MB)'), default=0)
+    # 跟踪current使用情况
+    current_storage_used_mb = models.IntegerField(_('current已用存储空间(MB)'), default=0)
     
     created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
     updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
@@ -193,7 +193,7 @@ class TenantQuota(models.Model):
             布尔值，指示是否可以添加用户
         """
         from users.models import User
-        # 查询当前租户的用户数
+        # 查询current租户的用户数
         current_user_count = User.objects.filter(tenant=self.tenant).count()
         
         if current_user_count >= self.max_users:

@@ -71,7 +71,7 @@ class TenantUserProfileAdmin(admin.ModelAdmin):
     profile_info.short_description = '用户@租户'
     
     def current_level_badge(self, obj):
-        """显示当前等级徽章"""
+        """显示current等级徽章"""
         if obj.current_level:
             return format_html(
                 '<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 4px;">{}</span>',
@@ -79,7 +79,7 @@ class TenantUserProfileAdmin(admin.ModelAdmin):
                 obj.current_level.level_name
             )
         return '-'
-    current_level_badge.short_description = '当前等级'
+    current_level_badge.short_description = 'current等级'
 
 
 @admin.register(TenantUserPoints)
@@ -100,12 +100,12 @@ class TenantUserPointsAdmin(admin.ModelAdmin):
     record_info.short_description = '用户@租户'
     
     def points_display(self, obj):
-        """显示积分变动"""
+        """显示积分Change"""
         if obj.points > 0:
             return format_html('<span style="color: green;">+{}</span>', obj.points)
         else:
             return format_html('<span style="color: red;">{}</span>', obj.points)
-    points_display.short_description = '积分变动'
+    points_display.short_description = '积分Change'
     
     def has_add_permission(self, request):
         return False  # 积分记录通过业务逻辑创建

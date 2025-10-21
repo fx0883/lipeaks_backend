@@ -17,7 +17,7 @@ class PointsException(BusinessException):
     Examples:
         # 方式1：使用具体异常类（高频错误）
         raise PointsInsufficientException(
-            detail=f'积分余额不足，当前: {available}，需要: {required}',
+            detail=f'积分余额不足，current: {available}，Required: {required}',
             available=available,
             required=required
         )
@@ -48,7 +48,7 @@ class PointsInsufficientException(PointsException):
     
     Examples:
         >>> raise PointsInsufficientException(
-        ...     detail=f'积分余额不足，当前可用: {available}，需要: {required}',
+        ...     detail=f'积分余额不足，current可用: {available}，Required: {required}',
         ...     user_id=user.id,
         ...     available_points=available,
         ...     required_points=required,

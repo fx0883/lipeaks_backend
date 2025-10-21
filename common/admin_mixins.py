@@ -18,7 +18,7 @@ class BaseTenantFilterMixin:
         """
         重写changelist_view，添加租户过滤功能
         """
-        # 获取当前用户
+        # 获取current用户
         user = request.user
         
         # 根据用户类型获取可用租户
@@ -33,7 +33,7 @@ class BaseTenantFilterMixin:
             else:
                 available_tenants = []
         
-        # 获取当前选中的租户ID
+        # 获取current选中的租户ID
         selected_tenant = request.GET.get('tenant_id')
         selected_tenant_name = None
         

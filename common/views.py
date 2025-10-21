@@ -226,7 +226,7 @@ class PaginationInfoSerializer(serializers.Serializer):
     next = serializers.CharField(help_text="下一页链接", allow_null=True)
     previous = serializers.CharField(help_text="上一页链接", allow_null=True)
     page_size = serializers.IntegerField(help_text="每页大小")
-    current_page = serializers.IntegerField(help_text="当前页码")
+    current_page = serializers.IntegerField(help_text="current页码")
     total_pages = serializers.IntegerField(help_text="总页数")
 
 class ResultItemSerializer(serializers.Serializer):
@@ -690,5 +690,152 @@ class FileUploadView(APIView):
                 'message': '服务器内部错误',
                 'data': {
                     'detail': f'文件上传失败: {str(e)}'
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SystemInfoView(APIView):
+    """
+    系统信息API
+    返回系统版本、环境、状态等信息
+    """
+    permission_classes = [AllowAny]
+    
+    @extend_schema(
+        tags=['系统'],
+        summary='获取系统信息',
+        description='''
+        获取系统版本、环境、运行状态等基本信息
+        
+        ## 返回信息
+        
+        - **version**: 系统版本号
+        - **environment**: 运行环境 (development/production)
+        - **django_version**: Django框架版本
+        - **python_version**: Python版本
+        - **api_version**: API版本
+        - **build_time**: 系统构建时间
+        - **status**: 系统运行状态
+        ''',
+        responses={
+            200: OpenApiResponse(
+                response=inline_serializer(
+                    name='SystemInfoResponse',
+                    fields={
+                        'success': serializers.BooleanField(default=True),
+                        'code': serializers.IntegerField(default=2000),
+                        'message': serializers.CharField(default='获取系统信息成功'),
+                        'data': inline_serializer(
+                            name='SystemInfoData',
+                            fields={
+                                'version': serializers.CharField(help_text='系统版本号'),
+                                'environment': serializers.CharField(help_text='运行环境'),
+                                'django_version': serializers.CharField(help_text='Django版本'),
+                                'python_version': serializers.CharField(help_text='Python版本'),
+                                'api_version': serializers.CharField(help_text='API版本'),
+                                'build_time': serializers.DateTimeField(help_text='构建时间'),
+                                'status': serializers.CharField(help_text='系统状态'),
+                                'features': serializers.ListField(
+                                    child=serializers.CharField(),
+                                    help_text='启用的功能模块'
+                                ),
+                            }
+                        )
+                    }
+                ),
+                description='系统信息',
+                examples=[
+                    OpenApiExample(
+                        'Success Example',
+                        value={
+                            'success': True,
+                            'code': 2000,
+                            'message': '获取系统信息成功',
+                            'data': {
+                                'version': '1.0.3',
+                                'environment': 'development',
+                                'django_version': '5.2.0',
+                                'python_version': '3.12.0',
+                                'api_version': 'v1',
+                                'build_time': '2025-10-18T18:45:00Z',
+                                'status': 'running',
+                                'features': [
+                                    'multi-tenant',
+                                    'license-management',
+                                    'rbac',
+                                    'points-system'
+                                ]
+                            }
+                        }
+                    )
+                ]
+            )
+        }
+    )
+    def get(self, request):
+        """获取系统信息"""
+        try:
+            import core
+            import django
+            import sys
+            from datetime import datetime
+            
+            # 获取系统版本信息
+            system_version = getattr(core, '__version__', '1.0.0')
+            
+            # 判断运行环境
+            environment = 'production' if not settings.DEBUG else 'development'
+            
+            # 获取已启用的功能模块
+            features = []
+            installed_apps = settings.INSTALLED_APPS
+            
+            # 根据 INSTALLED_APPS 判断启用的功能
+            if 'tenants' in installed_apps:
+                features.append('multi-tenant')
+            if 'licenses' in installed_apps:
+                features.append('license-management')
+            if 'rbac' in installed_apps:
+                features.append('rbac')
+            if 'points' in installed_apps:
+                features.append('points-system')
+            if 'orders' in installed_apps:
+                features.append('order-management')
+            if 'customers' in installed_apps:
+                features.append('customer-management')
+            if 'cms' in installed_apps:
+                features.append('cms')
+            if 'check_system' in installed_apps:
+                features.append('attendance-system')
+            
+            # 构造返回数据
+            data = {
+                'version': system_version,
+                'environment': environment,
+                'django_version': django.get_version(),
+                'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+                'api_version': 'v1',
+                'build_time': datetime.now().isoformat(),
+                'status': 'running',
+                'features': features,
+            }
+            
+            logger.info(f"系统信息查询 - 版本: {system_version}, 环境: {environment}")
+            
+            return Response({
+                'success': True,
+                'code': 2000,
+                'message': '获取系统信息成功',
+                'data': data
+            })
+            
+        except Exception as e:
+            logger.error(f"获取系统信息失败: {str(e)}")
+            return Response({
+                'success': False,
+                'code': 5000,
+                'message': '获取系统信息失败',
+                'data': {
+                    'detail': str(e)
                 }
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

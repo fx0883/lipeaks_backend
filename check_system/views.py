@@ -234,7 +234,7 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
         
     def perform_create(self, serializer):
         """
-        创建类型时自动关联当前用户和租户
+        创建类型时自动关联current用户和租户
         根据角色处理user_id参数
         """
         user = self.request.user
@@ -284,16 +284,16 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
                     # 设置用户和租户(始终使用目标用户的租户)
                     instance = serializer.save(
                         user=target_user, 
-                        tenant=user.tenant  # 强制使用当前租户管理员的租户
+                        tenant=user.tenant  # 强制使用current租户管理员的租户
                     )
                     logger.info(f"【创建打卡类型成功】ID: {instance.id}，名称: {instance.name}，用户: {target_user.username}，租户: {user.tenant.name}")
                 except User.DoesNotExist:
-                    error_msg = "指定的用户不存在"
+                    error_msg = "Specified user does not exist"
                     logger.error(f"【创建打卡类型失败】{error_msg}，指定的用户ID: {user_id}")
                     raise serializers.ValidationError(_(error_msg))
             else:
-                # 未指定用户，使用当前用户
-                logger.info(f"【创建打卡类型】未指定用户，即将创建打卡类型关联当前用户: {user.username}，租户: {user.tenant.name}")
+                # 未指定用户，使用current用户
+                logger.info(f"【创建打卡类型】未指定用户，即将创建打卡类型关联current用户: {user.username}，租户: {user.tenant.name}")
                 instance = serializer.save(
                     user=user, 
                     tenant=user.tenant
@@ -310,12 +310,12 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
                     # 检查目标用户是否为自己的子账号
                     if target_user.parent_id != user.id:
                         error_msg = "只能为自己的子账号创建类型"
-                        logger.error(f"【创建打卡类型失败】{error_msg}，目标用户父账号ID: {target_user.parent_id}，当前用户ID: {user.id}")
+                        logger.error(f"【创建打卡类型失败】{error_msg}，目标用户父账号ID: {target_user.parent_id}，current用户ID: {user.id}")
                         raise serializers.ValidationError(_(error_msg))
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        error_msg = "子账号必须属于同一租户"
+                        error_msg = "Sub-accounts must belong to the same tenant"
                         logger.error(f"【创建打卡类型失败】{error_msg}，子账号租户: {target_user.tenant.name if target_user.tenant else 'None'}")
                         raise serializers.ValidationError(_(error_msg))
                     
@@ -323,16 +323,16 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
                     # 设置用户和租户
                     instance = serializer.save(
                         user=target_user, 
-                        tenant=user.tenant  # 强制使用当前用户的租户
+                        tenant=user.tenant  # 强制使用current用户的租户
                     )
                     logger.info(f"【创建打卡类型成功】ID: {instance.id}，名称: {instance.name}，用户(子账号): {target_user.username}，租户: {user.tenant.name}")
                 except User.DoesNotExist:
-                    error_msg = "指定的用户不存在"
+                    error_msg = "Specified user does not exist"
                     logger.error(f"【创建打卡类型失败】{error_msg}，指定的用户ID: {user_id}")
                     raise serializers.ValidationError(_(error_msg))
             else:
-                # 未指定用户，使用当前用户
-                logger.info(f"【创建打卡类型】未指定用户，即将创建打卡类型关联当前用户: {user.username}，租户: {user.tenant.name}")
+                # 未指定用户，使用current用户
+                logger.info(f"【创建打卡类型】未指定用户，即将创建打卡类型关联current用户: {user.username}，租户: {user.tenant.name}")
                 instance = serializer.save(
                     user=user, 
                     tenant=user.tenant
@@ -386,14 +386,14 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
                         raise serializers.ValidationError(_(error_msg))
                     
                     logger.info(f"【更新打卡类型】即将更新打卡类型，关联用户: {target_user.username}，租户: {user.tenant.name}")
-                    # 设置用户和租户(始终使用当前租户)
+                    # 设置用户和租户(始终使用current租户)
                     updated_instance = serializer.save(
                         user=target_user, 
-                        tenant=user.tenant  # 强制使用当前租户管理员的租户
+                        tenant=user.tenant  # 强制使用current租户管理员的租户
                     )
                     logger.info(f"【更新打卡类型成功】ID: {updated_instance.id}，名称: {updated_instance.name}，用户: {target_user.username}，租户: {user.tenant.name}")
                 except User.DoesNotExist:
-                    error_msg = "指定的用户不存在"
+                    error_msg = "Specified user does not exist"
                     logger.error(f"【更新打卡类型失败】{error_msg}，指定的用户ID: {user_id}")
                     raise serializers.ValidationError(_(error_msg))
             else:
@@ -412,12 +412,12 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
                     # 检查目标用户是否为自己的子账号
                     if target_user.parent_id != user.id:
                         error_msg = "只能为自己的子账号修改类型"
-                        logger.error(f"【更新打卡类型失败】{error_msg}，目标用户父账号ID: {target_user.parent_id}，当前用户ID: {user.id}")
+                        logger.error(f"【更新打卡类型失败】{error_msg}，目标用户父账号ID: {target_user.parent_id}，current用户ID: {user.id}")
                         raise serializers.ValidationError(_(error_msg))
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        error_msg = "子账号必须属于同一租户"
+                        error_msg = "Sub-accounts must belong to the same tenant"
                         logger.error(f"【更新打卡类型失败】{error_msg}，子账号租户: {target_user.tenant.name if target_user.tenant else 'None'}")
                         raise serializers.ValidationError(_(error_msg))
                     
@@ -425,11 +425,11 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
                     # 设置用户和租户
                     updated_instance = serializer.save(
                         user=target_user, 
-                        tenant=user.tenant  # 强制使用当前用户的租户
+                        tenant=user.tenant  # 强制使用current用户的租户
                     )
                     logger.info(f"【更新打卡类型成功】ID: {updated_instance.id}，名称: {updated_instance.name}，用户(子账号): {target_user.username}，租户: {user.tenant.name}")
                 except User.DoesNotExist:
-                    error_msg = "指定的用户不存在"
+                    error_msg = "Specified user does not exist"
                     logger.error(f"【更新打卡类型失败】{error_msg}，指定的用户ID: {user_id}")
                     raise serializers.ValidationError(_(error_msg))
             else:
@@ -442,7 +442,7 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
             # 普通member：只能修改自己的
             if instance.user != user:
                 error_msg = "无法修改其他用户的类型"
-                logger.error(f"【更新打卡类型失败】{error_msg}，当前用户ID: {user.id}，类型所属用户ID: {instance.user.id}")
+                logger.error(f"【更新打卡类型失败】{error_msg}，current用户ID: {user.id}，类型所属用户ID: {instance.user.id}")
                 raise serializers.ValidationError(_(error_msg))
             updated_instance = serializer.save(tenant=user.tenant)  # 确保租户正确
             logger.info(f"【更新打卡类型成功】ID: {updated_instance.id}，名称: {updated_instance.name}，用户: {user.username}，租户: {user.tenant.name}")
@@ -644,7 +644,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """
-        创建任务时自动关联当前用户和租户
+        创建任务时自动关联current用户和租户
         根据角色处理user_id参数
         """
         user = self.request.user
@@ -652,7 +652,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         
         # 确保用户关联了租户
         if not hasattr(user, 'tenant') or not user.tenant:
-            raise serializers.ValidationError(_("用户未关联租户，无法创建任务"))
+            raise serializers.ValidationError(_("User has no associated tenant and cannot create task"))
         
         # 获取user_id
         user_id = data.get('user_id') or data.get('user')
@@ -673,19 +673,19 @@ class TaskViewSet(viewsets.ModelViewSet):
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        raise serializers.ValidationError(_("无法为其他租户的用户创建任务"))
+                        raise serializers.ValidationError(_("Cannot create task for users of other tenants"))
                     
-                    # 设置用户和租户(始终使用当前租户)
+                    # 设置用户和租户(始终使用current租户)
                     serializer.save(
                         user=target_user, 
-                        tenant=user.tenant,  # 强制使用当前租户管理员的租户
+                        tenant=user.tenant,  # 强制使用current租户管理员的租户
                         frequency_type=frequency_type,
                         frequency_days=frequency_days
                     )
                 except User.DoesNotExist:
-                    raise serializers.ValidationError(_("指定的用户不存在"))
+                    raise serializers.ValidationError(_("Specified user does not exist"))
             else:
-                # 未指定用户，使用当前用户
+                # 未指定用户，使用current用户
                 serializer.save(
                     user=user, 
                     tenant=user.tenant,
@@ -700,23 +700,23 @@ class TaskViewSet(viewsets.ModelViewSet):
                     
                     # 检查目标用户是否为自己的子账号
                     if target_user.parent_id != user.id:
-                        raise serializers.ValidationError(_("只能为自己的子账号创建任务"))
+                        raise serializers.ValidationError(_("Can only create tasks for own sub-accounts"))
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        raise serializers.ValidationError(_("子账号必须属于同一租户"))
+                        raise serializers.ValidationError(_("Sub-accounts must belong to the same tenant"))
                     
                     # 设置用户和租户
                     serializer.save(
                         user=target_user, 
-                        tenant=user.tenant,  # 强制使用当前用户的租户
+                        tenant=user.tenant,  # 强制使用current用户的租户
                         frequency_type=frequency_type,
                         frequency_days=frequency_days
                     )
                 except User.DoesNotExist:
-                    raise serializers.ValidationError(_("指定的用户不存在"))
+                    raise serializers.ValidationError(_("Specified user does not exist"))
             else:
-                # 未指定用户，使用当前用户
+                # 未指定用户，使用current用户
                 serializer.save(
                     user=user, 
                     tenant=user.tenant,
@@ -746,7 +746,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         
         # 确保用户关联了租户
         if not hasattr(user, 'tenant') or not user.tenant:
-            raise serializers.ValidationError(_("用户未关联租户，无法更新任务"))
+            raise serializers.ValidationError(_("User has no associated tenant and cannot update task"))
         
         # 获取user_id
         user_id = data.get('user_id') or data.get('user')
@@ -767,17 +767,17 @@ class TaskViewSet(viewsets.ModelViewSet):
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        raise serializers.ValidationError(_("无法为其他租户的用户修改任务"))
+                        raise serializers.ValidationError(_("Cannot modify task for users of other tenants"))
                     
-                    # 设置用户和租户(始终使用当前租户)
+                    # 设置用户和租户(始终使用current租户)
                     serializer.save(
                         user=target_user, 
-                        tenant=user.tenant,  # 强制使用当前租户管理员的租户
+                        tenant=user.tenant,  # 强制使用current租户管理员的租户
                         frequency_type=frequency_type,
                         frequency_days=frequency_days
                     )
                 except User.DoesNotExist:
-                    raise serializers.ValidationError(_("指定的用户不存在"))
+                    raise serializers.ValidationError(_("Specified user does not exist"))
             else:
                 # 未指定用户，保持原样，但确保租户正确
                 serializer.save(
@@ -793,21 +793,21 @@ class TaskViewSet(viewsets.ModelViewSet):
                     
                     # 检查目标用户是否为自己的子账号
                     if target_user.parent_id != user.id:
-                        raise serializers.ValidationError(_("只能为自己的子账号修改任务"))
+                        raise serializers.ValidationError(_("Can only modify tasks for own sub-accounts"))
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        raise serializers.ValidationError(_("子账号必须属于同一租户"))
+                        raise serializers.ValidationError(_("Sub-accounts must belong to the same tenant"))
                     
                     # 设置用户和租户
                     serializer.save(
                         user=target_user, 
-                        tenant=user.tenant,  # 强制使用当前用户的租户
+                        tenant=user.tenant,  # 强制使用current用户的租户
                         frequency_type=frequency_type,
                         frequency_days=frequency_days
                     )
                 except User.DoesNotExist:
-                    raise serializers.ValidationError(_("指定的用户不存在"))
+                    raise serializers.ValidationError(_("Specified user does not exist"))
             else:
                 # 未指定用户，保持原样，但确保租户正确
                 serializer.save(
@@ -818,7 +818,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         else:
             # 普通member：只能修改自己的
             if instance.user != user:
-                raise serializers.ValidationError(_("无法修改其他用户的任务"))
+                raise serializers.ValidationError(_("Cannot modify other users' tasks"))
             serializer.save(
                 tenant=user.tenant,  # 确保租户正确
                 frequency_type=frequency_type,
@@ -921,7 +921,7 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """
-        创建打卡记录时自动关联当前用户
+        创建打卡记录时自动关联current用户
         根据角色处理user_id参数
         检查任务和用户所属租户是否一致
         """
@@ -930,7 +930,7 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
         
         # 确保用户关联了租户
         if not hasattr(user, 'tenant') or not user.tenant:
-            raise serializers.ValidationError(_("用户未关联租户，无法创建打卡记录"))
+            raise serializers.ValidationError(_("User has no associated tenant and cannot create check-in record"))
         
         # 获取user_id和task_id
         user_id = data.get('user_id') or data.get('user')
@@ -941,9 +941,9 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
             try:
                 task = Task.objects.get(id=task_id)
                 if task.tenant != user.tenant:
-                    raise serializers.ValidationError(_("不能为其他租户的任务创建打卡记录"))
+                    raise serializers.ValidationError(_("Cannot create check-in record for tasks of other tenants"))
             except Task.DoesNotExist:
-                raise serializers.ValidationError(_("指定的任务不存在"))
+                raise serializers.ValidationError(_("Specified task does not exist"))
         
         if is_admin(user):
             # 租户管理员：可以指定用户，但必须属于同一租户
@@ -953,14 +953,14 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        raise serializers.ValidationError(_("无法为其他租户的用户创建打卡记录"))
+                        raise serializers.ValidationError(_("Cannot create check-in record for users of other tenants"))
                     
                     # 设置用户
                     serializer.save(user=target_user)
                 except User.DoesNotExist:
-                    raise serializers.ValidationError(_("指定的用户不存在"))
+                    raise serializers.ValidationError(_("Specified user does not exist"))
             else:
-                # 未指定用户，使用当前用户
+                # 未指定用户，使用current用户
                 serializer.save(user=user)
         elif hasattr(user, 'sub_accounts') and user.sub_accounts.exists():
             # 主member：可以为子账号创建
@@ -970,18 +970,18 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
                     
                     # 检查目标用户是否为自己的子账号
                     if target_user.parent_id != user.id:
-                        raise serializers.ValidationError(_("只能为自己的子账号创建打卡记录"))
+                        raise serializers.ValidationError(_("Can only create check-in records for own sub-accounts"))
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        raise serializers.ValidationError(_("子账号必须属于同一租户"))
+                        raise serializers.ValidationError(_("Sub-accounts must belong to the same tenant"))
                     
                     # 设置用户
                     serializer.save(user=target_user)
                 except User.DoesNotExist:
-                    raise serializers.ValidationError(_("指定的用户不存在"))
+                    raise serializers.ValidationError(_("Specified user does not exist"))
             else:
-                # 未指定用户，使用当前用户
+                # 未指定用户，使用current用户
                 serializer.save(user=user)
         else:
             # 普通member：只能为自己创建
@@ -999,7 +999,7 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
         
         # 确保用户关联了租户
         if not hasattr(user, 'tenant') or not user.tenant:
-            raise serializers.ValidationError(_("用户未关联租户，无法更新打卡记录"))
+            raise serializers.ValidationError(_("User has no associated tenant and cannot update check-in record"))
         
         # 获取user_id和task_id
         user_id = data.get('user_id') or data.get('user')
@@ -1010,9 +1010,9 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
             try:
                 task = Task.objects.get(id=task_id)
                 if task.tenant != user.tenant:
-                    raise serializers.ValidationError(_("不能为其他租户的任务更新打卡记录"))
+                    raise serializers.ValidationError(_("Cannot update check-in record for tasks of other tenants"))
             except Task.DoesNotExist:
-                raise serializers.ValidationError(_("指定的任务不存在"))
+                raise serializers.ValidationError(_("Specified task does not exist"))
         
         if is_admin(user):
             # 租户管理员：可以修改用户，但必须属于同一租户
@@ -1027,7 +1027,7 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
                     # 设置用户
                     serializer.save(user=target_user)
                 except User.DoesNotExist:
-                    raise serializers.ValidationError(_("指定的用户不存在"))
+                    raise serializers.ValidationError(_("Specified user does not exist"))
             else:
                 # 未指定用户，保持原样
                 serializer.save()
@@ -1039,23 +1039,23 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
                     
                     # 检查目标用户是否为自己的子账号
                     if target_user.parent_id != user.id:
-                        raise serializers.ValidationError(_("只能为自己的子账号修改打卡记录"))
+                        raise serializers.ValidationError(_("Can only modify check-in records for own sub-accounts"))
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        raise serializers.ValidationError(_("子账号必须属于同一租户"))
+                        raise serializers.ValidationError(_("Sub-accounts must belong to the same tenant"))
                     
                     # 设置用户
                     serializer.save(user=target_user)
                 except User.DoesNotExist:
-                    raise serializers.ValidationError(_("指定的用户不存在"))
+                    raise serializers.ValidationError(_("Specified user does not exist"))
             else:
                 # 未指定用户，保持原样
                 serializer.save()
         else:
             # 普通member：只能修改自己的
             if instance.user != user:
-                raise serializers.ValidationError(_("无法修改其他用户的打卡记录"))
+                raise serializers.ValidationError(_("Cannot modify other users' check-in records"))
             serializer.save()
 
 
@@ -1175,7 +1175,7 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """
-        创建模板时自动关联当前用户和租户
+        创建模板时自动关联current用户和租户
         根据角色处理user_id参数
         """
         user = self.request.user
@@ -1222,19 +1222,19 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
                         raise serializers.ValidationError(_(error_msg))
                     
                     logger.info(f"【创建任务模板】即将创建任务模板，关联用户: {target_user.username}，租户: {user.tenant.name}")
-                    # 设置用户和租户(始终使用当前租户)
+                    # 设置用户和租户(始终使用current租户)
                     instance = serializer.save(
                         user=target_user, 
-                        tenant=user.tenant  # 强制使用当前租户管理员的租户
+                        tenant=user.tenant  # 强制使用current租户管理员的租户
                     )
                     logger.info(f"【创建任务模板成功】ID: {instance.id}，名称: {instance.name}，用户: {target_user.username}，租户: {user.tenant.name}")
                 except User.DoesNotExist:
-                    error_msg = "指定的用户不存在"
+                    error_msg = "Specified user does not exist"
                     logger.error(f"【创建任务模板失败】{error_msg}，指定的用户ID: {user_id}")
                     raise serializers.ValidationError(_(error_msg))
             else:
-                # 未指定用户，使用当前用户
-                logger.info(f"【创建任务模板】未指定用户，即将创建任务模板关联当前用户: {user.username}，租户: {user.tenant.name}")
+                # 未指定用户，使用current用户
+                logger.info(f"【创建任务模板】未指定用户，即将创建任务模板关联current用户: {user.username}，租户: {user.tenant.name}")
                 instance = serializer.save(
                     user=user, 
                     tenant=user.tenant
@@ -1251,12 +1251,12 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
                     # 检查目标用户是否为自己的子账号
                     if target_user.parent_id != user.id:
                         error_msg = "只能为自己的子账号创建模板"
-                        logger.error(f"【创建任务模板失败】{error_msg}，目标用户父账号ID: {target_user.parent_id}，当前用户ID: {user.id}")
+                        logger.error(f"【创建任务模板失败】{error_msg}，目标用户父账号ID: {target_user.parent_id}，current用户ID: {user.id}")
                         raise serializers.ValidationError(_(error_msg))
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        error_msg = "子账号必须属于同一租户"
+                        error_msg = "Sub-accounts must belong to the same tenant"
                         logger.error(f"【创建任务模板失败】{error_msg}，子账号租户: {target_user.tenant.name if target_user.tenant else 'None'}")
                         raise serializers.ValidationError(_(error_msg))
                     
@@ -1264,16 +1264,16 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
                     # 设置用户和租户
                     instance = serializer.save(
                         user=target_user, 
-                        tenant=user.tenant  # 强制使用当前用户的租户
+                        tenant=user.tenant  # 强制使用current用户的租户
                     )
                     logger.info(f"【创建任务模板成功】ID: {instance.id}，名称: {instance.name}，用户(子账号): {target_user.username}，租户: {user.tenant.name}")
                 except User.DoesNotExist:
-                    error_msg = "指定的用户不存在"
+                    error_msg = "Specified user does not exist"
                     logger.error(f"【创建任务模板失败】{error_msg}，指定的用户ID: {user_id}")
                     raise serializers.ValidationError(_(error_msg))
             else:
-                # 未指定用户，使用当前用户
-                logger.info(f"【创建任务模板】未指定用户，即将创建任务模板关联当前用户: {user.username}，租户: {user.tenant.name}")
+                # 未指定用户，使用current用户
+                logger.info(f"【创建任务模板】未指定用户，即将创建任务模板关联current用户: {user.username}，租户: {user.tenant.name}")
                 instance = serializer.save(
                     user=user, 
                     tenant=user.tenant
@@ -1327,14 +1327,14 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
                         raise serializers.ValidationError(_(error_msg))
                     
                     logger.info(f"【更新任务模板】即将更新任务模板，关联用户: {target_user.username}，租户: {user.tenant.name}")
-                    # 设置用户和租户(始终使用当前租户)
+                    # 设置用户和租户(始终使用current租户)
                     updated_instance = serializer.save(
                         user=target_user, 
-                        tenant=user.tenant  # 强制使用当前租户管理员的租户
+                        tenant=user.tenant  # 强制使用current租户管理员的租户
                     )
                     logger.info(f"【更新任务模板成功】ID: {updated_instance.id}，名称: {updated_instance.name}，用户: {target_user.username}，租户: {user.tenant.name}")
                 except User.DoesNotExist:
-                    error_msg = "指定的用户不存在"
+                    error_msg = "Specified user does not exist"
                     logger.error(f"【更新任务模板失败】{error_msg}，指定的用户ID: {user_id}")
                     raise serializers.ValidationError(_(error_msg))
             else:
@@ -1353,12 +1353,12 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
                     # 检查目标用户是否为自己的子账号
                     if target_user.parent_id != user.id:
                         error_msg = "只能为自己的子账号修改模板"
-                        logger.error(f"【更新任务模板失败】{error_msg}，目标用户父账号ID: {target_user.parent_id}，当前用户ID: {user.id}")
+                        logger.error(f"【更新任务模板失败】{error_msg}，目标用户父账号ID: {target_user.parent_id}，current用户ID: {user.id}")
                         raise serializers.ValidationError(_(error_msg))
                     
                     # 检查目标用户是否属于同一租户
                     if target_user.tenant != user.tenant:
-                        error_msg = "子账号必须属于同一租户"
+                        error_msg = "Sub-accounts must belong to the same tenant"
                         logger.error(f"【更新任务模板失败】{error_msg}，子账号租户: {target_user.tenant.name if target_user.tenant else 'None'}")
                         raise serializers.ValidationError(_(error_msg))
                     
@@ -1366,11 +1366,11 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
                     # 设置用户和租户
                     updated_instance = serializer.save(
                         user=target_user, 
-                        tenant=user.tenant  # 强制使用当前用户的租户
+                        tenant=user.tenant  # 强制使用current用户的租户
                     )
                     logger.info(f"【更新任务模板成功】ID: {updated_instance.id}，名称: {updated_instance.name}，用户(子账号): {target_user.username}，租户: {user.tenant.name}")
                 except User.DoesNotExist:
-                    error_msg = "指定的用户不存在"
+                    error_msg = "Specified user does not exist"
                     logger.error(f"【更新任务模板失败】{error_msg}，指定的用户ID: {user_id}")
                     raise serializers.ValidationError(_(error_msg))
             else:
@@ -1383,7 +1383,7 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
             # 普通member：只能修改自己的
             if instance.user != user:
                 error_msg = "无法修改其他用户的模板"
-                logger.error(f"【更新任务模板失败】{error_msg}，当前用户ID: {user.id}，模板所属用户ID: {instance.user.id}")
+                logger.error(f"【更新任务模板失败】{error_msg}，current用户ID: {user.id}，模板所属用户ID: {instance.user.id}")
                 raise serializers.ValidationError(_(error_msg))
             updated_instance = serializer.save(tenant=user.tenant)  # 确保租户正确
             logger.info(f"【更新任务模板成功】ID: {updated_instance.id}，名称: {updated_instance.name}，用户: {user.username}，租户: {user.tenant.name}")

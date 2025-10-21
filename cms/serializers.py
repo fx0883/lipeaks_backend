@@ -127,7 +127,7 @@ class CommentSerializer(serializers.ModelSerializer):
         guest_name = data.get('guest_name')
         
         if not user and not guest_name:
-            raise serializers.ValidationError(_("用户或游客名称至少提供一项"))
+            raise serializers.ValidationError(_("User or guest name must be provided"))
         
         return data
 
@@ -382,7 +382,7 @@ class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
         tenant = self.context['request'].user.tenant
         validated_data['tenant'] = tenant
         
-        # 如果没有指定作者，使用当前用户
+        # 如果没有指定作者，使用current用户
         if 'author' not in validated_data:
             validated_data['author'] = self.context['request'].user
         
@@ -525,6 +525,6 @@ class InteractionSerializer(serializers.ModelSerializer):
         article = data.get('article')
         
         if user.tenant != article.tenant:
-            raise serializers.ValidationError(_("用户和文章必须属于同一租户"))
+            raise serializers.ValidationError(_("User and article must belong to the same tenant"))
         
         return data 

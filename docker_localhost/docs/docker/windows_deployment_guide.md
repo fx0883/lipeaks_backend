@@ -106,7 +106,7 @@ docker tag lipeaks_backend:latest your_username/lipeaks_backend:latest
 3. 推送镜像到 Docker Hub：
 
 ```powershell
-docker push your_username/lipeaks_backend:latest
+docker push fx0883/lipeaks_backend:latest
 ```
 
 4. 验证推送结果：访问 `https://hub.docker.com/r/your_username/lipeaks_backend`

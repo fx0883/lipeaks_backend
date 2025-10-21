@@ -24,7 +24,7 @@ class LicenseException(BusinessException):
         # 方式2：使用通用类+错误码（低频错误）
         raise LicenseException(
             error_code='ACTIVATION_DEVICE_MISMATCH',
-            detail='设备指纹不匹配',
+            detail='Device fingerprint mismatch',
             expected=expected_fp,
             actual=actual_fp
         )
@@ -96,7 +96,7 @@ class LicenseQuotaExceededException(LicenseException):
     
     Examples:
         >>> raise LicenseQuotaExceededException(
-        ...     detail=f'您的试用许可证数量已达上限（{max_licenses}个）',
+        ...     detail=f'Your trial license quota has been reached（{max_licenses}个）',
         ...     current_count=current,
         ...     max_count=max_licenses,
         ...     member_id=member.id

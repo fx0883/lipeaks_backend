@@ -42,13 +42,13 @@ class UserAdmin(TenantAdminMixin, DjangoUserAdmin):
         """
         重写保存方法，处理特殊情况：
         - 超级管理员不需要关联租户
-        - 普通用户保存时自动关联当前用户的租户（如果没有指定）
+        - 普通用户保存时自动关联current用户的租户（如果没有指定）
         """
         # 如果是超级管理员，清除租户关联
         if obj.is_super_admin and obj.tenant:
             obj.tenant = None
         
-        # 如果非超级管理员没有指定租户，使用当前用户的租户
+        # 如果非超级管理员没有指定租户，使用current用户的租户
         if not obj.is_super_admin and not obj.tenant:
             obj.tenant = getattr(request.user, 'tenant', None)
         
@@ -109,9 +109,9 @@ class MemberAdmin(TenantAdminMixin, DjangoUserAdmin):
     def save_model(self, request, obj, form, change):
         """
         重写保存方法，处理特殊情况：
-        - 普通成员保存时自动关联当前用户的租户（如果没有指定）
+        - 普通成员保存时自动关联current用户的租户（如果没有指定）
         """
-        # 如果没有指定租户，使用当前用户的租户
+        # 如果没有指定租户，使用current用户的租户
         if not obj.tenant:
             obj.tenant = getattr(request.user, 'tenant', None)
         

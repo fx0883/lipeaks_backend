@@ -198,7 +198,7 @@ class OrderHistory(models.Model):
         Returns:
             OrderHistory: 创建的历史记录对象
         """
-        # 获取当前订单的最大版本号
+        # 获取current订单的最大版本号
         last_version = OrderHistory.objects.filter(order=order).order_by('-version').first()
         new_version = 1 if not last_version else last_version.version + 1
         
@@ -249,7 +249,7 @@ class OrderHistory(models.Model):
             'created_at': order.created_at.isoformat() if order.created_at else None,
             'updated_at': order.updated_at.isoformat() if order.updated_at else None,
             'is_deleted': order.is_deleted,
-            # 记录当前执行更新的用户信息
+            # 记录current执行更新的用户信息
             'modified_by_id': user.id,
             'modified_by_username': user.username,
             'modified_by_display_name': user.display_name if hasattr(user, 'display_name') else user.username,
@@ -338,7 +338,7 @@ class OrderHistory(models.Model):
                 'created_at': order.created_at.isoformat() if order.created_at else None,
                 'updated_at': order.updated_at.isoformat() if order.updated_at else None,
                 'is_deleted': order.is_deleted,
-                # 记录当前执行更新的用户信息
+                # 记录current执行更新的用户信息
                 'modified_by_id': user.id,
                 'modified_by_username': user.username,
                 'modified_by_display_name': user.display_name if hasattr(user, 'display_name') else user.username,

@@ -206,7 +206,7 @@ class TenantModelViewSet(viewsets.ModelViewSet):
             logger.info(f"[TenantModelViewSet] {view_name} 非CMS路径，跳过租户验证: {self.request.path}")
             return serializer.save()
         
-        # 获取当前对象
+        # 获取current对象
         instance = serializer.instance
         logger.info(f"[TenantModelViewSet] {view_name} 更新对象: {instance.__class__.__name__} ID={instance.pk}")
         
@@ -238,13 +238,13 @@ class TenantModelViewSet(viewsets.ModelViewSet):
     
     def _verify_tenant_ownership(self, obj):
         """
-        验证对象所属租户与当前租户ID是否匹配
+        验证对象所属租户与current租户ID是否匹配
         
         Args:
             obj: 要验证的对象
             
         Raises:
-            PermissionDenied: 如果对象不属于当前租户
+            PermissionDenied: 如果对象不属于current租户
         """
         view_name = self.__class__.__name__
         
@@ -258,7 +258,7 @@ class TenantModelViewSet(viewsets.ModelViewSet):
             logger.info(f"[TenantModelViewSet] {view_name} 对象 {obj.__class__.__name__} 没有tenant字段，跳过租户验证")
             return
             
-        # 获取当前租户ID
+        # 获取current租户ID
         tenant_id = getattr(self.request, 'tenant_id', None)
         
         # 如果没有设置租户ID，则拒绝访问
@@ -266,13 +266,13 @@ class TenantModelViewSet(viewsets.ModelViewSet):
             logger.warning(f"[TenantModelViewSet] {view_name} 尝试操作对象但未提供租户ID")
             raise PermissionDenied("无法操作对象: 未提供租户ID")
             
-        # 验证对象所属租户与当前租户ID是否匹配
+        # 验证对象所属租户与current租户ID是否匹配
         obj_tenant_id = str(obj.tenant.id) if obj.tenant else None
-        logger.info(f"[TenantModelViewSet] {view_name} 验证租户所有权: 对象租户ID={obj_tenant_id}, 当前租户ID={tenant_id}")
+        logger.info(f"[TenantModelViewSet] {view_name} 验证租户所有权: 对象租户ID={obj_tenant_id}, current租户ID={tenant_id}")
         
         if obj_tenant_id and obj_tenant_id != str(tenant_id):
-            logger.warning(f"[TenantModelViewSet] {view_name} 尝试操作不属于当前租户的对象: 对象租户ID={obj_tenant_id}, 当前租户ID={tenant_id}")
-            raise PermissionDenied("无法操作不属于当前租户的对象") 
+            logger.warning(f"[TenantModelViewSet] {view_name} 尝试操作不属于current租户的对象: 对象租户ID={obj_tenant_id}, current租户ID={tenant_id}")
+            raise PermissionDenied("无法操作不属于current租户的对象") 
 
     # —— 辅助方法：按新规则计算有效租户 ——
     def _effective_tenant_id_for_read(self, default_none_ok: bool = False):

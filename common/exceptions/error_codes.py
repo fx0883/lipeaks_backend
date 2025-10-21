@@ -100,70 +100,70 @@ class ErrorMessages:
     
     # ==================== 认证授权 ====================
     
-    AUTH_NOT_AUTHENTICATED = '认证失败，请登录'
-    AUTH_TOKEN_INVALID = '认证令牌无效或已过期'
-    AUTH_PERMISSION_DENIED = '您没有执行该操作的权限'
-    AUTH_TOKEN_EXPIRED = '认证令牌已过期，请重新登录'
+    AUTH_NOT_AUTHENTICATED = 'Authentication failed, please log in'
+    AUTH_TOKEN_INVALID = 'Authentication token is invalid or expired'
+    AUTH_PERMISSION_DENIED = 'You do not have permission to perform this action'
+    AUTH_TOKEN_EXPIRED = 'Authentication token has expired, please log in again'
     
     # ==================== 租户管理 ====================
     
-    TENANT_ERROR = '租户操作失败'
-    TENANT_NOT_FOUND = '租户不存在'
-    TENANT_INACTIVE = '租户未激活或已被禁用'
-    TENANT_QUOTA_EXCEEDED = '租户许可证配额已满'
-    TENANT_ACCESS_DENIED = '无法访问其他租户的资源'
-    TENANT_INVALID_ID = '无效的租户ID格式'
+    TENANT_ERROR = 'Tenant operation failed'
+    TENANT_NOT_FOUND = 'Tenant not found'
+    TENANT_INACTIVE = 'Tenant is inactive or disabled'
+    TENANT_QUOTA_EXCEEDED = 'Tenant license quota is full'
+    TENANT_ACCESS_DENIED = 'Cannot access resources of other tenants'
+    TENANT_INVALID_ID = 'Invalid tenant ID format'
     
     # ==================== 许可证管理 ====================
     
-    LICENSE_ERROR = '许可证操作失败'
-    LICENSE_EXPIRED = '许可证已过期'
-    LICENSE_NOT_FOUND = '许可证不存在'
-    LICENSE_QUOTA_EXCEEDED = '许可证配额已达上限'
-    LICENSE_REVOKED = '许可证已被撤销'
-    LICENSE_ACTIVATION_FAILED = '许可证激活失败'
-    LICENSE_ALREADY_ASSIGNED = '该用户已拥有该产品的许可证'
-    LICENSE_INVALID_KEY = '无效的许可证密钥'
-    LICENSE_PLAN_NOT_FOUND = '许可证方案不存在'
+    LICENSE_ERROR = 'License operation failed'
+    LICENSE_EXPIRED = 'License has expired'
+    LICENSE_NOT_FOUND = 'License not found'
+    LICENSE_QUOTA_EXCEEDED = 'License quota limit exceeded'
+    LICENSE_REVOKED = 'License has been revoked'
+    LICENSE_ACTIVATION_FAILED = 'License activation failed'
+    LICENSE_ALREADY_ASSIGNED = 'User already has a license for this product'
+    LICENSE_INVALID_KEY = 'Invalid license key'
+    LICENSE_PLAN_NOT_FOUND = 'License plan not found'
     
     # ==================== 用户管理 ====================
     
-    USER_ERROR = '用户操作失败'
-    USER_NOT_FOUND = '用户不存在'
-    USER_INACTIVE = '用户账户已被禁用'
-    USER_PERMISSION_DENIED = '用户权限不足'
-    USER_ALREADY_EXISTS = '用户名或邮箱已存在'
-    USER_INVALID_CREDENTIALS = '用户名或密码错误'
+    USER_ERROR = 'User operation failed'
+    USER_NOT_FOUND = 'User not found'
+    USER_INACTIVE = 'User account is disabled'
+    USER_PERMISSION_DENIED = 'Insufficient user permissions'
+    USER_ALREADY_EXISTS = 'Username or email already exists'
+    USER_INVALID_CREDENTIALS = 'Invalid username or password'
     
     # ==================== 积分系统 ====================
     
-    POINTS_ERROR = '积分操作失败'
-    POINTS_INSUFFICIENT = '积分余额不足'
-    POINTS_EXPIRED = '积分已过期'
-    POINTS_NOT_ENABLED = '该用户未启用积分功能'
-    POINTS_DAILY_LIMIT_EXCEEDED = '今日积分已达上限'
+    POINTS_ERROR = 'Points operation failed'
+    POINTS_INSUFFICIENT = 'Insufficient points balance'
+    POINTS_EXPIRED = 'Points have expired'
+    POINTS_NOT_ENABLED = 'Points feature is not enabled for this user'
+    POINTS_DAILY_LIMIT_EXCEEDED = 'Daily points limit reached'
     
     # ==================== CMS系统 ====================
     
-    CMS_ERROR = 'CMS操作失败'
-    ARTICLE_NOT_FOUND = '文章不存在'
-    CATEGORY_NOT_FOUND = '分类不存在'
-    TAG_NOT_FOUND = '标签不存在'
-    COMMENT_NOT_FOUND = '评论不存在'
+    CMS_ERROR = 'CMS operation failed'
+    ARTICLE_NOT_FOUND = 'Article not found'
+    CATEGORY_NOT_FOUND = 'Category not found'
+    TAG_NOT_FOUND = 'Tag not found'
+    COMMENT_NOT_FOUND = 'Comment not found'
     
     # ==================== 订单系统 ====================
     
-    ORDER_ERROR = '订单操作失败'
-    ORDER_NOT_FOUND = '订单不存在'
-    ORDER_CANCELLED = '订单已取消'
-    ORDER_ALREADY_PAID = '订单已支付，无法修改'
+    ORDER_ERROR = 'Order operation failed'
+    ORDER_NOT_FOUND = 'Order not found'
+    ORDER_CANCELLED = 'Order has been cancelled'
+    ORDER_ALREADY_PAID = 'Order has been paid and cannot be modified'
     
     # ==================== 服务器错误 ====================
     
-    INTERNAL_SERVER_ERROR = '服务器内部错误'
-    DATABASE_ERROR = '数据库操作失败'
-    EXTERNAL_SERVICE_ERROR = '第三方服务调用失败'
-    CONFIGURATION_ERROR = '服务配置错误'
+    INTERNAL_SERVER_ERROR = 'Internal server error'
+    DATABASE_ERROR = 'Database operation failed'
+    EXTERNAL_SERVICE_ERROR = 'External service call failed'
+    CONFIGURATION_ERROR = 'Service configuration error'
 
 
 # 错误码到字符串标识符的映射（用于反向查找）
