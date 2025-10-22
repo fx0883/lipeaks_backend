@@ -31,7 +31,7 @@ from ..permissions import SoftwareManagePermission
 
 @extend_schema_view(
     list=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='List software categories',
         description='Get a list of all software categories available in the system.',
         parameters=[
@@ -75,7 +75,7 @@ from ..permissions import SoftwareManagePermission
         }
     ),
     create=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Create software category',
         description='Create a new software category. Only tenant administrators can perform this action.',
         request=SoftwareCategorySerializer,
@@ -103,7 +103,7 @@ from ..permissions import SoftwareManagePermission
         ]
     ),
     retrieve=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Get software category details',
         description='Retrieve detailed information about a specific software category.',
         responses={
@@ -112,7 +112,7 @@ from ..permissions import SoftwareManagePermission
         }
     ),
     update=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Update software category',
         description='Update all fields of a software category. Only tenant administrators can perform this action.',
         request=SoftwareCategorySerializer,
@@ -123,7 +123,7 @@ from ..permissions import SoftwareManagePermission
         }
     ),
     partial_update=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Partially update software category',
         description='Update specific fields of a software category. Only tenant administrators can perform this action.',
         request=SoftwareCategorySerializer,
@@ -134,7 +134,7 @@ from ..permissions import SoftwareManagePermission
         }
     ),
     destroy=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Delete software category',
         description='Soft delete a software category. Only tenant administrators can perform this action.',
         responses={
@@ -158,7 +158,7 @@ class SoftwareCategoryViewSet(viewsets.ModelViewSet):
 
 @extend_schema_view(
     list=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='List software products',
         description='Get a list of all software products in the system.',
         parameters=[
@@ -220,7 +220,7 @@ class SoftwareCategoryViewSet(viewsets.ModelViewSet):
         }
     ),
     create=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Create software product',
         description='Create a new software product. Only tenant administrators can perform this action.',
         request=SoftwareDetailSerializer,
@@ -253,7 +253,7 @@ class SoftwareCategoryViewSet(viewsets.ModelViewSet):
         ]
     ),
     retrieve=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Get software product details',
         description='Retrieve detailed information about a specific software product, including versions.',
         responses={
@@ -262,7 +262,7 @@ class SoftwareCategoryViewSet(viewsets.ModelViewSet):
         }
     ),
     update=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Update software product',
         description='Update all fields of a software product. Only tenant administrators can perform this action.',
         request=SoftwareDetailSerializer,
@@ -273,7 +273,7 @@ class SoftwareCategoryViewSet(viewsets.ModelViewSet):
         }
     ),
     partial_update=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Partially update software product',
         description='Update specific fields of a software product. Only tenant administrators can perform this action.',
         request=SoftwareDetailSerializer,
@@ -284,7 +284,7 @@ class SoftwareCategoryViewSet(viewsets.ModelViewSet):
         }
     ),
     destroy=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Delete software product',
         description='Soft delete a software product. Only tenant administrators can perform this action.',
         responses={
@@ -311,7 +311,7 @@ class SoftwareViewSet(viewsets.ModelViewSet):
         return SoftwareDetailSerializer
     
     @extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Add version to software',
         description='Add a new version to a software product. Only tenant administrators can perform this action.',
         request=SoftwareVersionSerializer,
@@ -355,7 +355,7 @@ class SoftwareViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='List software versions',
         description='Get all versions of a software product.',
         responses={
@@ -377,7 +377,7 @@ class SoftwareViewSet(viewsets.ModelViewSet):
 
 @extend_schema_view(
     list=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='List all software versions',
         description='Get a list of all software versions across all products.',
         parameters=[
@@ -405,7 +405,7 @@ class SoftwareViewSet(viewsets.ModelViewSet):
         }
     ),
     retrieve=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Get version details',
         description='Retrieve details of a specific software version.',
         responses={
@@ -414,7 +414,7 @@ class SoftwareViewSet(viewsets.ModelViewSet):
         }
     ),
     update=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Update software version',
         description='Update a software version. Only tenant administrators can perform this action.',
         request=SoftwareVersionSerializer,
@@ -425,7 +425,7 @@ class SoftwareViewSet(viewsets.ModelViewSet):
         }
     ),
     partial_update=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Partially update software version',
         description='Update specific fields of a software version. Only tenant administrators can perform this action.',
         request=SoftwareVersionSerializer,
@@ -436,7 +436,7 @@ class SoftwareViewSet(viewsets.ModelViewSet):
         }
     ),
     destroy=extend_schema(
-        tags=['Software Management'],
+        tags=['Feedback System'],
         summary='Delete software version',
         description='Soft delete a software version. Only tenant administrators can perform this action.',
         responses={

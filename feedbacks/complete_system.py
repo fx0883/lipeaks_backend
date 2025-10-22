@@ -48,7 +48,7 @@ from .permissions import (
 # Reply Views
 @extend_schema_view(
     list=extend_schema(
-        tags=['Feedback Replies'],
+        tags=['Feedback System'],
         summary='List feedback replies',
         description='Get all replies for a specific feedback. Staff see all replies, others see only non-internal.',
         responses={
@@ -59,7 +59,7 @@ from .permissions import (
         }
     ),
     create=extend_schema(
-        tags=['Feedback Replies'],
+        tags=['Feedback System'],
         summary='Add reply to feedback',
         description='Add a reply to feedback. Only administrators can reply.',
         responses={
@@ -110,7 +110,7 @@ class FeedbackVoteView(APIView):
     """View for voting on feedback"""
     
     @extend_schema(
-        tags=['Feedback Voting'],
+        tags=['Feedback System'],
         summary='Vote on feedback',
         description='Submit or update vote on feedback. Users can only have one vote per feedback.',
         request=inline_serializer(
@@ -153,7 +153,7 @@ class FeedbackVoteView(APIView):
         })
     
     @extend_schema(
-        tags=['Feedback Voting'],
+        tags=['Feedback System'],
         summary='Remove vote',
         description='Remove user vote from feedback.',
         responses={
@@ -177,7 +177,7 @@ class FeedbackStatisticsView(APIView):
     """View for feedback statistics"""
     
     @extend_schema(
-        tags=['Feedback Statistics'],
+        tags=['Feedback System'],
         summary='Get feedback statistics',
         description='Get comprehensive statistics about feedback. Only administrators can access.',
         parameters=[
@@ -344,7 +344,7 @@ class FeedbackStatisticsView(APIView):
 # Attachment Views
 @extend_schema_view(
     create=extend_schema(
-        tags=['Feedback Attachments'],
+        tags=['Feedback System'],
         summary='Upload attachment',
         description='Upload a file attachment for feedback.',
         request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
@@ -356,7 +356,7 @@ class FeedbackStatisticsView(APIView):
         }
     ),
     list=extend_schema(
-        tags=['Feedback Attachments'],
+        tags=['Feedback System'],
         summary='List attachments',
         description='Get all attachments for a feedback.',
         responses={
@@ -364,7 +364,7 @@ class FeedbackStatisticsView(APIView):
         }
     ),
     destroy=extend_schema(
-        tags=['Feedback Attachments'],
+        tags=['Feedback System'],
         summary='Delete attachment',
         description='Delete an attachment.',
         responses={
@@ -390,7 +390,7 @@ class FeedbackAttachmentViewSet(viewsets.ModelViewSet):
 # Email Template Views
 @extend_schema_view(
     list=extend_schema(
-        tags=['Email Management'],
+        tags=['Feedback System'],
         summary='List email templates',
         description='Get all email templates for the tenant.',
         responses={
@@ -398,7 +398,7 @@ class FeedbackAttachmentViewSet(viewsets.ModelViewSet):
         }
     ),
     create=extend_schema(
-        tags=['Email Management'],
+        tags=['Feedback System'],
         summary='Create email template',
         description='Create a new email template. Only tenant administrators can perform this action.',
         responses={
@@ -408,7 +408,7 @@ class FeedbackAttachmentViewSet(viewsets.ModelViewSet):
         }
     ),
     update=extend_schema(
-        tags=['Email Management'],
+        tags=['Feedback System'],
         summary='Update email template',
         description='Update an email template. Only tenant administrators can perform this action.',
         responses={
@@ -418,7 +418,7 @@ class FeedbackAttachmentViewSet(viewsets.ModelViewSet):
         }
     ),
     destroy=extend_schema(
-        tags=['Email Management'],
+        tags=['Feedback System'],
         summary='Delete email template',
         description='Delete an email template. Only tenant administrators can perform this action.',
         responses={
@@ -444,7 +444,7 @@ class EmailTemplateViewSet(viewsets.ModelViewSet):
 # Email Log Views
 @extend_schema_view(
     list=extend_schema(
-        tags=['Email Management'],
+        tags=['Feedback System'],
         summary='List email logs',
         description='Get email sending history.',
         parameters=[

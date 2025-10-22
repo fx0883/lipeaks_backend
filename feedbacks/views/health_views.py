@@ -18,7 +18,7 @@ class SystemHealthView(APIView):
     permission_classes = [IsAdminUser]
     
     @extend_schema(
-        tags=['System Health'],
+        tags=['Feedback System'],
         summary='Check system health',
         description='Check the health status of critical system components including Redis, database, and email service.',
         responses={
@@ -167,7 +167,7 @@ class RedisStatusView(APIView):
     permission_classes = [IsAdminUser]
     
     @extend_schema(
-        tags=['System Health'],
+        tags=['Feedback System'],
         summary='Check Redis status',
         description='Get detailed Redis connection status and information.',
         responses={

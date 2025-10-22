@@ -44,8 +44,9 @@
 2. **[Implementation_Summary.md](Implementation_Summary.md)** - Complete implementation details
 3. **[FINAL_SUMMARY_ZH.md](FINAL_SUMMARY_ZH.md)** - 最终总结（中文）
 
-### Translation
+### Translation and Updates
 1. **[TRANSLATION_STATUS.md](TRANSLATION_STATUS.md)** - Translation progress tracking
+2. **[API_Tags_Unified.md](API_Tags_Unified.md)** - ⭐ OpenAPI Tags Unification Report (Oct 22, 2025)
 
 ## 🎯 Quick Links by Role
 
@@ -76,12 +77,13 @@
 
 ## 📊 Documentation Stats
 
-- **Total Documents**: 28 (包含新增的正确版本)
-- **Total Lines**: ~13,000+
-- **API Endpoints Documented**: 30+
+- **Total Documents**: 29 (包含API Tags统一报告)
+- **Total Lines**: ~13,300+
+- **API Endpoints Documented**: 43 (所有端点统一在Feedback System tag下)
 - **Code Examples**: 60+
 - **Integration Patterns**: 15+
 - **⭐ Code Completion**: 100% (无需修改任何代码)
+- **🏷️ OpenAPI Tags**: Unified to single "Feedback System" tag
 
 ## 🚀 Getting Started Path (Updated - Code Complete)
 

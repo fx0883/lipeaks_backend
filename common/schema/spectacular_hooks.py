@@ -1,6 +1,6 @@
 """
 DRF Spectacular 预处理钩子
-用于为所有API路径添加安全要求
+用于为所有API路径添加安全要求和自定义标签
 """
 
 def add_security_requirement(endpoints, **kwargs):
@@ -31,3 +31,42 @@ def add_security_requirement(endpoints, **kwargs):
             callback.security.append({'Bearer': []})
     
     return endpoints
+
+
+def customize_feedback_tags(result, generator, request, public):
+    """
+    自定义反馈系统的标签，确保所有 feedbacks 相关的端点使用 'Feedback System' 标签
+    
+    Args:
+        result: OpenAPI schema 字典
+        generator: Schema generator 实例
+        request: HTTP 请求对象
+        public: 是否为公共API
+    
+    Returns:
+        修改后的 OpenAPI schema
+    """
+    if 'paths' not in result:
+        return result
+    
+    # 遍历所有路径
+    for path, path_item in result['paths'].items():
+        # 检查路径是否属于 feedbacks 应用
+        if '/feedbacks/' in path:
+            # 遍历所有HTTP方法
+            for method in ['get', 'post', 'put', 'patch', 'delete', 'options', 'head']:
+                if method in path_item:
+                    operation = path_item[method]
+                    # 检查当前的 tags
+                    current_tags = operation.get('tags', [])
+                    
+                    # 如果 tags 不是 ['Feedback System']，则替换
+                    if current_tags != ['Feedback System']:
+                        # 保留已经设置的 'Feedback System' tag，移除其他的
+                        if 'Feedback System' in current_tags:
+                            operation['tags'] = ['Feedback System']
+                        # 如果当前是 'api' 或其他默认 tag，替换为 'Feedback System'
+                        elif any(tag in ['api', 'feedbacks'] for tag in current_tags):
+                            operation['tags'] = ['Feedback System']
+    
+    return result

@@ -393,6 +393,9 @@ SPECTACULAR_SETTINGS = {
     # 设置API路径预处理器，对所有路径应用安全要求
     'PREPROCESSING_HOOKS': ['common.schema.spectacular_hooks.add_security_requirement'],
     
+    # 设置后处理钩子，用于自定义标签
+    'POSTPROCESSING_HOOKS': ['common.schema.spectacular_hooks.customize_feedback_tags'],
+    
     # 扩展类
     'EXTENSIONS': [
         'common.schema.spectacular_extensions.JWTAuthenticationScheme',

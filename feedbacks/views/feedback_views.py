@@ -42,7 +42,7 @@ from ..permissions import (
 
 @extend_schema_view(
     list=extend_schema(
-        tags=['Feedback Management'],
+        tags=['Feedback System'],
         summary='List feedback',
         description='Get a list of feedback. Permissions: Super admins see all tenant feedback, '
                    'tenant admins see all tenant feedback, regular users see only their own.',
@@ -149,7 +149,7 @@ from ..permissions import (
         }
     ),
     create=extend_schema(
-        tags=['Feedback Management'],
+        tags=['Feedback System'],
         summary='Submit feedback',
         description='Submit new feedback. Anyone can submit feedback, including anonymous users. '
                    'Anonymous users must provide an email address.',
@@ -184,7 +184,7 @@ from ..permissions import (
         ]
     ),
     retrieve=extend_schema(
-        tags=['Feedback Management'],
+        tags=['Feedback System'],
         summary='Get feedback details',
         description='Retrieve detailed information about specific feedback. '
                    'Permissions vary based on user role.',
@@ -198,7 +198,7 @@ from ..permissions import (
         }
     ),
     update=extend_schema(
-        tags=['Feedback Management'],
+        tags=['Feedback System'],
         summary='Update feedback',
         description='Update feedback. Admins can update any feedback, users can update '
                    'their own if not replied to.',
@@ -211,7 +211,7 @@ from ..permissions import (
         }
     ),
     partial_update=extend_schema(
-        tags=['Feedback Management'],
+        tags=['Feedback System'],
         summary='Partially update feedback',
         description='Update specific fields of feedback.',
         request=FeedbackUpdateSerializer,
@@ -223,7 +223,7 @@ from ..permissions import (
         }
     ),
     destroy=extend_schema(
-        tags=['Feedback Management'],
+        tags=['Feedback System'],
         summary='Delete feedback',
         description='Soft delete feedback. Admins can delete any feedback, users can delete '
                    'their own if not replied to.',
@@ -314,7 +314,7 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @extend_schema(
-        tags=['Feedback Management'],
+        tags=['Feedback System'],
         summary='Change feedback status',
         description='Change the status of feedback. Only administrators can perform this action. '
                    'A status history record will be created.',
@@ -395,7 +395,7 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @extend_schema(
-        tags=['Feedback Management'],
+        tags=['Feedback System'],
         summary='Verify email',
         description='Verify email address for anonymous feedback submission.',
         request=inline_serializer(
@@ -455,7 +455,7 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         return Response({'message': _('Email verified successfully')})
     
     @extend_schema(
-        tags=['Feedback Management'],
+        tags=['Feedback System'],
         summary='Toggle email notifications',
         description='Enable or disable email notifications for feedback updates.',
         request=inline_serializer(
