@@ -111,6 +111,9 @@ urlpatterns = [
         # 多租户积分系统路由
         path('points/', include('points.api.urls', namespace='points')),
         
+        # User Feedback System
+        path('feedbacks/', include('feedbacks.urls', namespace='feedbacks')),
+        
         # 图表数据API
         path('admin/charts/', include('charts.urls', namespace='charts')),
         

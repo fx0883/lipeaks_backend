@@ -99,6 +99,7 @@ INSTALLED_APPS = [
     'orders',  # 订单管理应用
     'licenses',  # 许可证管理应用
     'points',  # 多租户积分系统
+    'feedbacks',  # User Feedback System
 ]
 
 MIDDLEWARE = [
@@ -505,3 +506,27 @@ TENANT_MIDDLEWARE_DEBUG = get_env_with_validation(
 TENANT_MIDDLEWARE_PERFORMANCE_MONITORING = get_env_with_validation(
     'TENANT_MIDDLEWARE_PERFORMANCE_MONITORING', lambda x: x.lower() == 'true', 'False'
 )
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# Celery Task Routes
+CELERY_TASK_ROUTES = {
+    'feedbacks.tasks.*': {'queue': 'feedbacks'},
+}
+
+# Celery Beat Schedule (for periodic tasks)
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-old-email-logs': {
+        'task': 'feedbacks.tasks.cleanup_old_email_logs',
+        'schedule': crontab(hour=2, minute=0),  # Run daily at 2 AM
+        'args': (90,)  # Keep logs for 90 days
+    },
+}

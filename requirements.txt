@@ -2,6 +2,13 @@ asgiref==3.8.1
 attrs==25.1.0
 base58==2.1.1
 beautifulsoup4==4.13.3
+
+# Async Task Processing (Celery)
+celery==5.3.4
+redis==5.0.1
+django-celery-beat==2.8.1
+django-celery-results==2.6.0
+
 certifi==2025.1.31
 cffi==2.0.0
 charset-normalizer==3.4.1
@@ -14,6 +21,7 @@ django-filter==25.1
 django-js-asset==3.1.2
 django-json-widget==2.0.1
 django-mptt==0.17.0
+django-ratelimit==4.1.0
 djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.0
 drf-spectacular==0.28.0

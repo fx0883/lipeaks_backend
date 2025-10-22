@@ -1,0 +1,23 @@
+# Feedback System Requirements
+# Add these to your main requirements.txt
+
+# Async Task Processing
+celery==5.3.4
+redis==5.0.1
+django-celery-beat==2.5.0
+django-celery-results==2.5.1
+
+# File Upload Support
+Pillow==10.1.0
+
+# Email HTML Processing
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# Rate Limiting
+django-ratelimit==4.1.0
+
+# Optional: WebSocket Support
+channels==4.0.0
+channels-redis==4.1.0
+daphne==4.0.0
