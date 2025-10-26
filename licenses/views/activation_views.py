@@ -35,7 +35,7 @@ ACTIVATION_API_RATE_LIMIT = os.environ.get('ACTIVATION_API_RATE_LIMIT', '100/hou
 
 # 可疑活动检测 - IP频率限制配置
 # 控制同一IP地址的激活频率，防止恶意批量激活
-SUSPICIOUS_IP_ACTIVATION_LIMIT = int(os.environ.get('SUSPICIOUS_IP_ACTIVATION_LIMIT', '5'))
+SUSPICIOUS_IP_ACTIVATION_LIMIT = int(os.environ.get('SUSPICIOUS_IP_ACTIVATION_LIMIT', '50'))
 SUSPICIOUS_IP_CHECK_HOURS = int(os.environ.get('SUSPICIOUS_IP_CHECK_HOURS', '1'))
 
 # 可疑活动检测 - 许可证频率限制配置  
