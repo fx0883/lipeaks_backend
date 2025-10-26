@@ -6,7 +6,7 @@ __pycache__/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-media
+# media
 
 # 如果你想把整个media文件夹纳入版本控制，但是排除用户上传的文件
 # media/avatars/*
