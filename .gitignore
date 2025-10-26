@@ -9,8 +9,11 @@ db.sqlite3-journal
 # media
 
 # 如果你想把整个media文件夹纳入版本控制，但是排除用户上传的文件
-# media/avatars/*
-# !media/avatars/.gitkeep
+media/avatars/*
+media/avatars/.gitkeep
+
+
+
 media/uploads/*
 media/images/*
 media/images/60/*
