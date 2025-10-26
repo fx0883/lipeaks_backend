@@ -12,10 +12,9 @@ db.sqlite3-journal
 media/avatars/*
 media/avatars/.gitkeep
 
-
-
 media/uploads/*
-media/images/*
+
+# 只忽略images下60到71文件夹，其余images子文件夹纳入版本控制
 media/images/60/*
 media/images/61/*
 media/images/62/*
@@ -28,7 +27,24 @@ media/images/68/*
 media/images/69/*
 media/images/70/*
 media/images/71/*
-
+media/images/72/*
+media/images/73/*
+media/images/74/*
+media/images/75/*
+media/images/76/*
+media/images/77/*
+media/images/78/*
+media/images/79/*
+media/images/80/*
+media/images/81/*
+media/images/82/*
+media/images/83/*
+media/images/84/*
+media/images/85/*
+media/images/86/*
+media/images/87/*
+media/images/88/*
+media/images/89/*
 # !media/uploads/.gitkeep
 
 # 如果你的项目使用staticfiles
