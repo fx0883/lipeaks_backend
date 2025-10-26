@@ -37,6 +37,19 @@ class Article(models.Model):
     content = models.TextField(_("文章内容"))
     content_type = models.CharField(_("内容类型"), max_length=20, choices=CONTENT_TYPE_CHOICES, default='markdown')
     excerpt = models.TextField(_("文章摘要"), blank=True, null=True)
+    
+    # 父文章关联（自关联，用于实现文章层级结构）
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        related_name="children",
+        verbose_name=_("父文章"),
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="上级文章，用于创建文章层级结构（如系列文章、章节等）"
+    )
+    
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -53,6 +66,7 @@ class Article(models.Model):
     updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
     published_at = models.DateTimeField(_("发布时间"), blank=True, null=True)
     cover_image = models.CharField(_("封面图片"), max_length=255, blank=True, null=True)
+    cover_image_small = models.CharField(_("封面小图"), max_length=255, blank=True, null=True, help_text="封面图片的缩略图版本")
     template = models.CharField(_("模板"), max_length=100, blank=True, null=True)
     sort_order = models.IntegerField(_("排序"), default=0)
     tenant = models.ForeignKey(
@@ -72,6 +86,8 @@ class Article(models.Model):
             models.Index(fields=['status', 'published_at']),
             models.Index(fields=['tenant', 'status']),
             models.Index(fields=['tenant', 'published_at']),
+            models.Index(fields=['parent']),  # 父文章索引
+            models.Index(fields=['tenant', 'parent']),  # 租户+父文章组合索引
         ]
     
     def __str__(self):
@@ -87,6 +103,10 @@ class Article(models.Model):
             # 提取前200个字符作为摘要
             self.excerpt = self.content[:200].replace('#', '').strip()
         
+        # 防止循环引用：不能将自己设置为父文章
+        if self.parent and self.parent.id == self.id:
+            raise ValueError(_("文章不能将自己设置为父文章"))
+        
         super().save(*args, **kwargs)
         
         # 如果是首次创建文章，自动创建文章统计记录
@@ -95,6 +115,60 @@ class Article(models.Model):
                 article=self,
                 defaults={'tenant': self.tenant}
             )
+    
+    def get_ancestors(self):
+        """
+        获取所有祖先文章（从当前文章向上追溯到根文章）
+        返回：[父文章, 祖父文章, ..., 根文章]
+        """
+        ancestors = []
+        current = self.parent
+        while current:
+            if current in ancestors:  # 防止循环引用
+                logger.warning(f"检测到文章循环引用: {self.id} -> {current.id}")
+                break
+            ancestors.append(current)
+            current = current.parent
+        return ancestors
+    
+    def get_root(self):
+        """
+        获取根文章（最顶层的文章）
+        如果没有父文章，返回自己
+        """
+        ancestors = self.get_ancestors()
+        return ancestors[-1] if ancestors else self
+    
+    def get_depth(self):
+        """
+        获取文章在层级树中的深度
+        根文章深度为 0，子文章深度为 1，以此类推
+        """
+        return len(self.get_ancestors())
+    
+    def is_root(self):
+        """判断是否为根文章（没有父文章）"""
+        return self.parent is None
+    
+    def is_leaf(self):
+        """判断是否为叶子文章（没有子文章）"""
+        return not self.children.exists()
+    
+    def get_siblings(self, include_self=False):
+        """
+        获取兄弟文章（同一父文章下的其他文章）
+        """
+        if not self.parent:
+            # 根文章：返回所有其他根文章
+            siblings = Article.objects.filter(parent__isnull=True, tenant=self.tenant)
+        else:
+            # 子文章：返回同一父文章的其他子文章
+            siblings = self.parent.children.all()
+        
+        if not include_self:
+            siblings = siblings.exclude(id=self.id)
+        
+        return siblings
 
 
 class Category(models.Model):

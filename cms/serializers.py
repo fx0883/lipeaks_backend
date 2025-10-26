@@ -158,14 +158,18 @@ class ArticleListSerializer(serializers.ModelSerializer):
     likes_count = serializers.SerializerMethodField()
     views_count = serializers.SerializerMethodField()
     cover_image = serializers.SerializerMethodField()
+    cover_image_small = serializers.SerializerMethodField()
+    parent_info = serializers.SerializerMethodField()
+    children_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Article
         fields = [
             'id', 'title', 'slug', 'excerpt', 'author', 'author_info',
-            'status', 'is_featured', 'is_pinned', 'cover_image',
+            'status', 'is_featured', 'is_pinned', 'cover_image', 'cover_image_small',
             'published_at', 'created_at', 'updated_at', 'categories', 'tags', 
-            'comments_count', 'likes_count', 'views_count'
+            'comments_count', 'likes_count', 'views_count',
+            'parent', 'parent_info', 'children_count'
         ]
     
     def get_categories(self, obj) -> list:
@@ -214,6 +218,32 @@ class ArticleListSerializer(serializers.ModelSerializer):
             return add_domain_to_image_url(request, obj.cover_image)
         
         return obj.cover_image
+    
+    def get_cover_image_small(self, obj) -> str:
+        """获取封面小图的完整URL"""
+        if not obj.cover_image_small:
+            return ""
+        
+        # 获取请求对象
+        request = self.context.get('request')
+        if request is not None:
+            return add_domain_to_image_url(request, obj.cover_image_small)
+        
+        return obj.cover_image_small
+    
+    def get_parent_info(self, obj) -> dict:
+        """获取父文章信息"""
+        if obj.parent:
+            return {
+                'id': obj.parent.id,
+                'title': obj.parent.title,
+                'slug': obj.parent.slug
+            }
+        return None
+    
+    def get_children_count(self, obj) -> int:
+        """获取子文章数量"""
+        return obj.children.count()
 
 
 class ArticleDetailSerializer(serializers.ModelSerializer):
@@ -227,6 +257,10 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
     version_info = serializers.SerializerMethodField()
     tenant_info = TenantSerializer(source='tenant', read_only=True)
     cover_image = serializers.SerializerMethodField()
+    cover_image_small = serializers.SerializerMethodField()
+    parent_info = serializers.SerializerMethodField()
+    children = serializers.SerializerMethodField()
+    breadcrumb = serializers.SerializerMethodField()
     
     class Meta:
         model = Article
@@ -234,9 +268,10 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
             'id', 'title', 'slug', 'content', 'content_type', 'excerpt',
             'author', 'author_info', 'status', 'is_featured', 'is_pinned',
             'allow_comment', 'visibility', 'password', 'created_at',
-            'updated_at', 'published_at', 'cover_image', 'template',
+            'updated_at', 'published_at', 'cover_image', 'cover_image_small', 'template',
             'sort_order', 'tenant', 'tenant_info', 'categories', 'tags',
-            'meta', 'stats', 'version_info'
+            'meta', 'stats', 'version_info',
+            'parent', 'parent_info', 'children', 'breadcrumb'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
     
@@ -279,6 +314,61 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
             return add_domain_to_image_url(request, obj.cover_image)
         
         return obj.cover_image
+    
+    def get_cover_image_small(self, obj) -> str:
+        """获取封面小图的完整URL"""
+        if not obj.cover_image_small:
+            return ""
+        
+        # 获取请求对象
+        request = self.context.get('request')
+        if request is not None:
+            return add_domain_to_image_url(request, obj.cover_image_small)
+        
+        return obj.cover_image_small
+    
+    def get_parent_info(self, obj) -> dict:
+        """获取父文章信息"""
+        if obj.parent:
+            return {
+                'id': obj.parent.id,
+                'title': obj.parent.title,
+                'slug': obj.parent.slug
+            }
+        return None
+    
+    def get_children(self, obj) -> list:
+        """获取子文章列表（简化版本）"""
+        children = obj.children.filter(status='published').order_by('sort_order', 'created_at')[:20]
+        return [{
+            'id': child.id,
+            'title': child.title,
+            'slug': child.slug,
+            'excerpt': child.excerpt,
+            'published_at': child.published_at
+        } for child in children]
+    
+    def get_breadcrumb(self, obj) -> list:
+        """获取面包屑导航"""
+        ancestors = obj.get_ancestors()
+        breadcrumb = []
+        
+        # 从根到当前文章的路径（反转祖先列表）
+        for ancestor in reversed(ancestors):
+            breadcrumb.append({
+                'id': ancestor.id,
+                'title': ancestor.title,
+                'slug': ancestor.slug
+            })
+        
+        # 添加当前文章
+        breadcrumb.append({
+            'id': obj.id,
+            'title': obj.title,
+            'slug': obj.slug
+        })
+        
+        return breadcrumb
 
 
 class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
@@ -305,8 +395,8 @@ class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'content', 'content_type', 'excerpt',
             'status', 'is_featured', 'is_pinned', 'allow_comment',
-            'visibility', 'password', 'cover_image', 'template',
-            'sort_order', 'category_ids', 'tag_ids', 'meta',
+            'visibility', 'password', 'cover_image', 'cover_image_small', 'template',
+            'sort_order', 'parent', 'category_ids', 'tag_ids', 'meta',
             'change_description', 'create_new_version', 'publish_now',
             'scheduled_publish_time'
         ]

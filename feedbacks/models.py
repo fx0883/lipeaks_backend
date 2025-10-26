@@ -380,6 +380,8 @@ class Feedback(BaseModel):
     )
     contact_email = models.EmailField(
         _("Contact Email"), 
+        blank=True,
+        null=True,
         help_text="Email for replies (required for anonymous users)"
     )
     contact_name = models.CharField(

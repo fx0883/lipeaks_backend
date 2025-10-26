@@ -1,87 +1,103 @@
 """
-User Feedback System URL Configuration
+User Feedback System URL Configuration - APIView Version
 
-This module defines all URL patterns for the feedback management system.
+完全移除ViewSet和Router，使用纯APIView模式
+提供更好的调试体验和完全的控制能力
+所有API都支持 Tenant-ID header 进行租户过滤
 """
 
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from django.urls import path
 
-from .views import (
-    SoftwareCategoryViewSet,
-    SoftwareViewSet,
-    SoftwareVersionViewSet,
-    FeedbackViewSet,
+# Import Software Management APIViews
+from .views.software_api_views import (
+    SoftwareCategoryListView,
+    SoftwareCategoryDetailView,
+    SoftwareListView,
+    SoftwareDetailView,
+    SoftwareVersionsView,
+    SoftwareVersionListView,
+    SoftwareVersionDetailView,
 )
 
-# Import views from complete_system.py temporarily
-# In production, these should be in separate files
+# Import Email Management APIViews
+from .views.email_api_views import (
+    EmailTemplateListView,
+    EmailTemplateDetailView,
+    EmailLogListView,
+    EmailLogDetailView,
+)
+
+# Import Feedback Management APIViews
+from .views.feedback_api_views import (
+    FeedbackListView,
+    FeedbackDetailView,
+    FeedbackChangeStatusView,
+    FeedbackVerifyEmailView,
+    FeedbackToggleNotificationsView,
+)
+
+# Import Feedback Reply APIViews
+from .views.feedback_reply_api_views import (
+    FeedbackReplyListView,
+    FeedbackReplyDetailView,
+)
+
+# Import Feedback Attachment APIViews
+from .views.feedback_attachment_api_views import (
+    FeedbackAttachmentListView,
+    FeedbackAttachmentDetailView,
+)
+
+# Import other APIViews (already using APIView pattern)
 from .complete_system import (
-    FeedbackReplyViewSet,
     FeedbackVoteView,
-    FeedbackAttachmentViewSet,
     FeedbackStatisticsView,
-    EmailTemplateViewSet,
-    EmailLogViewSet
 )
 
-# Health check views
+# Health check views (already APIView)
 from .views.health_views import SystemHealthView, RedisStatusView
 
 app_name = 'feedbacks'
 
-# Main router
-router = DefaultRouter()
-
-# Software management routes
-router.register(r'software-categories', SoftwareCategoryViewSet, basename='software-category')
-router.register(r'software', SoftwareViewSet, basename='software')
-router.register(r'software-versions', SoftwareVersionViewSet, basename='software-version')
-
-# Feedback management routes
-router.register(r'feedbacks', FeedbackViewSet, basename='feedback')
-
-# Email management routes
-router.register(r'email-templates', EmailTemplateViewSet, basename='email-template')
-router.register(r'email-logs', EmailLogViewSet, basename='email-log')
-
 urlpatterns = [
-    # Include main router URLs
-    path('', include(router.urls)),
+    # ==================== Software Management APIs ====================
+    path('software-categories/', SoftwareCategoryListView.as_view(), name='software-category-list'),
+    path('software-categories/<int:pk>/', SoftwareCategoryDetailView.as_view(), name='software-category-detail'),
     
-    # Nested feedback-related routes
-    path('feedbacks/<int:feedback_pk>/replies/', 
-         FeedbackReplyViewSet.as_view({'get': 'list', 'post': 'create'}), 
-         name='feedback-replies-list'),
-    path('feedbacks/<int:feedback_pk>/replies/<int:pk>/', 
-         FeedbackReplyViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), 
-         name='feedback-replies-detail'),
+    path('software/', SoftwareListView.as_view(), name='software-list'),
+    path('software/<int:pk>/', SoftwareDetailView.as_view(), name='software-detail'),
+    path('software/<int:software_pk>/versions/', SoftwareVersionsView.as_view(), name='software-versions'),
     
-    path('feedbacks/<int:feedback_pk>/attachments/', 
-         FeedbackAttachmentViewSet.as_view({'get': 'list', 'post': 'create'}), 
-         name='feedback-attachments-list'),
-    path('feedbacks/<int:feedback_pk>/attachments/<int:pk>/', 
-         FeedbackAttachmentViewSet.as_view({'get': 'retrieve', 'delete': 'destroy'}), 
-         name='feedback-attachments-detail'),
+    path('software-versions/', SoftwareVersionListView.as_view(), name='software-version-list'),
+    path('software-versions/<int:pk>/', SoftwareVersionDetailView.as_view(), name='software-version-detail'),
     
-    # Individual action URLs
+    # ==================== Email Management APIs ====================
+    path('email-templates/', EmailTemplateListView.as_view(), name='email-template-list'),
+    path('email-templates/<int:pk>/', EmailTemplateDetailView.as_view(), name='email-template-detail'),
+    
+    path('email-logs/', EmailLogListView.as_view(), name='email-log-list'),
+    path('email-logs/<int:pk>/', EmailLogDetailView.as_view(), name='email-log-detail'),
+    
+    # ==================== Feedback Management APIs ====================
+    path('feedbacks/', FeedbackListView.as_view(), name='feedback-list'),
+    path('feedbacks/<int:pk>/', FeedbackDetailView.as_view(), name='feedback-detail'),
+    path('feedbacks/<int:pk>/status/', FeedbackChangeStatusView.as_view(), name='feedback-change-status'),
+    path('feedbacks/<int:pk>/verify-email/', FeedbackVerifyEmailView.as_view(), name='feedback-verify-email'),
+    path('feedbacks/<int:pk>/notifications/', FeedbackToggleNotificationsView.as_view(), name='feedback-toggle-notifications'),
     path('feedbacks/<int:pk>/vote/', FeedbackVoteView.as_view(), name='feedback-vote'),
-    path('statistics/', FeedbackStatisticsView.as_view(), name='feedback-statistics'),
     
-    # System Health Check URLs
+    # ==================== Feedback Reply APIs ====================
+    path('feedbacks/<int:feedback_pk>/replies/', FeedbackReplyListView.as_view(), name='feedback-replies-list'),
+    path('feedbacks/<int:feedback_pk>/replies/<int:pk>/', FeedbackReplyDetailView.as_view(), name='feedback-replies-detail'),
+    
+    # ==================== Feedback Attachment APIs ====================
+    path('feedbacks/<int:feedback_pk>/attachments/', FeedbackAttachmentListView.as_view(), name='feedback-attachments-list'),
+    path('feedbacks/<int:feedback_pk>/attachments/<int:pk>/', FeedbackAttachmentDetailView.as_view(), name='feedback-attachments-detail'),
+    
+    # ==================== Other APIs ====================
+    path('statistics/', FeedbackStatisticsView.as_view(), name='feedback-statistics'),
     path('health/', SystemHealthView.as_view(), name='system-health'),
     path('health/redis/', RedisStatusView.as_view(), name='redis-status'),
-    
-    # Convenience URLs for common operations
-    path('feedbacks/<int:pk>/verify-email/', 
-         FeedbackViewSet.as_view({'post': 'verify_email'}), 
-         name='feedback-verify-email'),
-    path('feedbacks/<int:pk>/status/', 
-         FeedbackViewSet.as_view({'patch': 'change_status'}), 
-         name='feedback-change-status'),
-    path('feedbacks/<int:pk>/notifications/', 
-         FeedbackViewSet.as_view({'patch': 'toggle_notifications'}), 
-         name='feedback-toggle-notifications'),
 ]
 
 # API Documentation

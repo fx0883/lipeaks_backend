@@ -41,7 +41,7 @@ from .serializers import (
 # Import permissions
 from .permissions import (
     FeedbackReplyPermission, FeedbackVotePermission,
-    EmailTemplatePermission
+    EmailTemplatePermission, StatisticsViewPermission
 )
 
 
@@ -175,6 +175,7 @@ class FeedbackVoteView(APIView):
 # Statistics Views
 class FeedbackStatisticsView(APIView):
     """View for feedback statistics"""
+    permission_classes = [StatisticsViewPermission]
     
     @extend_schema(
         tags=['Feedback System'],
@@ -246,14 +247,13 @@ class FeedbackStatisticsView(APIView):
     )
     def get(self, request):
         """Get statistics"""
-        # Permission check
-        if not request.user.is_staff:
-            return Response({'error': 'Permission denied'}, status=403)
+        # Permission is checked by permission_classes
         
-        # Get parameters
-        software_id = request.query_params.get('software')
-        date_from = request.query_params.get('date_from')
-        date_to = request.query_params.get('date_to')
+        # Get parameters (compatible with both DRF Request and Django Request)
+        query_params = getattr(request, 'query_params', request.GET)
+        software_id = query_params.get('software')
+        date_from = query_params.get('date_from')
+        date_to = query_params.get('date_to')
         
         # Base queryset
         queryset = Feedback.objects.filter(is_deleted=False)
@@ -281,8 +281,8 @@ class FeedbackStatisticsView(APIView):
             'feedbacks_by_type': self._count_by_field(queryset, 'feedback_type'),
             'feedbacks_by_status': self._count_by_field(queryset, 'status'),
             'feedbacks_by_priority': self._count_by_field(queryset, 'priority'),
-            'top_voted_feedbacks': self._get_top_voted(queryset),
-            'recent_feedbacks': self._get_recent(queryset),
+            'top_voted_feedbacks': self._get_top_voted(queryset, request),
+            'recent_feedbacks': self._get_recent(queryset, request),
             'daily_trend': self._get_daily_trend(queryset)
         }
         
@@ -313,15 +313,15 @@ class FeedbackStatisticsView(APIView):
             queryset.values(field).annotate(count=Count('id')).values_list(field, 'count')
         )
     
-    def _get_top_voted(self, queryset, limit=10):
+    def _get_top_voted(self, queryset, request, limit=10):
         top = queryset.order_by('-vote_count')[:limit]
-        from ..serializers import FeedbackListSerializer
-        return FeedbackListSerializer(top, many=True, context={'request': self.request}).data
+        from .serializers import FeedbackListSerializer
+        return FeedbackListSerializer(top, many=True, context={'request': request}).data
     
-    def _get_recent(self, queryset, limit=10):
+    def _get_recent(self, queryset, request, limit=10):
         recent = queryset.order_by('-created_at')[:limit]
-        from ..serializers import FeedbackListSerializer
-        return FeedbackListSerializer(recent, many=True, context={'request': self.request}).data
+        from .serializers import FeedbackListSerializer
+        return FeedbackListSerializer(recent, many=True, context={'request': request}).data
     
     def _get_daily_trend(self, queryset, days=30):
         from django.db.models.functions import TruncDate

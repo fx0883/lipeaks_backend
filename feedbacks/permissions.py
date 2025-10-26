@@ -8,6 +8,32 @@ from rest_framework import permissions
 from django.utils.translation import gettext_lazy as _
 
 
+def is_tenant_admin(user):
+    """
+    Helper function to check if user is a tenant administrator
+    
+    Args:
+        user: User object
+        
+    Returns:
+        bool: True if user is a tenant admin, False otherwise
+    """
+    # User must be authenticated
+    if not user or not user.is_authenticated:
+        return False
+    
+    # Check if this is a User model instance (not Member)
+    # User has is_admin field, Member doesn't
+    if not hasattr(user, 'is_admin'):
+        return False
+    
+    # Must be admin but not super admin
+    return (
+        user.is_admin and 
+        not getattr(user, 'is_super_admin', False)
+    )
+
+
 class IsTenantAdmin(permissions.BasePermission):
     """
     Permission check for tenant administrators.
@@ -17,15 +43,7 @@ class IsTenantAdmin(permissions.BasePermission):
     
     def has_permission(self, request, view):
         """Check if user is a tenant admin"""
-        if not request.user or not request.user.is_authenticated:
-            return False
-        
-        # Check if user is a tenant admin
-        # This assumes User model has is_tenant_admin property or method
-        return (
-            hasattr(request.user, 'is_tenant_admin') and 
-            request.user.is_tenant_admin
-        )
+        return is_tenant_admin(request.user)
 
 
 class SoftwareManagePermission(permissions.BasePermission):
@@ -53,10 +71,7 @@ class SoftwareManagePermission(permissions.BasePermission):
             return False
         
         # Only tenant admins can manage
-        return (
-            hasattr(request.user, 'is_tenant_admin') and 
-            request.user.is_tenant_admin
-        )
+        return is_tenant_admin(request.user)
     
     def has_object_permission(self, request, view, obj):
         """Check permission at the object level"""
@@ -74,8 +89,7 @@ class SoftwareManagePermission(permissions.BasePermission):
         
         # Only tenant admins of the same tenant can manage
         return (
-            hasattr(request.user, 'is_tenant_admin') and 
-            request.user.is_tenant_admin and
+            is_tenant_admin(request.user) and
             hasattr(request, 'tenant') and
             obj.tenant == request.tenant
         )
@@ -110,7 +124,7 @@ class FeedbackViewPermission(permissions.BasePermission):
             return True
         
         # Tenant admin can view all feedback in their tenant
-        if hasattr(request.user, 'is_tenant_admin') and request.user.is_tenant_admin:
+        if is_tenant_admin(request.user):
             return True
         
         # Regular users can only view their own feedback
@@ -151,7 +165,7 @@ class FeedbackUpdatePermission(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         
-        if hasattr(request.user, 'is_tenant_admin') and request.user.is_tenant_admin:
+        if is_tenant_admin(request.user):
             return True
         
         # Regular users can update their own feedback if not replied
@@ -187,7 +201,7 @@ class FeedbackDeletePermission(permissions.BasePermission):
         if request.user.is_superuser:
             return True
         
-        if hasattr(request.user, 'is_tenant_admin') and request.user.is_tenant_admin:
+        if is_tenant_admin(request.user):
             return True
         
         # Regular users can delete their own feedback if not replied
@@ -216,7 +230,7 @@ class FeedbackReplyPermission(permissions.BasePermission):
         # Only admins can reply
         return (
             request.user.is_superuser or
-            (hasattr(request.user, 'is_tenant_admin') and request.user.is_tenant_admin)
+            is_tenant_admin(request.user)
         )
     
     def has_object_permission(self, request, view, obj):
@@ -231,7 +245,7 @@ class FeedbackReplyPermission(permissions.BasePermission):
         # Only admins can reply
         return (
             request.user.is_superuser or
-            (hasattr(request.user, 'is_tenant_admin') and request.user.is_tenant_admin)
+            is_tenant_admin(request.user)
         )
 
 
@@ -254,7 +268,7 @@ class FeedbackStatusChangePermission(permissions.BasePermission):
         # Only admins can change status
         return (
             request.user.is_superuser or
-            (hasattr(request.user, 'is_tenant_admin') and request.user.is_tenant_admin)
+            is_tenant_admin(request.user)
         )
 
 
@@ -299,7 +313,7 @@ class StatisticsViewPermission(permissions.BasePermission):
         # Only admins can view statistics
         return (
             request.user.is_superuser or
-            (hasattr(request.user, 'is_tenant_admin') and request.user.is_tenant_admin)
+            is_tenant_admin(request.user)
         )
 
 
@@ -322,8 +336,7 @@ class EmailTemplatePermission(permissions.BasePermission):
             return False
         
         return (
-            hasattr(request.user, 'is_tenant_admin') and 
-            request.user.is_tenant_admin
+            is_tenant_admin(request.user)
         )
     
     def has_object_permission(self, request, view, obj):
@@ -337,8 +350,7 @@ class EmailTemplatePermission(permissions.BasePermission):
             return False
         
         return (
-            hasattr(request.user, 'is_tenant_admin') and 
-            request.user.is_tenant_admin and
+            is_tenant_admin(request.user) and
             hasattr(request, 'tenant') and
             obj.tenant == request.tenant
         )

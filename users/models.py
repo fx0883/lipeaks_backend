@@ -144,10 +144,15 @@ class User(BaseUserModel):
         # 确保is_admin始终为True
         self.is_admin = True
         
-        # 超级管理员同时设置Django内置权限
+        # 管理员用户都设置为staff（可以访问admin和部分API）
+        self.is_staff = True
+        
+        # 超级管理员额外设置Django内置的superuser权限
         if self.is_super_admin:
-            self.is_staff = True
             self.is_superuser = True
+        else:
+            # 租户管理员不是superuser
+            self.is_superuser = False
         
         super().save(*args, **kwargs)
     

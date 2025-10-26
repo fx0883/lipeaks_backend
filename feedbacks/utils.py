@@ -8,8 +8,94 @@ import logging
 from django.conf import settings
 from django.core.cache import cache
 from typing import Optional, Callable, Any
+import re
 
 logger = logging.getLogger(__name__)
+
+
+class EmailValidator:
+    """邮件地址验证工具"""
+    
+    # 更严格的邮件地址验证正则表达式
+    EMAIL_REGEX = re.compile(
+        r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    )
+    
+    # 常见的无效邮件地址模式
+    INVALID_PATTERNS = [
+        r'.*@example\.com$',           # 测试邮箱
+        r'.*@test\.com$',              # 测试邮箱
+        r'.*@localhost$',              # 本地测试
+        r'^test@.*',                   # test开头
+        r'^demo@.*',                   # demo开头
+        r'.*@tempmail\..*',            # 临时邮箱
+        r'.*@10minutemail\..*',        # 临时邮箱
+        r'.*@guerrillamail\..*',       # 临时邮箱
+        r'noreply@.*',                 # 无回复邮箱
+        r'no-reply@.*',                # 无回复邮箱
+    ]
+    
+    @classmethod
+    def is_valid_email(cls, email: str) -> bool:
+        """
+        验证邮件地址是否有效
+        
+        Args:
+            email: 要验证的邮件地址
+            
+        Returns:
+            bool: 是否为有效邮件地址
+        """
+        if not email or not isinstance(email, str):
+            return False
+        
+        # 去除前后空格
+        email = email.strip().lower()
+        
+        if not email:
+            return False
+        
+        # 基本格式验证
+        if not cls.EMAIL_REGEX.match(email):
+            return False
+        
+        # 检查是否包含无效模式
+        for pattern in cls.INVALID_PATTERNS:
+            if re.match(pattern, email, re.IGNORECASE):
+                logger.warning(f"Email {email} matches invalid pattern: {pattern}")
+                return False
+        
+        # 检查长度限制
+        if len(email) > 254:  # RFC 5321 限制
+            return False
+        
+        # 检查本地部分长度（@之前的部分）
+        local_part = email.split('@')[0]
+        if len(local_part) > 64:  # RFC 5321 限制
+            return False
+        
+        return True
+    
+    @classmethod
+    def validate_and_log(cls, email: str, context: str = "") -> bool:
+        """
+        验证邮件地址并记录日志
+        
+        Args:
+            email: 要验证的邮件地址
+            context: 上下文信息，用于日志记录
+            
+        Returns:
+            bool: 是否为有效邮件地址
+        """
+        is_valid = cls.is_valid_email(email)
+        
+        if not is_valid:
+            logger.warning(f"Invalid email address detected{context}: '{email}' - skipping email send")
+        else:
+            logger.debug(f"Email address validated{context}: '{email}'")
+        
+        return is_valid
 
 
 class RedisHealthChecker:

@@ -1,0 +1,262 @@
+{
+  "path": "/feedback",
+  "name": "Feedback",
+  "meta": {
+    "title": "feedback.feedbackManagement",
+    "rank": 10,
+    "showLink": true,
+    "icon": "ri:feedback-line",
+    "showParent": true,
+    "keepAlive": false,
+    "frameLoading": false,
+    "hiddenTag": false
+  },
+  "redirect": "/feedback/dashboard",
+  "children": [
+    {
+      "path": "/feedback/dashboard",
+      "name": "FeedbackDashboard",
+      "meta": {
+        "title": "feedback.dashboard",
+        "rank": 0,
+        "showLink": true,
+        "icon": "ep:data-analysis",
+        "showParent": true,
+        "keepAlive": false,
+        "frameLoading": false,
+        "hiddenTag": false
+      },
+      "component": "/src/views/feedback/dashboard/index.vue"
+    },
+    {
+      "path": "/feedback/software",
+      "name": "FeedbackSoftware",
+      "meta": {
+        "title": "feedback.softwareManagement",
+        "rank": 1,
+        "showLink": true,
+        "icon": "ep:folder-opened",
+        "showParent": true,
+        "keepAlive": false,
+        "frameLoading": false,
+        "hiddenTag": false,
+        "roles": ["admin", "super_admin"]
+      },
+      "children": [
+        {
+          "path": "/feedback/software/categories",
+          "name": "SoftwareCategories",
+          "meta": {
+            "title": "feedback.software.categories",
+            "rank": 0,
+            "showLink": true,
+            "icon": "ep:folder",
+            "showParent": true,
+            "keepAlive": false,
+            "frameLoading": false,
+            "hiddenTag": false
+          },
+          "component": "/src/views/feedback/software/categories/index.vue"
+        },
+        {
+          "path": "/feedback/software/products",
+          "name": "SoftwareProducts",
+          "meta": {
+            "title": "feedback.software.products",
+            "rank": 1,
+            "showLink": true,
+            "icon": "ep:box",
+            "showParent": true,
+            "keepAlive": false,
+            "frameLoading": false,
+            "hiddenTag": false
+          },
+          "component": "/src/views/feedback/software/products/index.vue"
+        },
+        {
+          "path": "/feedback/software/products/create",
+          "name": "SoftwareProductCreate",
+          "meta": {
+            "title": "feedback.software.productCreate",
+            "rank": 0,
+            "showLink": false,
+            "showParent": false,
+            "keepAlive": false,
+            "frameLoading": false,
+            "hiddenTag": false
+          },
+          "component": "/src/views/feedback/software/products/create.vue"
+        },
+        {
+          "path": "/feedback/software/products/detail/:id",
+          "name": "SoftwareProductDetail",
+          "meta": {
+            "title": "feedback.software.productDetail",
+            "rank": 0,
+            "showLink": false,
+            "showParent": false,
+            "keepAlive": false,
+            "frameLoading": false,
+            "hiddenTag": false
+          },
+          "component": "/src/views/feedback/software/products/detail.vue"
+        },
+        {
+          "path": "/feedback/software/versions",
+          "name": "SoftwareVersions",
+          "meta": {
+            "title": "feedback.software.versions",
+            "rank": 2,
+            "showLink": true,
+            "icon": "ep:list",
+            "showParent": true,
+            "keepAlive": false,
+            "frameLoading": false,
+            "hiddenTag": false
+          },
+          "component": "/src/views/feedback/software/versions/index.vue"
+        }
+      ]
+    },
+    {
+      "path": "/feedback/feedbacks",
+      "name": "FeedbackManagement",
+      "meta": {
+        "title": "feedback.feedbacks.list",
+        "rank": 2,
+        "showLink": true,
+        "icon": "ri:message-2-line",
+        "showParent": true,
+        "keepAlive": true,
+        "frameLoading": false,
+        "hiddenTag": false
+      },
+      "children": [
+        {
+          "path": "/feedback/feedbacks/list",
+          "name": "FeedbackList",
+          "meta": {
+            "title": "feedback.feedbacks.list",
+            "rank": 0,
+            "showLink": true,
+            "icon": "ri:file-list-line",
+            "showParent": false,
+            "keepAlive": true,
+            "frameLoading": false,
+            "hiddenTag": false
+          },
+          "component": "/src/views/feedback/feedbacks/index.vue"
+        },
+        {
+          "path": "/feedback/feedbacks/submit",
+          "name": "FeedbackSubmit",
+          "meta": {
+            "title": "feedback.feedbacks.submit",
+            "rank": 1,
+            "showLink": true,
+            "icon": "ep:edit",
+            "showParent": false,
+            "keepAlive": false,
+            "frameLoading": false,
+            "hiddenTag": false
+          },
+          "component": "/src/views/feedback/feedbacks/submit.vue"
+        },
+        {
+          "path": "/feedback/feedbacks/detail/:id",
+          "name": "FeedbackDetail",
+          "meta": {
+            "title": "feedback.feedbacks.detail",
+            "rank": 0,
+            "showLink": false,
+            "showParent": false,
+            "keepAlive": false,
+            "frameLoading": false,
+            "hiddenTag": false
+          },
+          "component": "/src/views/feedback/feedbacks/detail.vue"
+        }
+      ]
+    },
+    {
+      "path": "/feedback/email",
+      "name": "FeedbackEmail",
+      "meta": {
+        "title": "feedback.emailManagement",
+        "rank": 3,
+        "showLink": true,
+        "icon": "ep:message",
+        "showParent": true,
+        "keepAlive": false,
+        "frameLoading": false,
+        "hiddenTag": false,
+        "roles": ["admin", "super_admin"]
+      },
+      "children": [
+        {
+          "path": "/feedback/email/templates",
+          "name": "EmailTemplates",
+          "meta": {
+            "title": "feedback.email.templates",
+            "rank": 0,
+            "showLink": true,
+            "icon": "ep:document",
+            "showParent": true,
+            "keepAlive": false,
+            "frameLoading": false,
+            "hiddenTag": false
+          },
+          "component": "/src/views/feedback/email/templates/index.vue"
+        },
+        {
+          "path": "/feedback/email/logs",
+          "name": "EmailLogs",
+          "meta": {
+            "title": "feedback.email.logs",
+            "rank": 1,
+            "showLink": true,
+            "icon": "ep:document-checked",
+            "showParent": true,
+            "keepAlive": false,
+            "frameLoading": false,
+            "hiddenTag": false
+          },
+          "component": "/src/views/feedback/email/logs/index.vue"
+        }
+      ]
+    },
+    {
+      "path": "/feedback/statistics",
+      "name": "FeedbackStatistics",
+      "meta": {
+        "title": "feedback.statistics",
+        "rank": 4,
+        "showLink": true,
+        "icon": "ep:data-line",
+        "showParent": true,
+        "keepAlive": false,
+        "frameLoading": false,
+        "hiddenTag": false,
+        "roles": ["admin", "super_admin"]
+      },
+      "component": "/src/views/feedback/statistics/index.vue"
+    },
+    {
+      "path": "/feedback/health",
+      "name": "FeedbackHealth",
+      "meta": {
+        "title": "feedback.systemHealth",
+        "rank": 5,
+        "showLink": true,
+        "icon": "ep:monitor",
+        "showParent": true,
+        "keepAlive": false,
+        "frameLoading": false,
+        "hiddenTag": false,
+        "roles": ["admin", "super_admin"]
+      },
+      "component": "/src/views/feedback/health/index.vue"
+    }
+  ]
+}
+

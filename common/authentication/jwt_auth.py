@@ -147,7 +147,8 @@ def generate_jwt_token(user):
         'exp': token_expiry,
         'model_type': model_type,
         'is_admin': getattr(user, 'is_admin', False),
-        'is_super_admin': getattr(user, 'is_super_admin', False)
+        'is_super_admin': getattr(user, 'is_super_admin', False),
+        'is_staff': getattr(user, 'is_staff', False)
     }
     
     # 创建刷新令牌

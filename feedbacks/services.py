@@ -9,6 +9,9 @@ from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
+import time
 
 from .models import (
     Feedback, FeedbackReply, FeedbackStatusHistory,
@@ -19,9 +22,115 @@ from .tasks import (
     send_status_change_email,
     send_verification_email
 )
-from .utils import TaskExecutor, RedisHealthChecker
+from .utils import TaskExecutor, RedisHealthChecker, EmailValidator
 
 logger = logging.getLogger(__name__)
+
+
+class EmailThreadPoolManager:
+    """邮件发送线程池管理器 - 单例模式"""
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        
+        # 配置线程池
+        self.max_workers = getattr(settings, 'EMAIL_THREAD_POOL_SIZE', 3)
+        self.executor = ThreadPoolExecutor(
+            max_workers=self.max_workers,
+            thread_name_prefix='email-sender'
+        )
+        self._initialized = True
+        logger.info(f"Email thread pool initialized with {self.max_workers} workers")
+    
+    def submit_email_task(self, task_func, *args, **kwargs):
+        """提交邮件任务到线程池"""
+        try:
+            future = self.executor.submit(task_func, *args, **kwargs)
+            logger.debug(f"Email task {task_func.__name__} submitted to thread pool")
+            return future
+        except Exception as e:
+            logger.error(f"Failed to submit email task {task_func.__name__}: {str(e)}")
+            return None
+    
+    def shutdown(self, wait=True):
+        """关闭线程池"""
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=wait)
+            logger.info("Email thread pool shutdown")
+
+
+def _process_email_in_background(email_type: str, target_id: int, context: str = ""):
+    """
+    后台邮件处理函数 - 在线程中执行
+    
+    Args:
+        email_type: 邮件类型 ('reply', 'status_change', 'verification')
+        target_id: 目标对象ID
+        context: 上下文信息用于日志
+    """
+    logger.info(f"Background email processing started: {email_type} #{target_id}{context}")
+    
+    try:
+        # 根据邮件类型获取相关对象和邮件地址
+        if email_type == 'reply':
+            reply = FeedbackReply.objects.select_related('feedback').get(pk=target_id)
+            email = reply.feedback.contact_email
+            context_info = f" for reply {target_id}"
+        elif email_type == 'status_change':
+            history = FeedbackStatusHistory.objects.select_related('feedback').get(pk=target_id)
+            email = history.feedback.contact_email
+            context_info = f" for status change {target_id}"
+        elif email_type == 'verification':
+            feedback = Feedback.objects.get(pk=target_id)
+            email = feedback.contact_email
+            context_info = f" for verification {target_id}"
+        else:
+            logger.error(f"Unknown email type: {email_type}")
+            return
+        
+        # 邮件地址验证
+        if not EmailValidator.validate_and_log(email, context_info):
+            logger.info(f"Email sending skipped due to invalid address: {email_type} #{target_id}")
+            return
+        
+        # 执行邮件发送任务
+        task_map = {
+            'reply': send_feedback_reply_email,
+            'status_change': send_status_change_email,
+            'verification': send_verification_email,
+        }
+        
+        task_func = task_map[email_type]
+        
+        # 尝试异步执行，失败则记录错误
+        result = TaskExecutor.execute_task(
+            task_func,
+            target_id,
+            fallback_to_sync=False  # 不使用同步降级
+        )
+        
+        if result.get('mode') == 'failed':
+            logger.error(f"Email task failed: {email_type} #{target_id} - {result.get('error')}")
+        else:
+            logger.info(f"Email task submitted: {email_type} #{target_id} - mode: {result.get('mode')}")
+            
+    except Exception as e:
+        logger.error(f"Background email processing error: {email_type} #{target_id} - {str(e)}")
+
+
+# 获取线程池管理器实例
+_email_thread_pool = EmailThreadPoolManager()
 
 
 class EmailService:
@@ -32,46 +141,51 @@ class EmailService:
         """
         Send email notification for a feedback reply
         
-        支持自动降级：Redis不可用时同步发送
+        ✅ 新版本：使用后台线程池，API立即返回
         
         Args:
             reply: FeedbackReply instance
             
         Returns:
-            dict: 任务执行结果 {'mode': 'async/sync/failed', ...}
+            dict: 提交结果 {'status': 'submitted/skipped', ...}
         """
         try:
             # Don't send for internal notes
             if reply.is_internal_note:
                 logger.info(f"Skipping email for internal note reply {reply.id}")
-                return None
+                return {'status': 'skipped', 'reason': 'internal_note'}
             
-            # 使用TaskExecutor自动处理降级
-            result = TaskExecutor.execute_task(
-                send_feedback_reply_email,
+            # ✅ 提交到后台线程池，API立即返回
+            future = _email_thread_pool.submit_email_task(
+                _process_email_in_background,
+                'reply',
                 reply.id,
-                fallback_to_sync=True
+                f" from API thread {threading.current_thread().name}"
             )
             
-            logger.info(f"Email task executed in {result.get('mode')} mode for reply {reply.id}")
-            return result
+            if future:
+                logger.info(f"Reply email task submitted to thread pool: reply {reply.id}")
+                return {'status': 'submitted', 'mode': 'thread_pool'}
+            else:
+                logger.error(f"Failed to submit reply email task: reply {reply.id}")
+                return {'status': 'failed', 'reason': 'thread_pool_submit_failed'}
             
         except Exception as e:
-            logger.error(f"Failed to send reply email for reply {reply.id}: {str(e)}")
-            return {'mode': 'failed', 'error': str(e)}
+            logger.error(f"Failed to submit reply email task for reply {reply.id}: {str(e)}")
+            return {'status': 'failed', 'error': str(e)}
     
     @staticmethod
     def send_status_notification(status_history: FeedbackStatusHistory) -> Optional[dict]:
         """
         Send email notification for status change
         
-        支持自动降级：Redis不可用时同步发送
+        ✅ 新版本：使用后台线程池，API立即返回
         
         Args:
             status_history: FeedbackStatusHistory instance
             
         Returns:
-            dict: 任务执行结果
+            dict: 提交结果 {'status': 'submitted/skipped', ...}
         """
         try:
             # Only send for significant status changes
@@ -82,54 +196,64 @@ class EmailService:
             change = (status_history.from_status, status_history.to_status)
             if change in insignificant_changes:
                 logger.info(f"Skipping email for insignificant status change: {change}")
-                return None
+                return {'status': 'skipped', 'reason': 'insignificant_change'}
             
-            # 使用TaskExecutor自动处理降级
-            result = TaskExecutor.execute_task(
-                send_status_change_email,
+            # ✅ 提交到后台线程池，API立即返回
+            future = _email_thread_pool.submit_email_task(
+                _process_email_in_background,
+                'status_change',
                 status_history.id,
-                fallback_to_sync=True
+                f" from API thread {threading.current_thread().name}"
             )
             
-            logger.info(f"Status email task executed in {result.get('mode')} mode")
-            return result
+            if future:
+                logger.info(f"Status email task submitted to thread pool: history {status_history.id}")
+                return {'status': 'submitted', 'mode': 'thread_pool'}
+            else:
+                logger.error(f"Failed to submit status email task: history {status_history.id}")
+                return {'status': 'failed', 'reason': 'thread_pool_submit_failed'}
             
         except Exception as e:
-            logger.error(f"Failed to send status email for history {status_history.id}: {str(e)}")
-            return {'mode': 'failed', 'error': str(e)}
+            logger.error(f"Failed to submit status email task for history {status_history.id}: {str(e)}")
+            return {'status': 'failed', 'error': str(e)}
     
     @staticmethod
     def send_verification(feedback: Feedback) -> Optional[dict]:
         """
         Send email verification for anonymous feedback
         
-        支持自动降级：Redis不可用时同步发送
+        ✅ 新版本：使用后台线程池，API立即返回
         
         Args:
             feedback: Feedback instance
             
         Returns:
-            dict: 任务执行结果
+            dict: 提交结果 {'status': 'submitted/skipped', ...}
         """
         try:
             # Only for anonymous users
             if feedback.user or feedback.email_verified:
                 logger.info(f"Skipping verification for feedback {feedback.id}")
-                return None
+                return {'status': 'skipped', 'reason': 'already_verified_or_has_user'}
             
-            # 使用TaskExecutor自动处理降级
-            result = TaskExecutor.execute_task(
-                send_verification_email,
+            # ✅ 提交到后台线程池，API立即返回
+            future = _email_thread_pool.submit_email_task(
+                _process_email_in_background,
+                'verification',
                 feedback.id,
-                fallback_to_sync=True
+                f" from API thread {threading.current_thread().name}"
             )
             
-            logger.info(f"Verification email task executed in {result.get('mode')} mode")
-            return result
+            if future:
+                logger.info(f"Verification email task submitted to thread pool: feedback {feedback.id}")
+                return {'status': 'submitted', 'mode': 'thread_pool'}
+            else:
+                logger.error(f"Failed to submit verification email task: feedback {feedback.id}")
+                return {'status': 'failed', 'reason': 'thread_pool_submit_failed'}
             
         except Exception as e:
-            logger.error(f"Failed to send verification email for feedback {feedback.id}: {str(e)}")
-            return {'mode': 'failed', 'error': str(e)}
+            logger.error(f"Failed to submit verification email task for feedback {feedback.id}: {str(e)}")
+            return {'status': 'failed', 'error': str(e)}
     
     @staticmethod
     def create_default_templates(tenant) -> Dict[str, EmailTemplate]:

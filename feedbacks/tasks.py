@@ -17,6 +17,7 @@ from .models import (
     Feedback, FeedbackReply, FeedbackEmailLog, 
     EmailTemplate, FeedbackStatusHistory
 )
+from .utils import EmailValidator
 
 logger = get_task_logger(__name__)
 
@@ -53,6 +54,10 @@ def send_feedback_reply_email(self, reply_id: int) -> Dict[str, any]:
         if not feedback.user and not feedback.email_verified:
             logger.info(f"Email not verified for anonymous feedback {feedback.id}")
             return {'status': 'skipped', 'reason': 'email_not_verified'}
+        
+        # ✅ 新增：验证邮件地址格式
+        if not EmailValidator.validate_and_log(feedback.contact_email, f" for reply {reply_id}"):
+            return {'status': 'skipped', 'reason': 'invalid_email_address'}
         
         # Get email template
         template = EmailTemplate.objects.filter(
@@ -169,6 +174,10 @@ def send_status_change_email(self, status_history_id: int) -> Dict[str, any]:
             logger.info(f"Email notifications disabled for feedback {feedback.id}")
             return {'status': 'skipped', 'reason': 'notifications_disabled'}
         
+        # ✅ 新增：验证邮件地址格式
+        if not EmailValidator.validate_and_log(feedback.contact_email, f" for status change {status_history_id}"):
+            return {'status': 'skipped', 'reason': 'invalid_email_address'}
+        
         # Get email template
         template = EmailTemplate.objects.filter(
             tenant=feedback.tenant,
@@ -265,6 +274,10 @@ def send_verification_email(self, feedback_id: int) -> Dict[str, any]:
         if feedback.email_verified or feedback.user:
             logger.info(f"Skipping verification for feedback {feedback_id}")
             return {'status': 'skipped', 'reason': 'already_verified_or_has_user'}
+        
+        # ✅ 新增：验证邮件地址格式
+        if not EmailValidator.validate_and_log(feedback.contact_email, f" for verification {feedback_id}"):
+            return {'status': 'skipped', 'reason': 'invalid_email_address'}
         
         # Get email template
         template = EmailTemplate.objects.filter(

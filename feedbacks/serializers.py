@@ -59,15 +59,18 @@ class SoftwareCategorySerializer(serializers.ModelSerializer):
 
 class SoftwareVersionSerializer(serializers.ModelSerializer):
     """Serializer for Software Version"""
+    software_name = serializers.CharField(source='software.name', read_only=True)
+    software_code = serializers.CharField(source='software.code', read_only=True)
     
     class Meta:
         model = SoftwareVersion
         fields = [
-            'id', 'software', 'version', 'version_code', 'release_date',
+            'id', 'software', 'software_name', 'software_code', 
+            'version', 'version_code', 'release_date',
             'release_notes', 'is_stable', 'is_active', 'download_url',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'software_name', 'software_code', 'created_at', 'updated_at']
         
     def validate(self, attrs):
         """Ensure version is unique for the software"""
@@ -228,7 +231,7 @@ class FeedbackReplySerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'user', 'email_sent', 'email_sent_at',
+            'id', 'feedback', 'user', 'email_sent', 'email_sent_at',
             'created_at', 'updated_at'
         ]
         
@@ -246,6 +249,24 @@ class FeedbackReplySerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             validated_data['user'] = request.user
         return super().create(validated_data)
+
+
+class FeedbackReplyCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating Feedback Replies (without feedback field)"""
+    
+    class Meta:
+        model = FeedbackReply
+        fields = [
+            'content', 'is_internal_note'
+        ]
+        
+    def validate_content(self, value):
+        """Ensure content is not empty"""
+        if not value or not value.strip():
+            raise serializers.ValidationError(
+                _("Reply content cannot be empty.")
+            )
+        return value
 
 
 class FeedbackStatusHistorySerializer(serializers.ModelSerializer):
@@ -328,6 +349,11 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
         required=False,
         write_only=True
     )
+    contact_email = serializers.EmailField(
+        required=False,
+        allow_blank=True,
+        help_text="Email for replies (required for anonymous users)"
+    )
     
     class Meta:
         model = Feedback
@@ -339,13 +365,8 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
         
     def validate(self, attrs):
         """Validate feedback data"""
-        # Check if user is authenticated or email is provided
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            if not attrs.get('contact_email'):
-                raise serializers.ValidationError({
-                    'contact_email': _("Email is required for anonymous feedback.")
-                })
+        # ✅ Email对所有用户都是可选的（匿名用户和已登录用户）
+        # 不再强制要求匿名用户提供email
         
         # Validate software version belongs to software
         software = attrs.get('software')
@@ -364,9 +385,23 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
         # Set user if authenticated
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            validated_data['user'] = request.user
+            # ✅ 只有User类型才设置user字段，Member类型不设置
+            # 通过表名判断用户类型
+            user_table_name = request.user._meta.db_table
+            if user_table_name == 'user':  # User模型
+                validated_data['user'] = request.user
+            # else: Member或其他类型，不设置user字段（保持None）
+            
+            # ✅ 对于已登录用户，如果没有提供contact_email，尝试从用户获取
             if not validated_data.get('contact_email'):
-                validated_data['contact_email'] = request.user.email
+                user_email = getattr(request.user, 'email', None)
+                if user_email and user_email.strip():  # 检查email不为空
+                    validated_data['contact_email'] = user_email
+                # 如果用户没有email，contact_email保持为None（已登录用户可选）
+            
+            # ✅ 如果没有提供contact_name，使用用户名
+            if not validated_data.get('contact_name'):
+                validated_data['contact_name'] = request.user.username
         
         # Set IP and user agent
         if request:
@@ -457,9 +492,12 @@ class FeedbackDetailSerializer(serializers.ModelSerializer):
         """Get current user's vote on this feedback"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            vote = obj.votes.filter(user=request.user).first()
-            if vote:
-                return vote.vote_type
+            # ✅ 只有User类型可以投票，Member类型返回None
+            user_table_name = request.user._meta.db_table
+            if user_table_name == 'user':
+                vote = obj.votes.filter(user=request.user).first()
+                if vote:
+                    return vote.vote_type
         return None
 
 
