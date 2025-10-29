@@ -25,7 +25,7 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'slug', 'description', 'parent', 
             'cover_image', 'created_at', 'updated_at', 'sort_order',
-            'tenant', 'is_active', 'seo_title', 'seo_description'
+            'tenant', 'is_active', 'is_pinned', 'seo_title', 'seo_description'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
 

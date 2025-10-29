@@ -100,6 +100,7 @@ INSTALLED_APPS = [
     'licenses',  # 许可证管理应用
     'points',  # 多租户积分系统
     'feedbacks',  # User Feedback System
+    'interactions',  # 用户互动应用（收藏、点赞等）
 ]
 
 MIDDLEWARE = [

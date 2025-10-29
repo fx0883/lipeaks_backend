@@ -748,17 +748,57 @@ class ArticleViewSet(TenantModelViewSet):
 
     @extend_schema(
         summary="发布文章",
-        description="将文章状态改为已发布",
+        description="""将文章状态改为已发布。
+        
+**权限要求**:
+- 需要认证（登录）
+- Member: 只能发布自己的文章
+- Admin: 可以发布本租户所有文章
+- Super Admin: 需通过X-Tenant-ID指定租户，可发布该租户文章
+
+**业务规则**:
+- 文章当前状态必须不是'published'
+- 发布成功后自动设置published_at为当前时间
+- 会记录操作日志
+
+**使用场景**: Member创建草稿后，可以调用此接口将文章发布到前台展示
+        """,
         tags=["CMS-文章管理"],
         parameters=[
             OpenApiParameter(name="id", description="文章ID", required=True, type=OpenApiTypes.INT, location=OpenApiParameter.PATH),
-            OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=False, type=str, location=OpenApiParameter.HEADER),
+            OpenApiParameter(name="X-Tenant-ID", description="租户ID（必须）", required=True, type=str, location=OpenApiParameter.HEADER),
         ],
         responses={
-            200: OpenApiResponse(description="发布成功"),
-            403: OpenApiResponse(description="权限不足"),
-            404: OpenApiResponse(description="文章不存在"),
-        }
+            200: OpenApiResponse(
+                description="发布成功",
+                response={
+                    'type': 'object',
+                    'properties': {
+                        'message': {'type': 'string', 'example': '文章已成功发布'},
+                        'id': {'type': 'integer', 'example': 15},
+                        'status': {'type': 'string', 'example': 'published'},
+                        'published_at': {'type': 'string', 'format': 'date-time', 'example': '2024-01-20T10:30:00Z'}
+                    }
+                }
+            ),
+            400: OpenApiResponse(description="请求错误，例如文章已经是发布状态"),
+            403: OpenApiResponse(description="权限不足，例如Member尝试发布别人的文章"),
+            404: OpenApiResponse(description="文章不存在或不属于当前租户"),
+        },
+        examples=[
+            OpenApiExample(
+                'Publish Article Success',
+                summary='发布文章成功示例',
+                description='Member发布自己的文章',
+                value={
+                    'message': '文章已成功发布',
+                    'id': 15,
+                    'status': 'published',
+                    'published_at': '2024-01-20T10:30:00Z'
+                },
+                response_only=True,
+            )
+        ]
     )
     @action(detail=True, methods=['post'], url_path='publish')
     def publish(self, request, pk=None):
@@ -766,10 +806,10 @@ class ArticleViewSet(TenantModelViewSet):
         article = self.get_object()
         user = request.user
         
-        # Member 不能进行写操作
-        if is_member(user):
+        # 权限检查：Member只能发布自己的文章，Admin可以发布本租户所有文章
+        if is_member(user) and article.author_id != user.id:
             return Response(
-                {"detail": _("普通成员没有权限进行此操作")},
+                {"detail": _("您只能发布自己创建的文章")},
                 status=status.HTTP_403_FORBIDDEN
             )
         
@@ -812,23 +852,68 @@ class ArticleViewSet(TenantModelViewSet):
     
     @extend_schema(
         summary="取消发布文章",
-        description="将文章状态改为草稿",
+        description="""将文章状态从已发布改为草稿。
+        
+**权限要求**:
+- 需要认证（登录）
+- Member: 只能取消发布自己的文章
+- Admin: 可以取消发布本租户所有文章
+- Super Admin: 需通过X-Tenant-ID指定租户
+
+**业务规则**:
+- 文章当前状态必须是'published'
+- 取消发布后状态变为'draft'（草稿）
+- published_at时间戳保持不变
+- 会记录操作日志
+
+**使用场景**: Member发现文章有问题需要下线修改，可调用此接口将文章改为草稿
+        """,
         tags=["CMS-文章管理"],
         parameters=[
             OpenApiParameter(name="id", description="文章ID", required=True, type=OpenApiTypes.INT, location=OpenApiParameter.PATH),
-            OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=False, type=str, location=OpenApiParameter.HEADER),
+            OpenApiParameter(name="X-Tenant-ID", description="租户ID（必须）", required=True, type=str, location=OpenApiParameter.HEADER),
         ],
         responses={
-            200: OpenApiResponse(description="取消发布成功"),
+            200: OpenApiResponse(
+                description="取消发布成功",
+                response={
+                    'type': 'object',
+                    'properties': {
+                        'message': {'type': 'string', 'example': '文章已取消发布'},
+                        'id': {'type': 'integer', 'example': 15},
+                        'status': {'type': 'string', 'example': 'draft'}
+                    }
+                }
+            ),
+            400: OpenApiResponse(description="请求错误，例如文章不是发布状态"),
             403: OpenApiResponse(description="权限不足"),
             404: OpenApiResponse(description="文章不存在"),
-        }
+        },
+        examples=[
+            OpenApiExample(
+                'Unpublish Article Success',
+                summary='取消发布成功示例',
+                value={
+                    'message': '文章已取消发布',
+                    'id': 15,
+                    'status': 'draft'
+                },
+                response_only=True,
+            )
+        ]
     )
     @action(detail=True, methods=['post'], url_path='unpublish')
     def unpublish(self, request, pk=None):
         """取消发布文章"""
         article = self.get_object()
         user = request.user
+        
+        # 权限检查：Member只能取消发布自己的文章
+        if is_member(user) and article.author_id != user.id:
+            return Response(
+                {"detail": _("您只能取消发布自己创建的文章")},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # 验证文章是否为发布状态
         if article.status != 'published':
@@ -867,23 +952,68 @@ class ArticleViewSet(TenantModelViewSet):
     
     @extend_schema(
         summary="归档文章",
-        description="将文章状态改为归档",
+        description="""将文章状态改为归档。归档的文章不会在前台展示，但保留在数据库中。
+        
+**权限要求**:
+- 需要认证（登录）
+- Member: 只能归档自己的文章
+- Admin: 可以归档本租户所有文章
+- Super Admin: 需通过X-Tenant-ID指定租户
+
+**业务规则**:
+- 任何状态的文章都可以归档
+- 归档后状态变为'archived'
+- 归档的文章匿名用户无法访问
+- 会记录操作日志
+
+**使用场景**: Member想要隐藏过时或不再需要的文章，但又不想完全删除
+        """,
         tags=["CMS-文章管理"],
         parameters=[
             OpenApiParameter(name="id", description="文章ID", required=True, type=OpenApiTypes.INT, location=OpenApiParameter.PATH),
-            OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=False, type=str, location=OpenApiParameter.HEADER),
+            OpenApiParameter(name="X-Tenant-ID", description="租户ID（必须）", required=True, type=str, location=OpenApiParameter.HEADER),
         ],
         responses={
-            200: OpenApiResponse(description="归档成功"),
+            200: OpenApiResponse(
+                description="归档成功",
+                response={
+                    'type': 'object',
+                    'properties': {
+                        'message': {'type': 'string', 'example': '文章已归档'},
+                        'id': {'type': 'integer', 'example': 15},
+                        'status': {'type': 'string', 'example': 'archived'}
+                    }
+                }
+            ),
+            400: OpenApiResponse(description="请求错误，例如文章已经是归档状态"),
             403: OpenApiResponse(description="权限不足"),
             404: OpenApiResponse(description="文章不存在"),
-        }
+        },
+        examples=[
+            OpenApiExample(
+                'Archive Article Success',
+                summary='归档文章成功示例',
+                value={
+                    'message': '文章已归档',
+                    'id': 15,
+                    'status': 'archived'
+                },
+                response_only=True,
+            )
+        ]
     )
     @action(detail=True, methods=['post'], url_path='archive')
     def archive(self, request, pk=None):
         """归档文章"""
         article = self.get_object()
         user = request.user
+        
+        # 权限检查：Member只能归档自己的文章
+        if is_member(user) and article.author_id != user.id:
+            return Response(
+                {"detail": _("您只能归档自己创建的文章")},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # 验证文章是否已是归档状态
         if article.status == 'archived':
@@ -1058,13 +1188,15 @@ class ArticleViewSet(TenantModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         summary="获取分类列表",
-        description="获取文章分类列表，支持分页、过滤和搜索",
+        description="获取文章分类列表，支持分页、过滤和搜索。默认按置顶、排序、名称排序。",
         tags=["CMS-分类管理"],
         parameters=[
             OpenApiParameter(name="parent", description="父分类ID", required=False, type=int),
             OpenApiParameter(name="is_active", description="是否激活", required=False, type=bool),
+            OpenApiParameter(name="is_pinned", description="是否置顶", required=False, type=bool),
             OpenApiParameter(name="search", description="搜索关键词", required=False, type=str),
-            OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=False, type=str, location=OpenApiParameter.HEADER),
+            OpenApiParameter(name="ordering", description="排序字段（可选：sort_order, name, created_at, is_pinned）", required=False, type=str),
+            OpenApiParameter(name="X-Tenant-ID", description="租户ID（必须）", required=True, type=str, location=OpenApiParameter.HEADER),
         ],
         responses={
             200: CategorySerializer(many=True),
@@ -1110,6 +1242,7 @@ class ArticleViewSet(TenantModelViewSet):
                     'parent': None,
                     'cover_image': 'https://example.com/images/tech.jpg',
                     'is_active': True,
+                    'is_pinned': False,
                     'seo_title': '技术博客 - 分享技术知识',
                     'seo_description': '分享最新的技术知识和教程'
                 },
@@ -1173,10 +1306,10 @@ class CategoryViewSet(TenantModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [CategoryPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['parent', 'is_active']
+    filterset_fields = ['parent', 'is_active', 'is_pinned']
     search_fields = ['name', 'slug', 'description']
-    ordering_fields = ['sort_order', 'name', 'created_at']
-    ordering = ['sort_order', 'name']
+    ordering_fields = ['sort_order', 'name', 'created_at', 'is_pinned']
+    ordering = ['-is_pinned', 'sort_order', 'name']
     pagination_class = None  # 禁用分页
     queryset = Category.objects.all().select_related('parent', 'tenant')  # 添加select_related优化查询
     

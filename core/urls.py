@@ -114,6 +114,9 @@ urlpatterns = [
         # User Feedback System
         path('feedbacks/', include('feedbacks.urls', namespace='feedbacks')),
         
+        # 用户互动系统路由（收藏、点赞等）
+        path('interactions/', include('interactions.urls', namespace='interactions')),
+        
         # 图表数据API
         path('admin/charts/', include('charts.urls', namespace='charts')),
         

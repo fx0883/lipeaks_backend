@@ -197,6 +197,7 @@ class Category(models.Model):
         verbose_name=_("所属租户")
     )
     is_active = models.BooleanField(_("是否激活"), default=True)
+    is_pinned = models.BooleanField(_("是否置顶"), default=False)
     seo_title = models.CharField(_("SEO标题"), max_length=255, blank=True, null=True)
     seo_description = models.TextField(_("SEO描述"), blank=True, null=True)
     
@@ -204,12 +205,14 @@ class Category(models.Model):
         verbose_name = _('分类')
         verbose_name_plural = _('分类')
         db_table = 'cms_category'
-        ordering = ['sort_order', 'name']
+        ordering = ['-is_pinned', 'sort_order', 'name']
         indexes = [
             models.Index(fields=['parent']),
             models.Index(fields=['is_active']),
+            models.Index(fields=['is_pinned']),
             models.Index(fields=['tenant', 'parent']),
             models.Index(fields=['tenant', 'is_active']),
+            models.Index(fields=['tenant', 'is_pinned']),
         ]
     
     def __str__(self):
