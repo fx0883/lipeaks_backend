@@ -1320,12 +1320,20 @@ class CategoryViewSet(TenantModelViewSet):
         - 匿名用户: 可以查看所有激活的分类
         - 已认证用户: 根据租户过滤
         """
+        from common.utils.tenant_context import get_current_tenant
+        
         queryset = super().get_queryset()
         
         # 匿名用户只能看到激活的分类
         user = self.request.user
         if not user.is_authenticated:
-            return queryset.filter(is_active=True)
+            # 从中间件设置的租户上下文获取租户
+            current_tenant = get_current_tenant()
+            if current_tenant:
+                return queryset.filter(is_active=True, tenant=current_tenant)
+            else:
+                # 如果没有租户ID，返回空查询集
+                return queryset.none()
         
         # 基于租户的过滤
         if not is_super_admin(user):
@@ -1498,12 +1506,23 @@ class CategoryViewSet(TenantModelViewSet):
     @action(detail=False, methods=['get'], url_path='tree')
     def get_category_tree(self, request):
         """获取分类树形结构"""
+        from common.utils.tenant_context import get_current_tenant
+        
         user = request.user
         
         # 获取所有顶级分类
         if not user.is_authenticated:
-            # 匿名用户只能看到激活的分类
-            root_categories = Category.objects.filter(parent=None, is_active=True)
+            # 匿名用户：使用中间件设置的租户上下文
+            current_tenant = get_current_tenant()
+            if current_tenant:
+                root_categories = Category.objects.filter(
+                    parent=None, 
+                    is_active=True, 
+                    tenant=current_tenant
+                )
+            else:
+                # 如果没有租户ID，返回空列表
+                return Response([])
         elif is_super_admin(user):
             root_categories = Category.objects.filter(parent=None)
         else:
@@ -1512,8 +1531,16 @@ class CategoryViewSet(TenantModelViewSet):
         def build_tree(category):
             """递归构建分类树"""
             if not user.is_authenticated:
-                # 匿名用户只能看到激活的子分类
-                children = Category.objects.filter(parent=category, is_active=True)
+                # 匿名用户：使用租户过滤子分类
+                current_tenant = get_current_tenant()
+                if current_tenant:
+                    children = Category.objects.filter(
+                        parent=category, 
+                        is_active=True, 
+                        tenant=current_tenant
+                    )
+                else:
+                    children = Category.objects.none()
             else:
                 children = Category.objects.filter(parent=category)
                 
@@ -1658,12 +1685,20 @@ class TagGroupViewSet(TenantModelViewSet):
         - 匿名用户: 可以查看所有激活的标签组
         - 已认证用户: 根据租户过滤
         """
+        from common.utils.tenant_context import get_current_tenant
+        
         queryset = super().get_queryset()
         
         # 匿名用户只能看到激活的标签组
         user = self.request.user
         if not user.is_authenticated:
-            return queryset.filter(is_active=True)
+            # 从中间件设置的租户上下文获取租户
+            current_tenant = get_current_tenant()
+            if current_tenant:
+                return queryset.filter(is_active=True, tenant=current_tenant)
+            else:
+                # 如果没有租户ID，返回空查询集
+                return queryset.none()
         
         # 基于租户的过滤
         if not is_super_admin(user):
@@ -1896,12 +1931,20 @@ class TagViewSet(TenantModelViewSet):
         - 匿名用户: 可以查看所有激活的标签
         - 已认证用户: 根据租户过滤
         """
+        from common.utils.tenant_context import get_current_tenant
+        
         queryset = super().get_queryset()
         
         # 匿名用户只能看到激活的标签
         user = self.request.user
         if not user.is_authenticated:
-            return queryset.filter(is_active=True)
+            # 从中间件设置的租户上下文获取租户
+            current_tenant = get_current_tenant()
+            if current_tenant:
+                return queryset.filter(is_active=True, tenant=current_tenant)
+            else:
+                # 如果没有租户ID，返回空查询集
+                return queryset.none()
         
         # 基于租户的过滤
         if not is_super_admin(user):
@@ -2029,14 +2072,24 @@ class TagViewSet(TenantModelViewSet):
     @action(detail=False, methods=['get'], url_path='usage-stats')
     def get_usage_stats(self, request):
         """获取标签使用统计"""
+        from common.utils.tenant_context import get_current_tenant
+        
         user = request.user
         
         # 获取标签及其使用次数
         if not user.is_authenticated:
-            # 匿名用户只能看到激活的标签
-            tags_with_count = Tag.objects.filter(is_active=True).annotate(
-                articles_count=Count('article_tags')
-            ).values('id', 'name', 'slug', 'color', 'articles_count')
+            # 匿名用户：使用租户过滤
+            current_tenant = get_current_tenant()
+            if current_tenant:
+                tags_with_count = Tag.objects.filter(
+                    is_active=True, 
+                    tenant=current_tenant
+                ).annotate(
+                    articles_count=Count('article_tags')
+                ).values('id', 'name', 'slug', 'color', 'articles_count')
+            else:
+                # 如果没有租户ID，返回空列表
+                return Response([])
         elif is_super_admin(user):
             tags_with_count = Tag.objects.annotate(
                 articles_count=Count('article_tags')
@@ -2187,12 +2240,20 @@ class CommentViewSet(TenantModelViewSet):
         - 已认证用户: 可以查看已批准的评论和自己的评论
         - 管理员: 可以查看所有评论
         """
+        from common.utils.tenant_context import get_current_tenant
+        
         queryset = super().get_queryset()
         
         # 匿名用户只能看到已批准的评论
         user = self.request.user
         if not user.is_authenticated:
-            return queryset.filter(status='approved')
+            # 从中间件设置的租户上下文获取租户
+            current_tenant = get_current_tenant()
+            if current_tenant:
+                return queryset.filter(status='approved', tenant=current_tenant)
+            else:
+                # 如果没有租户ID，返回空查询集
+                return queryset.none()
         
         # 基于租户的过滤
         if not is_super_admin(user):
@@ -2410,13 +2471,21 @@ class CommentViewSet(TenantModelViewSet):
     @action(detail=True, methods=['get'], url_path='replies')
     def replies(self, request, pk=None):
         """获取评论的回复"""
+        from common.utils.tenant_context import get_current_tenant
+        
         comment = self.get_object()
         replies = Comment.objects.filter(parent=comment)
         
         # 匿名用户只能看到已批准的评论
         user = request.user
         if not user.is_authenticated:
-            replies = replies.filter(status='approved')
+            # 从中间件设置的租户上下文获取租户
+            current_tenant = get_current_tenant()
+            if current_tenant:
+                replies = replies.filter(status='approved', tenant=current_tenant)
+            else:
+                # 如果没有租户ID，返回空查询集
+                replies = replies.none()
         # 非管理员且已认证用户只能看到已批准的评论或自己的评论
         elif not (is_super_admin(user) or is_admin(user) or user.id == comment.article.author_id):
             replies = replies.filter(

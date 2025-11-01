@@ -40,7 +40,7 @@ SUSPICIOUS_IP_CHECK_HOURS = int(os.environ.get('SUSPICIOUS_IP_CHECK_HOURS', '1')
 
 # 可疑活动检测 - 许可证频率限制配置  
 # 控制同一许可证的重复激活频率，防止许可证滥用
-SUSPICIOUS_LICENSE_ACTIVATION_LIMIT = int(os.environ.get('SUSPICIOUS_LICENSE_ACTIVATION_LIMIT', '3'))
+SUSPICIOUS_LICENSE_ACTIVATION_LIMIT = int(os.environ.get('SUSPICIOUS_LICENSE_ACTIVATION_LIMIT', '13'))
 SUSPICIOUS_LICENSE_CHECK_MINUTES = int(os.environ.get('SUSPICIOUS_LICENSE_CHECK_MINUTES', '30'))
 
 # ========================================================================
