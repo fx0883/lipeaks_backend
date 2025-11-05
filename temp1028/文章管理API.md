@@ -16,8 +16,11 @@ Base: `/api/v1/cms/articles/`
 ## 1. 获取文章列表 GET /
 - 参数：
   - `page`, `page_size`
+  - `id` (integer) - **文章ID过滤**，支持精确查询单篇或多篇文章（可多次传递，如 `?id=782&id=783`）
   - `status` (draft|pending|published|archived)
   - `category_id`, `tag_id`, `author_id`
+  - `parent_id` (integer) - 父文章ID，查询指定父文章的子文章
+  - `has_parent` (true|false) - true返回所有子文章，false返回所有根文章
   - `search`
   - `sort` (created_at|updated_at|published_at|title|views_count)
   - `sort_direction` (asc|desc)
@@ -27,9 +30,40 @@ Base: `/api/v1/cms/articles/`
 - Headers：必须包含 `X-Tenant-ID`。
 - 示例：
 ```bash
+# 基本查询：获取已发布文章
 curl -X GET "http://your-domain.com/api/v1/cms/articles/?status=published&search=demo" \
   -H "Authorization: Bearer <token>" -H "X-Tenant-ID: 1"
+
+# 通过ID精确查询单篇文章（列表接口方式）
+curl -X GET "http://your-domain.com/api/v1/cms/articles/?id=782&status=published" \
+  -H "Authorization: Bearer <token>" -H "X-Tenant-ID: 1"
+
+# 通过ID查询多篇文章
+curl -X GET "http://your-domain.com/api/v1/cms/articles/?id=782&id=783&id=784" \
+  -H "Authorization: Bearer <token>" -H "X-Tenant-ID: 1"
+
+# 查询指定父文章的子文章
+curl -X GET "http://your-domain.com/api/v1/cms/articles/?status=published&parent_id=14" \
+  -H "Authorization: Bearer <token>" -H "X-Tenant-ID: 1"
+
+# 查询所有根文章（无父文章的文章）
+curl -X GET "http://your-domain.com/api/v1/cms/articles/?status=published&has_parent=false" \
+  -H "Authorization: Bearer <token>" -H "X-Tenant-ID: 1"
+
+# 查询所有子文章（有父文章的文章）
+curl -X GET "http://your-domain.com/api/v1/cms/articles/?status=published&has_parent=true" \
+  -H "Authorization: Bearer <token>" -H "X-Tenant-ID: 1"
 ```
+- **层级结构查询参数说明**：
+  - `parent_id`：查询特定父文章的直接子文章
+    - 示例：`parent_id=14` 返回parent_id为14的所有子文章
+    - 用途：构建系列文章、章节导航等
+  - `has_parent`：按是否有父文章过滤
+    - `has_parent=true`：返回所有有父文章的文章（所有子文章）
+    - `has_parent=false`：返回所有根文章（没有父文章的文章）
+    - 用途：区分顶层文章和子文章
+  - 注意：`parent_id` 和 `has_parent` 可以组合使用其他过滤条件（如status、category_id等）
+
 - 响应（节选）：
 ```json
 {
@@ -41,7 +75,9 @@ curl -X GET "http://your-domain.com/api/v1/cms/articles/?status=published&search
     "cover_image": "https://.../image.jpg",
     "categories": [{"id":3,"name":"技术","slug":"tech"}],
     "tags": [{"id":8,"name":"Python","slug":"python","color":"#3776AB"}],
-    "comments_count": 15, "likes_count": 42, "views_count": 1250
+    "comments_count": 15, "likes_count": 42, "views_count": 1250,
+    "parent": 14, "parent_info": {"id":14,"title":"父文章标题","slug":"parent-slug"},
+    "children_count": 3
   }]
 }
 ```

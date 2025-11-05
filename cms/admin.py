@@ -4,6 +4,7 @@ CMS系统管理后台配置
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 from django.db.models import Count
+from parler.admin import TranslatableAdmin
 from .models import (
     Article, 
     Category, 
@@ -104,14 +105,108 @@ class ArticleAdmin(CMSAdminMixin, admin.ModelAdmin):
         return False
 
 @admin.register(Category)
-class CategoryAdmin(CMSAdminMixin, admin.ModelAdmin):
-    list_display = ['name', 'parent', 'is_active', 'article_count', 'created_at']
+class CategoryAdmin(CMSAdminMixin, TranslatableAdmin, admin.ModelAdmin):
+    """分类管理（支持多语言）"""
+    list_display = ['name', 'slug', 'parent', 'is_active', 'translation_status', 'article_count', 'created_at']
     list_filter = ['is_active', 'parent', 'tenant']
-    search_fields = ['name', 'description']
-    prepopulated_fields = {'slug': ('name',)}
+    search_fields = ['translations__name', 'translations__description', 'slug']  # 搜索翻译字段
     autocomplete_fields = ['parent', 'tenant']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'show_all_translations']
     list_per_page = 30
+    
+    # parler配置 - 明确定义翻译字段在fieldsets中的位置
+    fieldsets = (
+        (_('基本信息'), {
+            'fields': ('slug', 'parent', 'cover_image', 'tenant'),
+            'description': '这些字段对所有语言共享，只需填写一次'
+        }),
+        (_('多语言内容'), {
+            'fields': ('name', 'description', 'seo_title', 'seo_description'),
+            'description': '这些字段支持多语言，请切换上方的语言标签分别填写不同语言的内容'
+        }),
+        (_('翻译状态'), {
+            'fields': ('show_all_translations',),
+            'classes': ('collapse',),
+            'description': '查看当前分类的所有语言翻译情况'
+        }),
+        (_('显示设置'), {
+            'fields': ('sort_order', 'is_active', 'is_pinned')
+        }),
+        (_('时间信息'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def translation_status(self, obj):
+        """显示翻译状态：哪些语言已翻译"""
+        from django.utils.html import format_html
+        
+        translations = obj.translations.all()
+        lang_codes = [t.language_code for t in translations]
+        
+        status_icons = []
+        lang_map = {
+            'zh-hans': ('简', '#4CAF50'),
+            'en': ('EN', '#2196F3'),
+            'zh-hant': ('繁', '#FF9800'),
+            'ja': ('日', '#F44336'),
+            'ko': ('한', '#9C27B0'),
+            'fr': ('FR', '#3F51B5')
+        }
+        
+        for code, (label, color) in lang_map.items():
+            if code in lang_codes:
+                status_icons.append(
+                    f'<span style="background:{color};color:white;padding:2px 6px;border-radius:3px;margin:0 2px;font-size:11px;">{label}</span>'
+                )
+            else:
+                status_icons.append(
+                    f'<span style="background:#ccc;color:white;padding:2px 6px;border-radius:3px;margin:0 2px;font-size:11px;">{label}</span>'
+                )
+        
+        return format_html(''.join(status_icons))
+    
+    translation_status.short_description = _('翻译状态')
+    
+    def show_all_translations(self, obj):
+        """显示所有语言的翻译详情"""
+        from django.utils.html import format_html
+        
+        if not obj.pk:
+            return '保存后显示翻译信息'
+        
+        translations = obj.translations.all()
+        if not translations:
+            return format_html('<p style="color:#f44336;">暂无翻译数据</p>')
+        
+        html = '<table style="width:100%;border-collapse:collapse;margin-top:10px;">'
+        html += '<tr style="background:#f5f5f5;"><th style="padding:8px;border:1px solid #ddd;">语言</th>'
+        html += '<th style="padding:8px;border:1px solid #ddd;">名称</th>'
+        html += '<th style="padding:8px;border:1px solid #ddd;">描述</th>'
+        html += '<th style="padding:8px;border:1px solid #ddd;">SEO标题</th></tr>'
+        
+        lang_names = {
+            'zh-hans': '简体中文',
+            'en': 'English',
+            'zh-hant': '繁体中文',
+            'ja': '日本語',
+            'ko': '한국어',
+            'fr': 'Français'
+        }
+        
+        for trans in translations:
+            html += f'<tr><td style="padding:8px;border:1px solid #ddd;"><strong>{lang_names.get(trans.language_code, trans.language_code)}</strong></td>'
+            html += f'<td style="padding:8px;border:1px solid #ddd;">{trans.name or "-"}</td>'
+            html += f'<td style="padding:8px;border:1px solid #ddd;">{(trans.description[:50] + "...") if trans.description and len(trans.description) > 50 else (trans.description or "-")}</td>'
+            html += f'<td style="padding:8px;border:1px solid #ddd;">{trans.seo_title or "-"}</td></tr>'
+        
+        html += '</table>'
+        html += '<p style="margin-top:10px;color:#666;font-size:12px;">💡 提示：点击上方的语言标签可切换编辑不同语言的内容</p>'
+        
+        return format_html(html)
+    
+    show_all_translations.short_description = _('所有语言翻译')
     
 
     

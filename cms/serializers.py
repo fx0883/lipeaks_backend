@@ -8,6 +8,8 @@ from django.utils import timezone
 from users.serializers import UserSerializer
 from tenants.serializers import TenantSerializer
 from common.utils.image_url import add_domain_to_image_url
+from parler_rest.serializers import TranslatableModelSerializer, TranslatedFieldsField
+from parler_rest.fields import TranslatedField
 
 from .models import (
     Article, Category, Tag, TagGroup, Comment, 
@@ -17,17 +19,40 @@ from .models import (
 )
 
 
-class CategorySerializer(serializers.ModelSerializer):
-    """分类序列化器"""
+class CategorySerializer(TranslatableModelSerializer):
+    """分类序列化器（支持多语言）"""
+    translations = TranslatedFieldsField(shared_model=Category)
     
     class Meta:
         model = Category
         fields = [
-            'id', 'name', 'slug', 'description', 'parent', 
-            'cover_image', 'created_at', 'updated_at', 'sort_order',
-            'tenant', 'is_active', 'is_pinned', 'seo_title', 'seo_description'
+            'id', 'slug', 'parent', 'cover_image', 'created_at', 'updated_at', 
+            'sort_order', 'tenant', 'is_active', 'is_pinned',
+            'translations',  # 包含所有语言的翻译
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
+    
+    def to_representation(self, instance):
+        """
+        自定义序列化输出，添加当前语言的字段（向后兼容）
+        """
+        data = super().to_representation(instance)
+        
+        # 获取当前语言的翻译，如果没有则使用默认语言
+        current_language = self.context.get('request').META.get('HTTP_ACCEPT_LANGUAGE', 'zh-hans').split(',')[0].strip()
+        if current_language not in ['zh-hans', 'en', 'zh-hant', 'ja', 'ko', 'fr']:
+            current_language = 'zh-hans'
+        
+        # 尝试获取当前语言的翻译
+        instance.set_current_language(current_language, initialize=True)
+        
+        # 添加单语言字段
+        data['name'] = instance.safe_translation_getter('name', any_language=True) or ''
+        data['description'] = instance.safe_translation_getter('description', any_language=True) or ''
+        data['seo_title'] = instance.safe_translation_getter('seo_title', any_language=True) or ''
+        data['seo_description'] = instance.safe_translation_getter('seo_description', any_language=True) or ''
+        
+        return data
 
 
 class TagGroupSerializer(serializers.ModelSerializer):
@@ -134,10 +159,15 @@ class CommentSerializer(serializers.ModelSerializer):
 
 class SimpleCategorySerializer(serializers.ModelSerializer):
     """简化的分类序列化器，用于嵌套在文章序列化器中"""
+    name = serializers.SerializerMethodField()
     
     class Meta:
         model = Category
         fields = ['id', 'name', 'slug']
+    
+    def get_name(self, obj):
+        """获取分类名称（自动处理多语言）"""
+        return obj.safe_translation_getter('name', any_language=True) or obj.slug
 
 
 class SimpleTagSerializer(serializers.ModelSerializer):

@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'drf_spectacular',
     'drf_spectacular_sidecar',  # 提供Swagger UI和ReDoc的静态资源
+    'parler',  # 多语言支持
     
     # 自定义应用
     'common',
@@ -534,3 +535,25 @@ CELERY_BEAT_SCHEDULE = {
         'args': (90,)  # Keep logs for 90 days
     },
 }
+
+# ============================================================================
+# Django Parler Configuration (多语言支持)
+# ============================================================================
+
+PARLER_LANGUAGES = {
+    None: (
+        {'code': 'zh-hans', 'name': 'Simplified Chinese'},  # 简体中文
+        {'code': 'en', 'name': 'English'},                  # 英文
+        {'code': 'zh-hant', 'name': 'Traditional Chinese'}, # 繁体中文
+        {'code': 'ja', 'name': 'Japanese'},                 # 日语
+        {'code': 'ko', 'name': 'Korean'},                   # 韩语
+        {'code': 'fr', 'name': 'French'},                   # 法语
+    ),
+    'default': {
+        'fallbacks': ['zh-hans'],          # 默认回退到简体中文
+        'hide_untranslated': False,        # 显示未翻译的内容（使用回退语言）
+    }
+}
+
+# Parler默认语言
+PARLER_DEFAULT_LANGUAGE_CODE = 'zh-hans'

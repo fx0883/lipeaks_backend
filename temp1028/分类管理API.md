@@ -7,6 +7,7 @@ Base: `/api/v1/cms/categories/`
   - `X-Tenant-ID: <tenant_id>`
   - `Authorization: Bearer <token>`（GET匿名可不带；POST/PUT/PATCH/DELETE 需要）
   - `Content-Type: application/json`
+  - `Accept-Language: zh-hans|en|zh-hant|ja|ko|fr`（可选）- 指定返回内容的语言，默认为简体中文(zh-hans)
 - **权限模型（`CategoryPermission` 继承 `CMSBasePermission`）**：
   - 匿名：允许GET；仍需 `X-Tenant-ID`。仅返回激活分类（匿名场景）。
   - Member：创建/更新/删除需要认证，受租户限制。
@@ -299,3 +300,175 @@ https://example.com/uploads/2024/01/category-5-cover.webp
   "cover_image": ["Ensure this field has no more than 255 characters."]
 }
 ```
+
+---
+
+## 多语言支持
+
+分类系统支持多语言内容，可以为每个分类维护多种语言版本。
+
+### 支持的语言
+
+- `zh-hans`: 简体中文（默认）
+- `en`: 英文
+- `zh-hant`: 繁体中文
+- `ja`: 日语
+- `ko`: 韩语
+- `fr`: 法语
+
+### 可翻译字段
+
+以下字段支持多语言：
+- `name` - 分类名称
+- `description` - 分类描述
+- `seo_title` - SEO标题
+- `seo_description` - SEO描述
+
+### 响应格式
+
+API响应包含两种格式的翻译数据：
+
+1. **translations对象** - 包含所有语言的完整翻译
+2. **单语言字段** - 根据`Accept-Language`头返回对应语言的内容
+
+**完整响应示例**：
+```json
+{
+  "id": 1,
+  "slug": "tech",
+  "parent": null,
+  "cover_image": "https://example.com/tech.jpg",
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-20T10:30:00Z",
+  "sort_order": 0,
+  "tenant": 1,
+  "is_active": true,
+  "is_pinned": true,
+  
+  "translations": {
+    "zh-hans": {
+      "name": "技术",
+      "description": "技术相关分类",
+      "seo_title": "技术分类",
+      "seo_description": "探索最新的技术资讯"
+    },
+    "en": {
+      "name": "Technology",
+      "description": "Technology related category",
+      "seo_title": "Technology Category",
+      "seo_description": "Explore the latest tech news"
+    },
+    "zh-hant": {
+      "name": "技術",
+      "description": "技術相關分類",
+      "seo_title": "技術分類",
+      "seo_description": "探索最新的技術資訊"
+    },
+    "ja": {
+      "name": "テクノロジー",
+      "description": "テクノロジー関連のカテゴリー",
+      "seo_title": "テクノロジーカテゴリー",
+      "seo_description": "最新のテクノロジー情報を探す"
+    }
+  },
+  
+  "name": "Technology",
+  "description": "Technology related category",
+  "seo_title": "Technology Category",
+  "seo_description": "Explore the latest tech news"
+}
+```
+
+### 使用场景
+
+#### 场景1：获取英文内容
+
+```bash
+curl -X GET "http://your-domain.com/api/v1/cms/categories/1/" \
+  -H "X-Tenant-ID: 1" \
+  -H "Accept-Language: en"
+```
+
+响应中的`name`、`description`等字段将返回英文内容，`translations`对象包含所有语言。
+
+#### 场景2：创建多语言分类
+
+```bash
+curl -X POST http://your-domain.com/api/v1/cms/categories/ \
+  -H "Authorization: Bearer <token>" \
+  -H "X-Tenant-ID: 1" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "tech-news",
+    "translations": {
+      "zh-hans": {
+        "name": "技术新闻",
+        "description": "最新的技术新闻和资讯",
+        "seo_title": "技术新闻 - 最新科技资讯",
+        "seo_description": "获取最新的技术新闻和行业动态"
+      },
+      "en": {
+        "name": "Tech News",
+        "description": "Latest technology news and updates",
+        "seo_title": "Tech News - Latest Technology Updates",
+        "seo_description": "Get the latest tech news and industry trends"
+      },
+      "zh-hant": {
+        "name": "技術新聞",
+        "description": "最新的技術新聞和資訊",
+        "seo_title": "技術新聞 - 最新科技資訊",
+        "seo_description": "獲取最新的技術新聞和行業動態"
+      },
+      "ja": {
+        "name": "テクノロジーニュース",
+        "description": "最新のテクノロジーニュースと情報",
+        "seo_title": "テクノロジーニュース - 最新技術情報",
+        "seo_description": "最新のテクノロジーニュースと業界動向を入手"
+      }
+    },
+    "is_active": true
+  }'
+```
+
+#### 场景3：更新特定语言的翻译
+
+```bash
+curl -X PATCH http://your-domain.com/api/v1/cms/categories/1/ \
+  -H "Authorization: Bearer <token>" \
+  -H "X-Tenant-ID: 1" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "translations": {
+      "en": {
+        "name": "Updated Tech News",
+        "description": "Updated description in English"
+      }
+    }
+  }'
+```
+
+### 语言回退机制
+
+如果请求的语言没有翻译内容，系统会自动回退到默认语言（简体中文）：
+
+```bash
+# 请求法语内容（不存在）
+curl -X GET "http://your-domain.com/api/v1/cms/categories/1/" \
+  -H "X-Tenant-ID: 1" \
+  -H "Accept-Language: fr"
+
+# 响应会返回简体中文内容（回退语言）
+{
+  "name": "技术",
+  "description": "技术相关分类",
+  ...
+}
+```
+
+### 最佳实践
+
+1. **创建分类时至少提供默认语言（简体中文）的翻译**
+2. **使用`Accept-Language`头请求特定语言的内容**
+3. **`translations`对象用于管理后台显示所有语言**
+4. **单语言字段用于前端展示特定语言内容**
+5. **slug字段不参与翻译，保持全局唯一**

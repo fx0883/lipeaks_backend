@@ -253,6 +253,188 @@ Content-Type: application/json  # POST/PUT请求
 
 ---
 
+### 场景5: 文章列表页（多语言） 🆕
+
+**需要的接口**:
+1. `GET /api/v1/cms/categories/` - 获取分类列表（多语言）
+2. `GET /api/v1/cms/articles/` - 获取文章列表
+3. `GET /api/v1/cms/articles/?category_id={id}&status=published` - 按分类过滤
+
+**关键参数**:
+- `Accept-Language: en` - 获取英文分类名称
+- `status=published` - 只获取已发布文章
+- `category_id=14` - 按分类过滤
+- `parent_id=14` - 获取特定父文章的子文章
+- `has_parent=false` - 获取所有根文章
+
+**集成流程**:
+```
+1. 页面加载 → 调用获取分类列表API（带Accept-Language头）
+2. 显示分类导航（使用返回的name字段）
+3. 用户选择分类 → 调用文章列表API（category_id过滤）
+4. 用户切换语言 → 更新Accept-Language头，重新加载数据
+5. 显示对应语言的分类名称和文章列表
+```
+
+**示例代码**（JavaScript）:
+```javascript
+// 用户切换语言
+const changeLanguage = async (lang) => {
+  // 重新获取分类（新语言）
+  const categories = await fetch('/api/v1/cms/categories/', {
+    headers: {
+      'X-Tenant-ID': '1',
+      'Accept-Language': lang  // 'zh-hans' | 'en' | 'zh-hant'
+    }
+  }).then(r => r.json());
+  
+  // 更新UI显示
+  updateCategoryNav(categories);
+};
+```
+
+---
+
+### 场景6: 系列文章导航 🆕
+
+**需要的接口**:
+1. `GET /api/v1/cms/articles/{id}/` - 获取文章详情（包含breadcrumb）
+2. `GET /api/v1/cms/articles/?parent_id={id}` - 获取子文章列表
+3. `GET /api/v1/cms/articles/?has_parent=false` - 获取所有根文章
+
+**关键字段**:
+- `parent` - 父文章ID
+- `parent_info` - 父文章基本信息
+- `children` - 子文章列表
+- `children_count` - 子文章数量
+- `breadcrumb` - 面包屑导航
+
+**集成流程**:
+```
+1. 获取当前文章详情 → parent_info显示父文章
+2. 显示面包屑导航 → 使用breadcrumb数组
+3. 获取同级文章 → 使用parent_id过滤
+4. 显示子文章列表 → 使用children字段
+5. 点击父文章/子文章 → 跳转到对应文章
+```
+
+**应用场景**:
+- 系列教程（如"Python入门" → "第1课"、"第2课"）
+- 书籍章节（如"Django教程" → "第1章"、"第2章"）
+- 产品文档（如"API文档" → "认证"、"用户接口"）
+
+---
+
+### 场景7: 多语言博客首页 🆕
+
+**需要的接口**:
+1. `GET /api/v1/cms/categories/` - 分类（多语言）
+2. `GET /api/v1/cms/articles/?status=published&is_featured=true` - 特色文章
+3. `GET /api/v1/cms/articles/?status=published&is_pinned=true` - 置顶文章
+
+**关键Headers**:
+- `Accept-Language` - 控制返回语言
+- `X-Tenant-ID` - 租户隔离
+
+**集成流程**:
+```
+1. 检测用户语言偏好（浏览器/用户设置）
+2. 设置Accept-Language头
+3. 并行调用：
+   - 获取分类列表
+   - 获取特色文章
+   - 获取置顶文章
+4. 显示多语言导航和内容
+5. 用户切换语言 → 更新请求头，刷新数据
+```
+
+---
+
+## 📝 CMS API 快速参考 🆕
+
+### 文章管理核心接口
+
+| 接口 | 方法 | 说明 | 关键参数 |
+|------|------|------|---------|
+| `/cms/articles/` | GET | 获取文章列表 | status、category_id、parent_id、has_parent |
+| `/cms/articles/{id}/` | GET | 获取文章详情 | - |
+| `/cms/articles/` | POST | 创建文章 | title、content、category_ids |
+| `/cms/articles/{id}/` | PUT/PATCH | 更新文章 | - |
+| `/cms/articles/{id}/` | DELETE | 删除文章 | force=true（强制删除） |
+
+### 分类管理核心接口（多语言）
+
+| 接口 | 方法 | 说明 | 关键Headers |
+|------|------|------|------------|
+| `/cms/categories/` | GET | 获取分类列表 | Accept-Language |
+| `/cms/categories/{id}/` | GET | 获取分类详情 | Accept-Language |
+| `/cms/categories/` | POST | 创建分类 | translations对象 |
+| `/cms/categories/{id}/` | PATCH | 更新分类 | translations对象 |
+| `/cms/categories/tree/` | GET | 获取分类树 | Accept-Language |
+
+### 文章层级过滤参数 🆕
+
+| 参数 | 值 | 说明 | 使用场景 |
+|------|----|----|---------|
+| `parent_id` | 数字ID | 获取指定父文章的子文章 | 系列文章导航 |
+| `has_parent` | true | 获取所有子文章 | 列出所有子文章 |
+| `has_parent` | false | 获取所有根文章 | 首页文章列表 |
+
+**示例**：
+```bash
+# 获取ID为14的文章的所有子文章
+GET /api/v1/cms/articles/?parent_id=14&status=published
+
+# 获取所有根文章（顶层文章）
+GET /api/v1/cms/articles/?has_parent=false&status=published
+
+# 获取所有子文章（有父文章的文章）
+GET /api/v1/cms/articles/?has_parent=true&status=published
+```
+
+### 多语言请求Headers 🆕
+
+| Header | 可选值 | 默认值 | 说明 |
+|--------|-------|--------|------|
+| `Accept-Language` | zh-hans | zh-hans | 简体中文 |
+| | en | | 英文 |
+| | zh-hant | | 繁体中文 |
+
+**示例**：
+```bash
+# 获取英文分类
+curl -H "Accept-Language: en" \
+     -H "X-Tenant-ID: 1" \
+     http://localhost:8000/api/v1/cms/categories/
+```
+
+### 多语言响应格式
+
+**方式1：使用单语言字段**（推荐前端展示）
+```json
+{
+  "id": 1,
+  "name": "Technology",      // 当前语言（根据Accept-Language）
+  "description": "Tech articles",
+  ...
+}
+```
+
+**方式2：使用translations对象**（推荐管理后台）
+```json
+{
+  "id": 1,
+  "translations": {
+    "zh-hans": {"name": "技术", "description": "..."},
+    "en": {"name": "Technology", "description": "..."},
+    "zh-hant": {"name": "技術", "description": "..."}
+  },
+  ...
+}
+```
+
+---
+
 ## ⚠️ 通用注意事项
 
 ### 1. 租户隔离
@@ -265,19 +447,27 @@ Content-Type: application/json  # POST/PUT请求
 - 在请求头中添加：`Authorization: Bearer <token>`
 - Token过期（401错误）时跳转登录页
 
-### 3. 错误处理
+### 3. 多语言支持 🆕
+- **Accept-Language头**：控制返回内容的语言
+- **默认语言**：zh-hans（简体中文）
+- **回退机制**：请求的语言无翻译时自动回退到默认语言
+- **响应格式**：同时包含单语言字段和translations对象
+
+### 4. 错误处理
 - 400: 参数错误，显示具体错误信息
 - 401: 未认证，跳转登录
 - 403: 权限不足，显示提示
 - 404: 资源不存在，显示提示
 - 500: 服务器错误，显示通用提示
 
-### 4. 业务规则
+### 5. 业务规则
 - 不能点赞/关注自己
 - 不能跨租户操作
 - 不能重复点赞/关注/收藏
 - 子账号不能上传头像
 - 子账号不能管理子账号
+- **分类翻译**：至少需要提供默认语言（zh-hans）的翻译 🆕
+- **文章层级**：文章不能将自己设置为父文章 🆕
 
 ---
 

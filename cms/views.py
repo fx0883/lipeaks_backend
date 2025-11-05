@@ -264,7 +264,7 @@ class ArticleViewSet(TenantModelViewSet):
     permission_classes = [ArticlePermission]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'visibility', 'is_featured', 'is_pinned']
+    filterset_fields = ['id', 'status', 'visibility', 'is_featured', 'is_pinned']
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['created_at', 'updated_at', 'published_at', 'title']
     ordering = ['-is_pinned', '-created_at']
@@ -338,6 +338,17 @@ class ArticleViewSet(TenantModelViewSet):
                 order_field = f"-{order_field}"
                 
             queryset = queryset.order_by(order_field)
+        
+        # 处理父文章过滤
+        parent_id = self.request.query_params.get('parent_id')
+        if parent_id:
+            queryset = queryset.filter(parent_id=parent_id)
+        
+        has_parent = self.request.query_params.get('has_parent')
+        if has_parent == 'true':
+            queryset = queryset.filter(parent__isnull=False)
+        elif has_parent == 'false':
+            queryset = queryset.filter(parent__isnull=True)
         
         return queryset
     
@@ -1297,7 +1308,7 @@ class ArticleViewSet(TenantModelViewSet):
 )
 class CategoryViewSet(TenantModelViewSet):
     """
-    分类视图集，提供增删改查API
+    分类视图集，提供增删改查API（支持多语言）
     
     - 普通用户: 只能查看分类
     - 租户管理员: 可以管理该租户下的所有分类
@@ -1307,9 +1318,9 @@ class CategoryViewSet(TenantModelViewSet):
     permission_classes = [CategoryPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['parent', 'is_active', 'is_pinned']
-    search_fields = ['name', 'slug', 'description']
-    ordering_fields = ['sort_order', 'name', 'created_at', 'is_pinned']
-    ordering = ['-is_pinned', 'sort_order', 'name']
+    search_fields = ['translations__name', 'slug', 'translations__description']  # 搜索翻译字段
+    ordering_fields = ['sort_order', 'created_at', 'is_pinned']  # 移除name（翻译字段不能直接排序）
+    ordering = ['-is_pinned', 'sort_order', 'id']  # 使用id替代name
     pagination_class = None  # 禁用分页
     queryset = Category.objects.all().select_related('parent', 'tenant')  # 添加select_related优化查询
     

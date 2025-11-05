@@ -6,6 +6,8 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
+from parler.models import TranslatableModel, TranslatedFields
+from parler.managers import TranslatableManager
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -171,13 +173,20 @@ class Article(models.Model):
         return siblings
 
 
-class Category(models.Model):
+class Category(TranslatableModel):
     """
-    分类模型
+    分类模型（支持多语言）
     """
-    name = models.CharField(_("分类名称"), max_length=100)
+    # 可翻译字段
+    translations = TranslatedFields(
+        name=models.CharField(_("分类名称"), max_length=100),
+        description=models.TextField(_("分类描述"), blank=True, null=True),
+        seo_title=models.CharField(_("SEO标题"), max_length=255, blank=True, null=True),
+        seo_description=models.TextField(_("SEO描述"), blank=True, null=True),
+    )
+    
+    # 非翻译字段（共享字段）
     slug = models.SlugField(_("URL别名"), max_length=100, unique=True)
-    description = models.TextField(_("分类描述"), blank=True, null=True)
     parent = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
@@ -198,14 +207,15 @@ class Category(models.Model):
     )
     is_active = models.BooleanField(_("是否激活"), default=True)
     is_pinned = models.BooleanField(_("是否置顶"), default=False)
-    seo_title = models.CharField(_("SEO标题"), max_length=255, blank=True, null=True)
-    seo_description = models.TextField(_("SEO描述"), blank=True, null=True)
+    
+    # 使用TranslatableManager以支持翻译字段的查询
+    objects = TranslatableManager()
     
     class Meta:
         verbose_name = _('分类')
         verbose_name_plural = _('分类')
         db_table = 'cms_category'
-        ordering = ['-is_pinned', 'sort_order', 'name']
+        ordering = ['-is_pinned', 'sort_order', 'id']  # name是翻译字段，不能直接排序，改用id
         indexes = [
             models.Index(fields=['parent']),
             models.Index(fields=['is_active']),
@@ -216,14 +226,21 @@ class Category(models.Model):
         ]
     
     def __str__(self):
+        # 使用safe_translation_getter获取翻译，如果没有则返回任意语言
+        name = self.safe_translation_getter('name', any_language=True) or 'Unnamed'
         if self.parent:
-            return f"{self.parent.name} > {self.name}"
-        return self.name
+            parent_name = self.parent.safe_translation_getter('name', any_language=True) or 'Unnamed'
+            return f"{parent_name} > {name}"
+        return name
     
     def save(self, *args, **kwargs):
         # 如果没有设置slug，根据名称自动生成
-        if not self.slug:
-            self.slug = slugify(self.name)
+        # 注意：由于name现在是翻译字段，需要先保存才能访问
+        if not self.slug and hasattr(self, '_current_language'):
+            # 尝试从当前语言获取name
+            name = self.safe_translation_getter('name', any_language=True)
+            if name:
+                self.slug = slugify(name)
         super().save(*args, **kwargs)
 
 
