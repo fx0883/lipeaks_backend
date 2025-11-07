@@ -582,10 +582,12 @@ class AdminMemberAvatarUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 验证文件大小
-        if avatar_file.size > 2 * 1024 * 1024:  # 2MB
+        # 验证文件大小（从settings获取配置，默认10MB）
+        max_size = getattr(settings, 'DATA_UPLOAD_MAX_MEMORY_SIZE', 10 * 1024 * 1024)
+        if avatar_file.size > max_size:
+            max_size_mb = max_size / (1024 * 1024)
             return Response(
-                {"detail": "文件太大，头像大小不能超过2MB"},
+                {"detail": f"文件太大，头像大小不能超过{max_size_mb:.0f}MB"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         

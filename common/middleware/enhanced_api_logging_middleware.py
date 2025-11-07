@@ -10,6 +10,7 @@ from datetime import datetime
 from django.utils.deprecation import MiddlewareMixin
 from django.urls import resolve
 from django.db.models import F
+from django.core.exceptions import RequestDataTooBig
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +62,18 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
         Returns:
             字典或None: 请求体内容
         """
-        if not request.body:
-            return None
+        try:
+            # 尝试访问请求体，可能会抛出RequestDataTooBig异常
+            if not request.body:
+                return None
+        except RequestDataTooBig:
+            # 请求体过大，超过DATA_UPLOAD_MAX_MEMORY_SIZE限制
+            logger.warning(f"请求体过大，超过DATA_UPLOAD_MAX_MEMORY_SIZE限制: {request.path}")
+            return {'error': 'Request body too large', 'message': '请求体超过大小限制'}
+        except Exception as e:
+            # 捕获其他异常
+            logger.warning(f"访问请求体时发生错误: {str(e)}")
+            return {'error': f"访问请求体失败: {str(e)}"}
             
         content_type = request.content_type.lower() if request.content_type else ''
         
