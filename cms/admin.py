@@ -41,12 +41,11 @@ class ArticleMetaInline(admin.StackedInline):
 
 @admin.register(Article)
 class ArticleAdmin(CMSAdminMixin, admin.ModelAdmin):
-    list_display = ['title', 'author', 'status', 'is_featured', 'is_pinned', 'created_at', 'published_at', 'view_count', 'comment_count']
+    list_display = ['title', 'author_display', 'status', 'is_featured', 'is_pinned', 'created_at', 'published_at', 'view_count', 'comment_count']
     list_filter = ['status', 'is_featured', 'is_pinned', 'created_at', 'published_at', 'tenant']
     search_fields = ['title', 'content', 'excerpt']
     prepopulated_fields = {'slug': ('title',)}
-    raw_id_fields = ['author']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'author_display']
     autocomplete_fields = ['tenant']
     date_hierarchy = 'created_at'
     inlines = [ArticleCategoryInline, ArticleTagInline, ArticleMetaInline]
@@ -55,6 +54,14 @@ class ArticleAdmin(CMSAdminMixin, admin.ModelAdmin):
     
     # 自定义模板
     change_list_template = 'admin/cms/change_list.html'
+    
+    def author_display(self, obj):
+        """显示作者信息"""
+        if obj.author:
+            author_type = "Member" if obj.is_author_member else "Admin"
+            return f"{obj.author.username} ({author_type})"
+        return "-"
+    author_display.short_description = _('作者')
     
     def view_count(self, obj):
         try:
@@ -72,12 +79,13 @@ class ArticleAdmin(CMSAdminMixin, admin.ModelAdmin):
     
     def save_model(self, request, obj, form, change):
         if not change:  # 如果是创建新对象
-            obj.author = request.user  # 设置current用户为作者
+            # 设置current用户为作者（Admin后台只有User类型）
+            obj.user = request.user
         super().save_model(request, obj, form, change)
     
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.select_related('author', 'tenant')
+        return qs.select_related('user', 'member', 'tenant')
     
     def has_add_permission(self, request):
         # 超级管理员可以添加任何租户的文章

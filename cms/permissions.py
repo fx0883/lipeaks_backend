@@ -62,7 +62,7 @@ class CMSBasePermission(permissions.BasePermission):
             return False
         
         # 超级管理员特殊处理：允许通过X-Tenant-ID请求头指定租户进行操作
-        if user.is_super_admin:
+        if getattr(user, 'is_super_admin', False):
             # 确保请求中有租户ID（由中间件设置）
             if not hasattr(request, 'tenant_id') or not request.tenant_id:
                 logger.warning(f"超级管理员 {user.username} 尝试操作CMS数据但未指定租户ID")
@@ -80,7 +80,7 @@ class CMSBasePermission(permissions.BasePermission):
             raise PermissionDenied("User has no associated tenant and cannot access CMS system")
         
         # 租户管理员可以操作其租户内的所有资源
-        if user.is_admin:
+        if getattr(user, 'is_admin', False):
             return True
         
         # 普通用户只能操作自己的资源
@@ -125,7 +125,7 @@ class CMSBasePermission(permissions.BasePermission):
             return True
         
         # 超级管理员特殊处理：允许通过X-Tenant-ID请求头指定租户进行操作
-        if user.is_super_admin:
+        if getattr(user, 'is_super_admin', False):
             # 验证对象所属租户与请求租户一致
             if hasattr(obj, 'tenant') and str(obj.tenant.id) != str(request.tenant_id):
                 logger.warning(f"超级管理员 {user.username} 尝试操作不属于指定租户的对象")
@@ -143,22 +143,18 @@ class CMSBasePermission(permissions.BasePermission):
             raise PermissionDenied("Cannot operate resources of other tenants")
         
         # 租户管理员可以操作其租户内的所有资源
-        if user.is_admin and hasattr(obj, 'tenant') and obj.tenant == user.tenant:
+        if getattr(user, 'is_admin', False) and hasattr(obj, 'tenant') and obj.tenant == user.tenant:
             return True
         
-        # 获取对象的所有者
-        obj_author_id = None
-        if hasattr(obj, 'author_id'):
-            obj_author_id = obj.author_id
-        elif hasattr(obj, 'author'):
-            obj_author_id = obj.author.id if obj.author else None
-        elif hasattr(obj, 'user_id'):
-            obj_author_id = obj.user_id
+        # 获取对象的所有者（支持GenericForeignKey）
+        obj_author = None
+        if hasattr(obj, 'author'):
+            obj_author = obj.author
         elif hasattr(obj, 'user'):
-            obj_author_id = obj.user.id if obj.user else None
+            obj_author = obj.user
         
-        # 自己的资源
-        if obj_author_id == user.id:
+        # 检查是否是自己的资源（直接比较对象，支持不同用户类型）
+        if obj_author and obj_author == user:
             return True
         
         logger.warning(f"用户 {user.username} 尝试访问不属于他的对象 {obj.__class__.__name__} #{getattr(obj, 'id', 'unknown')}")

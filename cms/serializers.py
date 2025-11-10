@@ -5,7 +5,7 @@ from rest_framework import serializers
 from django.utils.translation import gettext_lazy as _
 from django.utils.text import slugify
 from django.utils import timezone
-from users.serializers import UserSerializer
+from users.serializers import UserSerializer, MemberSerializer
 from tenants.serializers import TenantSerializer
 from common.utils.image_url import add_domain_to_image_url
 from parler_rest.serializers import TranslatableModelSerializer, TranslatedFieldsField
@@ -147,13 +147,16 @@ class CommentSerializer(serializers.ModelSerializer):
         return obj.replies.count()
     
     def validate(self, data):
-        """验证评论数据，确保用户信息或游客信息至少提供一项"""
-        user = data.get('user')
+        """验证评论数据"""
+        # 对于已认证用户，不需要检查user字段，因为它会在perform_create中自动设置
+        # 对于游客评论，才需要检查guest_name
         guest_name = data.get('guest_name')
-        
-        if not user and not guest_name:
-            raise serializers.ValidationError(_("User or guest name must be provided"))
-        
+
+        # 如果提供了guest_name，说明是游客评论，需要验证
+        if guest_name is not None:
+            if not guest_name.strip():
+                raise serializers.ValidationError(_("Guest name cannot be empty"))
+
         return data
 
 
@@ -181,7 +184,8 @@ class SimpleTagSerializer(serializers.ModelSerializer):
 class ArticleListSerializer(serializers.ModelSerializer):
     """文章列表序列化器，用于返回文章列表，包含基本信息"""
     
-    author_info = UserSerializer(source='author', read_only=True)
+    author_info = serializers.SerializerMethodField()
+    author_type = serializers.SerializerMethodField()
     categories = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
     comments_count = serializers.SerializerMethodField()
@@ -195,12 +199,30 @@ class ArticleListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Article
         fields = [
-            'id', 'title', 'slug', 'excerpt', 'author', 'author_info',
+            'id', 'title', 'slug', 'excerpt', 'author_info', 'author_type',
             'status', 'is_featured', 'is_pinned', 'cover_image', 'cover_image_small',
             'published_at', 'created_at', 'updated_at', 'categories', 'tags', 
             'comments_count', 'likes_count', 'views_count',
             'parent', 'parent_info', 'children_count'
         ]
+    
+    def get_author_info(self, obj) -> dict:
+        """获取作者信息（支持User和Member）"""
+        if obj.member_id:
+            # Member作者
+            return MemberSerializer(obj.member).data
+        elif obj.user_id:
+            # User作者
+            return UserSerializer(obj.user).data
+        return None
+    
+    def get_author_type(self, obj) -> str:
+        """获取作者类型"""
+        if obj.member_id:
+            return 'member'
+        elif obj.user_id:
+            return 'admin'
+        return None
     
     def get_categories(self, obj) -> list:
         """获取文章关联的分类"""
@@ -279,7 +301,8 @@ class ArticleListSerializer(serializers.ModelSerializer):
 class ArticleDetailSerializer(serializers.ModelSerializer):
     """文章详情序列化器，用于返回单篇文章详情，包含全部信息"""
     
-    author_info = UserSerializer(source='author', read_only=True)
+    author_info = serializers.SerializerMethodField()
+    author_type = serializers.SerializerMethodField()
     categories = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
     meta = ArticleMetaSerializer(read_only=True)
@@ -296,7 +319,7 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
         model = Article
         fields = [
             'id', 'title', 'slug', 'content', 'content_type', 'excerpt',
-            'author', 'author_info', 'status', 'is_featured', 'is_pinned',
+            'author_info', 'author_type', 'status', 'is_featured', 'is_pinned',
             'allow_comment', 'visibility', 'password', 'created_at',
             'updated_at', 'published_at', 'cover_image', 'cover_image_small', 'template',
             'sort_order', 'tenant', 'tenant_info', 'categories', 'tags',
@@ -304,6 +327,24 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
             'parent', 'parent_info', 'children', 'breadcrumb'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
+    
+    def get_author_info(self, obj) -> dict:
+        """获取作者信息（支持User和Member）"""
+        if obj.member_id:
+            # Member作者
+            return MemberSerializer(obj.member).data
+        elif obj.user_id:
+            # User作者
+            return UserSerializer(obj.user).data
+        return None
+    
+    def get_author_type(self, obj) -> str:
+        """获取作者类型"""
+        if obj.member_id:
+            return 'member'
+        elif obj.user_id:
+            return 'admin'
+        return None
     
     def get_categories(self, obj) -> list:
         """获取文章关联的分类"""
@@ -502,9 +543,15 @@ class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
         tenant = self.context['request'].user.tenant
         validated_data['tenant'] = tenant
         
-        # 如果没有指定作者，使用current用户
-        if 'author' not in validated_data:
-            validated_data['author'] = self.context['request'].user
+        # 如果没有指定作者，根据当前用户类型设置user或member
+        current_user = self.context['request'].user
+        from users.models import Member, User
+        
+        # 根据用户类型设置对应的外键字段
+        if isinstance(current_user, Member):
+            validated_data['member'] = current_user
+        elif isinstance(current_user, User):
+            validated_data['user'] = current_user
         
         # 创建文章
         article = super().create(validated_data)
@@ -529,18 +576,19 @@ class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
                 tenant=tenant
             )
         
-        # 创建初始版本
-        ArticleVersion.objects.create(
-            article=article,
-            title=article.title,
-            content=article.content,
-            content_type=article.content_type,
-            excerpt=article.excerpt,
-            editor=validated_data['author'],
-            version_number=1,
-            change_description="初始版本",
-            tenant=tenant
-        )
+        # 创建初始版本（仅支持User类型作为editor）
+        if isinstance(current_user, User):
+            ArticleVersion.objects.create(
+                article=article,
+                title=article.title,
+                content=article.content,
+                content_type=article.content_type,
+                excerpt=article.excerpt,
+                editor=current_user,
+                version_number=1,
+                change_description="初始版本",
+                tenant=tenant
+            )
         
         # 创建统计记录（使用get_or_create避免重复创建）
         ArticleStatistics.objects.get_or_create(
@@ -612,18 +660,21 @@ class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
                 latest_version = ArticleVersion.objects.filter(article=article).order_by('-version_number').first()
                 new_version_number = latest_version.version_number + 1 if latest_version else 1
                 
-                # 创建新版本
-                ArticleVersion.objects.create(
-                    article=article,
-                    title=article.title,
-                    content=article.content,
-                    content_type=article.content_type,
-                    excerpt=article.excerpt,
-                    editor=self.context['request'].user,
-                    version_number=new_version_number,
-                    change_description=getattr(self, '_change_description', None) or "更新文章",
-                    tenant=tenant
-                )
+                # 创建新版本（仅支持User类型作为editor）
+                from users.models import User
+                current_user = self.context['request'].user
+                if isinstance(current_user, User):
+                    ArticleVersion.objects.create(
+                        article=article,
+                        title=article.title,
+                        content=article.content,
+                        content_type=article.content_type,
+                        excerpt=article.excerpt,
+                        editor=current_user,
+                        version_number=new_version_number,
+                        change_description=getattr(self, '_change_description', None) or "更新文章",
+                        tenant=tenant
+                    )
         
         return article
 

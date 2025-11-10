@@ -6,6 +6,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from parler.models import TranslatableModel, TranslatedFields
 from parler.managers import TranslatableManager
 
@@ -19,6 +20,16 @@ class Article(models.Model):
     CONTENT_TYPE_CHOICES = (
         ('markdown', 'Markdown'),
         ('html', 'HTML'),
+        ('image', 'Image'),
+        ('image_upload', 'Image Upload'),
+        ('video', 'Video'),
+        ('audio', 'Audio'),
+        ('file', 'File'),
+        ('link', 'Link'),
+        ('quote', 'Quote'),
+        ('code', 'Code'),
+        ('table', 'Table'),
+        ('list', 'List'),
     )
     
     STATUS_CHOICES = (
@@ -52,11 +63,27 @@ class Article(models.Model):
         help_text="上级文章，用于创建文章层级结构（如系列文章、章节等）"
     )
     
-    author = models.ForeignKey(
+    # 双外键支持两种用户类型（User和Member）
+    # 有且仅有一个字段非空
+    user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name="articles",
-        verbose_name=_("作者")
+        verbose_name=_("管理员作者"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="如果作者是管理员User，此字段非空"
+    )
+    member = models.ForeignKey(
+        'users.Member',
+        on_delete=models.CASCADE,
+        related_name="articles",
+        verbose_name=_("Member作者"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="如果作者是Member，此字段非空"
     )
     status = models.CharField(_("状态"), max_length=20, choices=STATUS_CHOICES, default='draft')
     is_featured = models.BooleanField(_("是否特色"), default=False)
@@ -90,10 +117,83 @@ class Article(models.Model):
             models.Index(fields=['tenant', 'published_at']),
             models.Index(fields=['parent']),  # 父文章索引
             models.Index(fields=['tenant', 'parent']),  # 租户+父文章组合索引
+            models.Index(fields=['user']),  # User作者索引
+            models.Index(fields=['member']),  # Member作者索引
+            models.Index(fields=['tenant', 'user']),  # 租户+User作者组合索引
+            models.Index(fields=['tenant', 'member']),  # 租户+Member作者组合索引
+        ]
+        constraints = [
+            # 确保user和member有且仅有一个非空
+            models.CheckConstraint(
+                check=(
+                    models.Q(user__isnull=False, member__isnull=True) | 
+                    models.Q(user__isnull=True, member__isnull=False)
+                ),
+                name='article_one_author_required'
+            )
         ]
     
     def __str__(self):
         return self.title
+    
+    @property
+    def author(self):
+        """
+        返回文章作者对象（User或Member）
+        用于保持向后兼容性
+        """
+        return self.user or self.member
+    
+    @property
+    def author_username(self):
+        """获取作者用户名"""
+        author = self.author
+        return author.username if author else None
+    
+    @property
+    def author_display_name(self):
+        """获取作者显示名称"""
+        author = self.author
+        if author:
+            if hasattr(author, 'display_name') and author.display_name:
+                return author.display_name
+            if hasattr(author, 'nick_name') and author.nick_name:
+                return author.nick_name
+            return author.username
+        return None
+    
+    @property
+    def is_author_member(self):
+        """判断作者是否为Member类型"""
+        return self.member_id is not None
+    
+    @property
+    def is_author_admin(self):
+        """判断作者是否为管理员User类型"""
+        return self.user_id is not None
+    
+    @property
+    def author_type(self):
+        """获取作者类型"""
+        if self.member_id:
+            return 'member'
+        elif self.user_id:
+            return 'admin'
+        return None
+    
+    def clean(self):
+        """验证模型数据"""
+        super().clean()
+        
+        # 验证user和member有且仅有一个非空
+        has_user = self.user_id is not None
+        has_member = self.member_id is not None
+        
+        if not has_user and not has_member:
+            raise ValidationError(_("必须指定user或member中的一个作为作者"))
+        
+        if has_user and has_member:
+            raise ValidationError(_("user和member不能同时指定，只能选择其中一个"))
     
     def save(self, *args, **kwargs):
         # 如果没有设置slug，根据标题自动生成
@@ -108,6 +208,9 @@ class Article(models.Model):
         # 防止循环引用：不能将自己设置为父文章
         if self.parent and self.parent.id == self.id:
             raise ValueError(_("文章不能将自己设置为父文章"))
+        
+        # 执行clean验证（确保约束满足）
+        self.clean()
         
         super().save(*args, **kwargs)
         

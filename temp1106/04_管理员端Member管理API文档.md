@@ -17,44 +17,142 @@
   - 管理员接口禁止携带 `X-Tenant-ID`。
 
 ## 1. 获取 Member 列表（分页）
-- 路径：GET `/api/v1/admin/members/`
-- 查询参数（可选）：
-  - search(string)：按用户名/邮箱/昵称/手机号模糊匹配
-  - status(enum)：`active`/`suspended`/`inactive`
-  - is_sub_account(bool)
-  - parent(int)
-  - tenant_id(int，仅超级管理员可用)
-  - page(int), page_size(int)
-- 成功（200，分页）：
-{
-  "success": true, "code": 2000, "message": "查询成功",
-  "data": {"pagination": {...}, "results": [{"id": 10, "username": "member001", ...}]}
-}
+
+### 接口信息
+- **接口地址**: `GET /api/v1/admin/members/`
+- **权限要求**: 需要管理员认证（租户管理员或超级管理员）
+- **功能说明**: 获取Member用户列表，支持多种筛选条件
+
+### 请求头
+
+| 参数 | 类型 | 必填 | 说明 | 示例 | 验证规则 |
+|------|------|------|------|------|----------|
+| Authorization | string | 是 | Bearer token认证 | "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." | 有效的Bearer token格式 |
+
+### 查询参数
+
+| 参数 | 类型 | 必填 | 说明 | 示例 | 验证规则 |
+|------|------|------|------|------|----------|
+| search | string | 否 | 按用户名/邮箱/昵称/手机号模糊匹配 | "member001" | 最长100字符 |
+| status | string | 否 | 按状态筛选 | "active" | active/suspended/inactive |
+| is_sub_account | boolean | 否 | 是否为子账号 | true | true/false |
+| parent | integer | 否 | 父账号ID | 5 | 有效的Member ID |
+| tenant_id | integer | 否 | 租户ID（仅超级管理员） | 1 | 有效的租户ID |
+| page | integer | 否 | 页码，默认1 | 1 | 大于0的整数 |
+| page_size | integer | 否 | 每页数量，默认20，最大100 | 20 | 1-100之间的整数 |
+
+### 权限说明
+- **租户管理员**: 只能查看本租户的Member
+- **超级管理员**: 可查看所有租户的Member，并可指定tenant_id筛选
+
+### 业务规则
+- ✅ 支持多字段模糊搜索
+- ✅ 支持精确状态筛选
+- ✅ 支持子账号和父子关系筛选
+- ✅ 租户管理员自动限定在本租户范围内
 
 ## 2. 创建 Member
-- 路径：POST `/api/v1/admin/members/`
-- 请求体：
-  - username(string, 必填；租户内唯一)
-  - email(string, 必填；租户内唯一)
-  - password(string, 必填)
-  - password_confirm(string, 必填)
-  - phone(string, 可选；租户内唯一)
-  - nick_name(string, 可选)
-  - wechat_id(string, 可选)
-  - tenant_id(int, 可选；仅超级管理员可指定)
-- 成功（201）：返回 Member 详情。
-- 失败（400）：`VALIDATION_ERROR`（唯一性/强度/租户ID合法性等）。
-- 权限：租户管理员创建时隐式绑定其所属租户且不得越权。
+
+### 接口信息
+- **接口地址**: `POST /api/v1/admin/members/`
+- **权限要求**: 需要管理员认证（租户管理员或超级管理员）
+- **功能说明**: 创建新的Member用户账号
+
+### 请求头
+
+| 参数 | 类型 | 必填 | 说明 | 示例 | 验证规则 |
+|------|------|------|------|------|----------|
+| Authorization | string | 是 | Bearer token认证 | "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." | 有效的Bearer token格式 |
+| Content-Type | string | 是 | 请求体类型 | "application/json" | 必须为application/json |
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 | 示例 | 验证规则 |
+|------|------|------|------|------|------|----------|
+| username | string | 是 | 用户名，租户内唯一 | "member001" | 3-30字符，只能包含字母、数字、下划线 |
+| email | string | 是 | 邮箱地址，租户内唯一 | "member001@example.com" | 有效的邮箱格式 |
+| password | string | 是 | 登录密码 | "password123" | 最少8字符，包含大小写字母和数字 |
+| password_confirm | string | 是 | 密码确认 | "password123" | 必须与password相同 |
+| phone | string | 否 | 手机号码，租户内唯一 | "13800138000" | 有效的手机号码格式 |
+| nick_name | string | 否 | 昵称 | "测试成员" | 最长50字符 |
+| wechat_id | string | 否 | 微信ID | "wechat123" | 最长100字符 |
+| tenant_id | integer | 否 | 租户ID（仅超级管理员可指定） | 1 | 有效的租户ID |
+
+### 权限说明
+- **租户管理员**: 创建的Member自动绑定到自己的租户，不能指定其他租户
+- **超级管理员**: 可指定任意租户ID创建Member
+
+### 业务规则
+- ✅ 用户名和邮箱在指定租户内唯一
+- ✅ 手机号码在租户内唯一（如果提供）
+- ✅ 密码强度自动校验
+- ✅ 租户管理员自动绑定到所属租户
+- ❌ 租户管理员不能跨租户创建用户
 
 ## 3. 获取 Member 详情
-- 路径：GET `/api/v1/admin/members/<id>/`
-- 成功（200）：返回 Member 详情；失败（404/403）：按统一错误规范。
+
+### 接口信息
+- **接口地址**: `GET /api/v1/admin/members/{id}/`
+- **权限要求**: 需要管理员认证（租户管理员或超级管理员）
+- **功能说明**: 获取指定Member的详细信息
+
+### 请求头
+
+| 参数 | 类型 | 必填 | 说明 | 示例 | 验证规则 |
+|------|------|------|------|------|----------|
+| Authorization | string | 是 | Bearer token认证 | "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." | 有效的Bearer token格式 |
+
+### 路径参数
+
+| 参数 | 类型 | 必填 | 说明 | 示例 | 验证规则 |
+|------|------|------|------|------|------|----------|
+| id | integer | 是 | Member ID | 10 | 有效的Member ID |
+
+### 权限说明
+- **租户管理员**: 只能查看本租户的Member
+- **超级管理员**: 可查看任意租户的Member
 
 ## 4. 更新 Member 信息
-- 路径：PUT/PATCH `/api/v1/admin/members/<id>/`
-- 不建议修改字段：`username`、`email`、`tenant`
-- 可更新字段（示例）：`phone`、`nick_name`、`first_name`、`last_name`、`avatar`、`status`、`is_active`、`wechat_id`
-- 成功（200）：返回更新后的 Member；失败（400）：`VALIDATION_ERROR`。
+
+### 接口信息
+- **接口地址**: `PUT/PATCH /api/v1/admin/members/{id}/`
+- **权限要求**: 需要管理员认证（租户管理员或超级管理员）
+- **功能说明**: 更新指定Member的信息
+
+### 请求头
+
+| 参数 | 类型 | 必填 | 说明 | 示例 | 验证规则 |
+|------|------|------|------|------|------|------|----------|
+| Authorization | string | 是 | Bearer token认证 | "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." | 有效的Bearer token格式 |
+| Content-Type | string | 是 | 请求体类型 | "application/json" | 必须为application/json |
+
+### 路径参数
+
+| 参数 | 类型 | 必填 | 说明 | 示例 | 验证规则 |
+|------|------|------|------|------|------|------|----------|
+| id | integer | 是 | Member ID | 10 | 有效的Member ID |
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 | 示例 | 验证规则 |
+|------|------|------|------|------|------|------|----------|
+| phone | string | 否 | 手机号码 | "13800138001" | 有效的手机号码格式 |
+| nick_name | string | 否 | 昵称 | "新昵称" | 最长50字符 |
+| first_name | string | 否 | 名 | "新" | 最长30字符 |
+| last_name | string | 否 | 姓 | "名" | 最长30字符 |
+| avatar | string | 否 | 头像路径 | "/media/avatars/new.jpg" | 有效的文件路径 |
+| status | string | 否 | 账号状态 | "active" | active/suspended/inactive |
+| is_active | boolean | 否 | 是否激活 | true | true/false |
+| wechat_id | string | 否 | 微信ID | "new_wechat" | 最长100字符 |
+
+### 不可修改字段
+- `username` - 用户名
+- `email` - 邮箱地址
+- `tenant` - 租户ID
+
+### 权限说明
+- **租户管理员**: 只能更新本租户的Member
+- **超级管理员**: 可更新任意租户的Member
 
 ## 5. 删除 Member（软删除）
 - 路径：DELETE `/api/v1/admin/members/<id>/`

@@ -268,7 +268,7 @@ class ArticleViewSet(TenantModelViewSet):
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['created_at', 'updated_at', 'published_at', 'title']
     ordering = ['-is_pinned', '-created_at']
-    queryset = Article.objects.all().select_related('author', 'tenant')  # 添加select_related优化查询
+    queryset = Article.objects.all().select_related('user', 'member', 'tenant')  # 优化查询：预加载user和member
     
     def get_queryset(self):
         """
@@ -294,10 +294,19 @@ class ArticleViewSet(TenantModelViewSet):
         if tag_id:
             queryset = queryset.filter(article_tags__tag_id=tag_id)
         
-        # 处理作者过滤
+        # 处理作者过滤（支持user_id和member_id）
+        user_id = self.request.query_params.get('user_id')
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        
+        member_id = self.request.query_params.get('member_id')
+        if member_id:
+            queryset = queryset.filter(member_id=member_id)
+        
+        # 兼容旧的author_id参数（同时搜索user_id和member_id）
         author_id = self.request.query_params.get('author_id')
         if author_id:
-            queryset = queryset.filter(author_id=author_id)
+            queryset = queryset.filter(Q(user_id=author_id) | Q(member_id=author_id))
         
         # 处理特色和置顶过滤
         is_featured = self.request.query_params.get('is_featured')
@@ -375,8 +384,12 @@ class ArticleViewSet(TenantModelViewSet):
         if not can_create_content(user):
             raise serializers.ValidationError(_("You do not have permission to create articles"))
         
-        # 设置作者为current用户
-        serializer.save(author=self.request.user)
+        # 根据用户类型设置对应的外键字段
+        from users.models import Member
+        if isinstance(user, Member):
+            serializer.save(member=user)
+        else:
+            serializer.save(user=user)
         
         # 记录操作日志
         self._record_operation_log('create', serializer.instance)
@@ -455,10 +468,9 @@ class ArticleViewSet(TenantModelViewSet):
         if not can_edit_content(user, instance.author):
             raise serializers.ValidationError(_("You do not have permission to edit this article"))
         
-        # 验证作者权限
-        if 'author' in serializer.validated_data:
-            new_author = serializer.validated_data['author']
-            if new_author != instance.author and not (is_super_admin(user) or is_admin(user)):
+        # 验证作者权限（不允许修改user或member字段）
+        if 'user' in serializer.validated_data or 'member' in serializer.validated_data:
+            if not (is_super_admin(user) or is_admin(user)):
                 raise serializers.ValidationError(_("You do not have permission to change article author"))
         
         # 更新文章
@@ -466,16 +478,19 @@ class ArticleViewSet(TenantModelViewSet):
         
         # 记录操作日志
         try:
-            OperationLog.objects.create(
-                user=user,
-                action='update',
-                entity_type='article',
-                entity_id=article.id,
-                details=f"更新文章: {article.title}",
-                ip_address=self.request.META.get('REMOTE_ADDR'),
-                user_agent=self.request.META.get('HTTP_USER_AGENT'),
-                tenant=tenant
-            )
+            # OperationLog只支持User类型，Member类型跳过
+            from users.models import User as AdminUser
+            if isinstance(user, AdminUser):
+                OperationLog.objects.create(
+                    user=user,
+                    action='update',
+                    entity_type='article',
+                    entity_id=article.id,
+                    details=f"更新文章: {article.title}",
+                    ip_address=self.request.META.get('REMOTE_ADDR'),
+                    user_agent=self.request.META.get('HTTP_USER_AGENT'),
+                    tenant=tenant
+                )
         except Exception as e:
             logger.error(f"记录文章更新操作日志失败: {str(e)}")
         
