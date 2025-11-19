@@ -821,57 +821,6 @@ class ArticleVersion(models.Model):
         return f"{self.article.title} - 版本 {self.version_number}"
 
 
-class Interaction(models.Model):
-    """
-    用户互动
-    """
-    TYPE_CHOICES = (
-        ('like', '点赞'),
-        ('dislike', '踩'),
-        ('bookmark', '收藏'),
-        ('share', '分享'),
-    )
-    
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="interactions",
-        verbose_name=_("用户")
-    )
-    article = models.ForeignKey(
-        Article,
-        on_delete=models.CASCADE,
-        related_name="interactions",
-        verbose_name=_("文章")
-    )
-    type = models.CharField(_("类型"), max_length=20, choices=TYPE_CHOICES)
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
-    ip_address = models.GenericIPAddressField(_("IP地址"), blank=True, null=True)
-    user_agent = models.CharField(_("用户代理"), max_length=255, blank=True, null=True)
-    extra_data = models.TextField(_("附加数据"), blank=True, null=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="interactions",
-        verbose_name=_("所属租户")
-    )
-    
-    class Meta:
-        verbose_name = _('用户互动')
-        verbose_name_plural = _('用户互动')
-        db_table = 'cms_interaction'
-        unique_together = ('user', 'article', 'type')
-        indexes = [
-            models.Index(fields=['article', 'type']),
-            models.Index(fields=['user', 'type']),
-            models.Index(fields=['tenant', 'user', 'article', 'type']),
-        ]
-    
-    def __str__(self):
-        return f"{self.user.username} {self.get_type_display()} {self.article.title}"
-
-
 class UserLevel(models.Model):
     """
     用户等级

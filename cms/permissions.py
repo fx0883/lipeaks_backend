@@ -340,11 +340,4 @@ class ArticleStatisticsPermission(CMSBasePermission):
     """
     文章统计权限控制
     """
-    pass
-
-
-class InteractionPermission(CMSBasePermission):
-    """
-    用户互动权限控制
-    """
     pass 

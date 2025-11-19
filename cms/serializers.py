@@ -14,7 +14,7 @@ from parler_rest.fields import TranslatedField
 from .models import (
     Article, Category, Tag, TagGroup, Comment, 
     ArticleCategory, ArticleTag, ArticleMeta,
-    ArticleStatistics, ArticleVersion, Interaction,
+    ArticleStatistics, ArticleVersion,
     UserLevel, UserLevelRelation, AccessLog, OperationLog
 )
 
@@ -710,26 +710,4 @@ class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
                         tenant=tenant
                     )
         
-        return article
-
-
-class InteractionSerializer(serializers.ModelSerializer):
-    """用户互动序列化器"""
-    
-    class Meta:
-        model = Interaction
-        fields = [
-            'id', 'user', 'article', 'type', 'created_at', 'updated_at',
-            'ip_address', 'user_agent', 'extra_data', 'tenant'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'ip_address', 'user_agent', 'tenant']
-    
-    def validate(self, data):
-        """验证互动数据，确保用户和文章属于同一租户"""
-        user = data.get('user')
-        article = data.get('article')
-        
-        if user.tenant != article.tenant:
-            raise serializers.ValidationError(_("User and article must belong to the same tenant"))
-        
-        return data 
+        return article 

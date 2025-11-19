@@ -80,3 +80,30 @@ class MemberFollowPermission(permissions.BasePermission):
         """
         # 用户只能删除自己发起的关注
         return obj.follower == request.user
+
+
+class ArticleLikePermission(permissions.BasePermission):
+    """
+    文章点赞权限类
+    
+    - 只有Member用户可以点赞文章
+    - 用户只能管理自己发起的点赞
+    """
+    
+    def has_permission(self, request, view):
+        """
+        检查用户是否有权限访问文章点赞API
+        """
+        # 需要认证且是Member用户
+        return (
+            request.user and 
+            request.user.is_authenticated and 
+            isinstance(request.user, Member)
+        )
+    
+    def has_object_permission(self, request, view, obj):
+        """
+        检查用户是否有权限操作specific点赞记录
+        """
+        # 用户只能删除自己发起的点赞
+        return obj.from_member == request.user

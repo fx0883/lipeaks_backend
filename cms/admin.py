@@ -7,16 +7,15 @@ from django.db.models import Count
 from parler.admin import TranslatableAdmin
 from .models import (
     Article, 
-    Category, 
-    Tag, 
-    TagGroup, 
-    Comment, 
+    Category,
+    Tag,
+    TagGroup,
+    Comment,
     ArticleCategory, 
-    ArticleTag, 
+    ArticleTag,
     ArticleMeta,
     ArticleStatistics,
     ArticleVersion,
-    Interaction,
     UserLevel,
     UserLevelRelation,
     AccessLog,
@@ -342,20 +341,6 @@ class ArticleVersionAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('article', 'editor', 'tenant')
-
-@admin.register(Interaction)
-class InteractionAdmin(admin.ModelAdmin):
-    list_display = ['user', 'article', 'type', 'created_at', 'ip_address']
-    list_filter = ['type', 'created_at', 'tenant']
-    search_fields = ['user__username', 'article__title', 'ip_address']
-    raw_id_fields = ['user', 'article']
-    autocomplete_fields = ['tenant']
-    readonly_fields = ['created_at', 'updated_at', 'ip_address', 'user_agent']
-    list_per_page = 30
-    
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        return qs.select_related('user', 'article', 'tenant')
 
 @admin.register(UserLevel)
 class UserLevelAdmin(admin.ModelAdmin):

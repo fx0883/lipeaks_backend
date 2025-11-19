@@ -2,7 +2,7 @@
 用户互动序列化器
 """
 from rest_framework import serializers
-from .models import ArticleFavorite, MemberLike, MemberFollow
+from .models import ArticleFavorite, MemberLike, MemberFollow, ArticleLike
 from cms.serializers import ArticleListSerializer
 from users.models import Member
 
@@ -180,5 +180,57 @@ class MemberFollowCreateSerializer(serializers.ModelSerializer):
         # 检查是否已经关注
         if MemberFollow.objects.filter(follower=follower, following=value).exists():
             raise serializers.ValidationError("您已经关注过该用户")
+        
+        return value
+
+
+class ArticleLikeSerializer(serializers.ModelSerializer):
+    """文章点赞序列化器"""
+    
+    article_detail = ArticleListSerializer(source='article', read_only=True)
+    from_member_info = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ArticleLike
+        fields = [
+            'id', 'from_member', 'article', 'article_detail',
+            'from_member_info', 'tenant', 'created_at',
+            'ip_address', 'user_agent'
+        ]
+        read_only_fields = ['id', 'from_member', 'tenant', 'created_at', 'ip_address', 'user_agent']
+    
+    def get_from_member_info(self, obj):
+        """获取点赞发起者信息"""
+        return {
+            'id': obj.from_member.id,
+            'username': obj.from_member.username,
+            'nick_name': obj.from_member.nick_name,
+            'avatar': obj.from_member.avatar
+        }
+
+
+class ArticleLikeCreateSerializer(serializers.ModelSerializer):
+    """文章点赞创建序列化器"""
+    
+    class Meta:
+        model = ArticleLike
+        fields = ['article']
+    
+    def validate_article(self, value):
+        """验证文章是否存在且可访问"""
+        request = self.context.get('request')
+        from_member = request.user
+        
+        # 检查用户类型
+        if not isinstance(from_member, Member):
+            raise serializers.ValidationError("只有Member用户可以点赞文章")
+        
+        # 检查文章是否属于当前租户
+        if value.tenant_id != from_member.tenant_id:
+            raise serializers.ValidationError("您无法点赞其他租户的文章")
+        
+        # 检查是否已经点赞
+        if ArticleLike.objects.filter(from_member=from_member, article=value).exists():
+            raise serializers.ValidationError("您已经点赞过这篇文章")
         
         return value

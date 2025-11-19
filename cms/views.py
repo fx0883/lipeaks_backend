@@ -28,19 +28,19 @@ from users.models import User
 from .models import (
     Article, Category, Tag, TagGroup, Comment, 
     ArticleCategory, ArticleTag, ArticleMeta,
-    ArticleStatistics, ArticleVersion, Interaction,
+    ArticleStatistics, ArticleVersion,
     UserLevel, UserLevelRelation, AccessLog, OperationLog
 )
 from .serializers import (
     ArticleListSerializer, ArticleDetailSerializer, ArticleCreateUpdateSerializer,
     CategorySerializer, TagSerializer, TagGroupSerializer,
     CommentSerializer, ArticleVersionSerializer, ArticleMetaSerializer,
-    ArticleStatisticsSerializer, InteractionSerializer
+    ArticleStatisticsSerializer
 )
 from .permissions import (
     ArticlePermission, CategoryPermission, TagPermission,
     CommentPermission, ArticleVersionPermission, ArticleMetaPermission,
-    ArticleStatisticsPermission, InteractionPermission
+    ArticleStatisticsPermission
 )
 
 logger = logging.getLogger(__name__)

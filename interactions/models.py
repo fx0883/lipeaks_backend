@@ -141,3 +141,48 @@ class MemberFollow(models.Model):
             follower=self.following,
             following=self.follower
         ).exists()
+
+
+class ArticleLike(models.Model):
+    """
+    文章点赞模型
+    
+    记录Member用户对文章的点赞行为，支持租户隔离
+    """
+    from_member = models.ForeignKey(
+        'users.Member',
+        on_delete=models.CASCADE,
+        related_name='article_likes',
+        verbose_name=_("点赞发起者")
+    )
+    article = models.ForeignKey(
+        'cms.Article',
+        on_delete=models.CASCADE,
+        related_name='liked_by',
+        verbose_name=_("被点赞文章")
+    )
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        related_name='article_likes',
+        verbose_name=_("所属租户")
+    )
+    created_at = models.DateTimeField(_("点赞时间"), default=timezone.now, db_index=True)
+    ip_address = models.GenericIPAddressField(_("IP地址"), blank=True, null=True)
+    user_agent = models.CharField(_("用户代理"), max_length=255, blank=True, null=True)
+    
+    class Meta:
+        verbose_name = _('文章点赞')
+        verbose_name_plural = _('文章点赞')
+        db_table = 'interactions_article_like'
+        ordering = ['-created_at']
+        unique_together = [['from_member', 'article']]  # 同一用户不能重复点赞同一文章
+        indexes = [
+            models.Index(fields=['from_member', 'created_at']),
+            models.Index(fields=['article', 'created_at']),
+            models.Index(fields=['tenant', 'from_member']),
+            models.Index(fields=['tenant', 'article']),
+        ]
+    
+    def __str__(self):
+        return f"{self.from_member.username} liked {self.article.title}"

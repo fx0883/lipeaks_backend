@@ -11,15 +11,16 @@ import logging
 
 from common.authentication.jwt_auth import JWTAuthentication
 from common.pagination import StandardResultsSetPagination
-from cms.models import Article
+from cms.models import Article, ArticleStatistics
 from users.models import Member
-from .models import ArticleFavorite, MemberLike, MemberFollow
+from .models import ArticleFavorite, MemberLike, MemberFollow, ArticleLike
 from .serializers import (
     ArticleFavoriteSerializer, ArticleFavoriteCreateSerializer,
     MemberLikeSerializer, MemberLikeCreateSerializer,
-    MemberFollowSerializer, MemberFollowCreateSerializer
+    MemberFollowSerializer, MemberFollowCreateSerializer,
+    ArticleLikeSerializer, ArticleLikeCreateSerializer
 )
-from .permissions import ArticleFavoritePermission, MemberLikePermission, MemberFollowPermission
+from .permissions import ArticleFavoritePermission, MemberLikePermission, MemberFollowPermission, ArticleLikePermission
 
 logger = logging.getLogger(__name__)
 
@@ -1361,3 +1362,506 @@ class MemberFollowViewSet(viewsets.ModelViewSet):
             'followers_count': followers_count,
             'mutual_count': mutual_count
         })
+"""
+文章点赞视图
+"""
+from django.utils.translation import gettext_lazy as _
+from django.shortcuts import get_object_or_404
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse, OpenApiTypes
+import logging
+
+from common.authentication.jwt_auth import JWTAuthentication
+from common.pagination import StandardResultsSetPagination
+from cms.models import Article, ArticleStatistics
+from users.models import Member
+from .models import ArticleLike
+from .serializers import ArticleLikeSerializer, ArticleLikeCreateSerializer
+from .permissions import ArticleLikePermission
+
+logger = logging.getLogger(__name__)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="获取我点赞的文章列表",
+        description="""获取当前Member用户点赞的文章列表。
+        
+**权限要求**:
+- 需要认证（登录）
+- 只有Member用户可以访问
+- 仅返回当前用户的点赞记录
+
+**返回内容**:
+- 点赞记录ID和时间
+- 文章完整信息（标题、封面、作者等）
+- 支持分页
+
+**使用场景**: Member查看自己点赞过的文章列表
+        """,
+        tags=["用户互动-文章点赞"],
+        parameters=[
+            OpenApiParameter(name="X-Tenant-ID", description="租户ID（必须）", required=True, type=str, location=OpenApiParameter.HEADER),
+            OpenApiParameter(name="page", description="页码", required=False, type=int),
+            OpenApiParameter(name="page_size", description="每页数量", required=False, type=int),
+        ],
+        responses={
+            200: OpenApiResponse(
+                description="获取成功",
+                response=ArticleLikeSerializer(many=True)
+            ),
+            401: OpenApiResponse(description="未认证"),
+            403: OpenApiResponse(description="权限不足（非Member用户）"),
+        },
+        examples=[
+            OpenApiExample(
+                'Article Likes List Success',
+                summary='获取点赞文章列表成功示例',
+                value={
+                    'count': 25,
+                    'next': 'http://api.example.com/api/v1/interactions/article-likes/?page=2',
+                    'previous': None,
+                    'results': [
+                        {
+                            'id': 45,
+                            'from_member': 5,
+                            'article': 100,
+                            'article_detail': {
+                                'id': 100,
+                                'title': '深入理解Python装饰器',
+                                'slug': 'python-decorators',
+                                'excerpt': '本文详细介绍Python装饰器的原理和应用...',
+                                'cover_image': 'https://example.com/python.jpg',
+                                'author_info': {'id': 8, 'username': 'author'},
+                                'status': 'published',
+                                'views_count': 1250,
+                                'likes_count': 42
+                            },
+                            'from_member_info': {
+                                'id': 5,
+                                'username': 'member_user',
+                                'nick_name': '普通用户',
+                                'avatar': 'https://example.com/avatar1.jpg'
+                            },
+                            'tenant': 1,
+                            'created_at': '2024-01-20T10:30:00Z'
+                        }
+                    ]
+                },
+                response_only=True,
+            )
+        ]
+    ),
+    create=extend_schema(
+        summary="点赞文章",
+        description="""给指定文章点赞。
+        
+**权限要求**:
+- 需要认证（登录）
+- 只有Member用户可以点赞
+- 只能点赞本租户内的文章
+- 不能重复点赞同一文章
+
+**业务规则**:
+- 每个用户对每篇文章只能点赞一次
+- 点赞时自动记录租户、时间、IP和User-Agent
+- 点赞成功后实时更新文章统计的likes_count
+
+**使用场景**: Member浏览文章时点击点赞按钮
+        """,
+        tags=["用户互动-文章点赞"],
+        request=ArticleLikeCreateSerializer,
+        parameters=[
+            OpenApiParameter(name="X-Tenant-ID", description="租户ID（必须）", required=True, type=str, location=OpenApiParameter.HEADER),
+        ],
+        responses={
+            201: OpenApiResponse(
+                description="点赞成功",
+                response=ArticleLikeSerializer
+            ),
+            400: OpenApiResponse(description="请求错误（如文章不存在、已点赞等）"),
+            401: OpenApiResponse(description="未认证"),
+            403: OpenApiResponse(description="权限不足（非Member用户或尝试点赞其他租户文章）"),
+        },
+        examples=[
+            OpenApiExample(
+                'Like Article Request',
+                summary='点赞文章请求示例',
+                value={
+                    'article': 100
+                },
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Like Article Success',
+                summary='点赞成功响应示例',
+                value={
+                    'id': 45,
+                    'from_member': 5,
+                    'article': 100,
+                    'article_detail': {
+                        'id': 100,
+                        'title': '深入理解Python装饰器',
+                        'slug': 'python-decorators',
+                        'excerpt': '本文详细介绍Python装饰器的原理和应用...',
+                        'cover_image': 'https://example.com/python.jpg'
+                    },
+                    'from_member_info': {
+                        'id': 5,
+                        'username': 'member_user',
+                        'nick_name': '普通用户',
+                        'avatar': 'https://example.com/avatar1.jpg'
+                    },
+                    'tenant': 1,
+                    'created_at': '2024-01-20T10:30:00Z',
+                    'ip_address': '192.168.1.100',
+                    'user_agent': 'Mozilla/5.0...'
+                },
+                response_only=True,
+            )
+        ]
+    ),
+    destroy=extend_schema(
+        summary="取消点赞",
+        description="""从点赞列表中移除文章。
+        
+**权限要求**:
+- 需要认证（登录）
+- 只能删除自己的点赞记录
+
+**业务规则**:
+- 删除后文章统计的likes_count会实时更新
+- 操作是幂等的（重复删除不会报错）
+
+**使用场景**: Member在点赞列表中点击取消点赞
+        """,
+        tags=["用户互动-文章点赞"],
+        parameters=[
+            OpenApiParameter(name="id", description="点赞记录ID", required=True, type=OpenApiTypes.INT, location=OpenApiParameter.PATH),
+            OpenApiParameter(name="X-Tenant-ID", description="租户ID（必须）", required=True, type=str, location=OpenApiParameter.HEADER),
+        ],
+        responses={
+            204: OpenApiResponse(description="删除成功"),
+            401: OpenApiResponse(description="未认证"),
+            403: OpenApiResponse(description="权限不足（尝试删除别人的点赞）"),
+            404: OpenApiResponse(description="点赞记录不存在"),
+        }
+    )
+)
+class ArticleLikeViewSet(viewsets.ModelViewSet):
+    """
+    文章点赞视图集
+    
+    提供文章点赞的增删查功能
+    """
+    serializer_class = ArticleLikeSerializer
+    permission_classes = [ArticleLikePermission]
+    authentication_classes = [JWTAuthentication]
+    pagination_class = StandardResultsSetPagination
+    queryset = ArticleLike.objects.all().select_related('from_member', 'article', 'tenant')
+    
+    def get_queryset(self):
+        """
+        获取当前Member用户的点赞列表
+        """
+        member = self.request.user
+        return self.queryset.filter(from_member=member, tenant=member.tenant)
+    
+    def get_serializer_class(self):
+        """根据操作选择序列化器"""
+        if self.action == 'create':
+            return ArticleLikeCreateSerializer
+        return ArticleLikeSerializer
+    
+    def perform_create(self, serializer):
+        """
+        执行点赞创建操作
+        
+        - 自动设置当前用户和租户
+        - 记录IP和User-Agent
+        - 更新文章统计的likes_count
+        """
+        member = self.request.user
+        article = serializer.validated_data['article']
+        
+        # 保存点赞记录
+        like = serializer.save(
+            from_member=member,
+            tenant=member.tenant,
+            ip_address=self.request.META.get('REMOTE_ADDR'),
+            user_agent=self.request.META.get('HTTP_USER_AGENT', '')
+        )
+        
+        # 更新文章统计
+        self._update_article_likes_count(article)
+        
+        logger.info(f"Member {member.username} liked article {article.id}")
+    
+    def perform_destroy(self, instance):
+        """
+        执行取消点赞操作
+        
+        - 删除点赞记录
+        - 更新文章统计的likes_count
+        """
+        article = instance.article
+        member = instance.from_member
+        
+        # 删除点赞记录
+        instance.delete()
+        
+        # 更新文章统计
+        self._update_article_likes_count(article)
+        
+        logger.info(f"Member {member.username} unliked article {article.id}")
+    
+    def _update_article_likes_count(self, article):
+        """
+        更新文章点赞统计
+        
+        Args:
+            article: 文章实例
+        """
+        try:
+            stats, created = ArticleStatistics.objects.get_or_create(
+                article=article,
+                tenant=article.tenant
+            )
+            stats.likes_count = ArticleLike.objects.filter(article=article).count()
+            stats.save(update_fields=['likes_count'])
+            logger.debug(f"Updated article {article.id} likes_count to {stats.likes_count}")
+        except Exception as e:
+            logger.error(f"Failed to update article likes count: {str(e)}")
+    
+    @extend_schema(
+        summary="通过文章ID取消点赞",
+        description="""根据文章ID取消点赞（便捷方法）。
+        
+**权限要求**:
+- 需要认证（登录）
+
+**业务规则**:
+- 如果该文章未被点赞，返回404
+- 只能取消点赞自己的记录
+
+**使用场景**: Member在文章详情页点击取消点赞按钮（已知文章ID，不需要知道点赞记录ID）
+        """,
+        tags=["用户互动-文章点赞"],
+        parameters=[
+            OpenApiParameter(name="article_id", description="文章ID", required=True, type=OpenApiTypes.INT, location=OpenApiParameter.PATH),
+            OpenApiParameter(name="X-Tenant-ID", description="租户ID（必须）", required=True, type=str, location=OpenApiParameter.HEADER),
+        ],
+        responses={
+            204: OpenApiResponse(description="取消点赞成功"),
+            401: OpenApiResponse(description="未认证"),
+            404: OpenApiResponse(description="点赞记录不存在或文章不存在"),
+        },
+        examples=[
+            OpenApiExample(
+                'Unlike By Article ID Success',
+                summary='取消点赞成功',
+                value={'message': '已取消点赞'},
+                response_only=True,
+            )
+        ]
+    )
+    @action(detail=False, methods=['delete'], url_path='by-article/(?P<article_id>[^/.]+)')
+    def unlike_by_article(self, request, article_id=None):
+        """根据文章ID取消点赞"""
+        member = request.user
+        
+        # 查找点赞记录
+        like = get_object_or_404(
+            ArticleLike,
+            from_member=member,
+            article_id=article_id,
+            tenant=member.tenant
+        )
+        
+        # 删除点赞并更新统计
+        article = like.article
+        like.delete()
+        self._update_article_likes_count(article)
+        
+        logger.info(f"Member {member.username} unliked article {article_id}")
+        
+        return Response(
+            {'message': _('已取消点赞')},
+            status=status.HTTP_204_NO_CONTENT
+        )
+    
+    @extend_schema(
+        summary="检查文章是否已点赞",
+        description="""检查当前用户是否已点赞指定文章。
+        
+**权限要求**:
+- 需要认证（登录）
+
+**返回内容**:
+- is_liked: 是否已点赞
+- like_id: 点赞记录ID（如已点赞）
+- created_at: 点赞时间（如已点赞）
+
+**使用场景**: 前端显示文章详情时，判断是否显示"已点赞"状态
+        """,
+        tags=["用户互动-文章点赞"],
+        parameters=[
+            OpenApiParameter(name="article_id", description="文章ID", required=True, type=OpenApiTypes.INT, location=OpenApiParameter.PATH),
+            OpenApiParameter(name="X-Tenant-ID", description="租户ID（必须）", required=True, type=str, location=OpenApiParameter.HEADER),
+        ],
+        responses={
+            200: OpenApiResponse(
+                description="查询成功",
+                response={
+                    'type': 'object',
+                    'properties': {
+                        'is_liked': {'type': 'boolean'},
+                        'like_id': {'type': 'integer', 'nullable': True},
+                        'created_at': {'type': 'string', 'format': 'date-time', 'nullable': True}
+                    }
+                }
+            ),
+            401: OpenApiResponse(description="未认证"),
+            404: OpenApiResponse(description="文章不存在"),
+        },
+        examples=[
+            OpenApiExample(
+                'Article Is Liked',
+                summary='文章已点赞',
+                value={
+                    'is_liked': True,
+                    'like_id': 45,
+                    'created_at': '2024-01-20T10:30:00Z'
+                },
+                response_only=True,
+            ),
+            OpenApiExample(
+                'Article Not Liked',
+                summary='文章未点赞',
+                value={
+                    'is_liked': False,
+                    'like_id': None,
+                    'created_at': None
+                },
+                response_only=True,
+            )
+        ]
+    )
+    @action(detail=False, methods=['get'], url_path='check/(?P<article_id>[^/.]+)')
+    def check_like(self, request, article_id=None):
+        """检查文章是否已点赞"""
+        member = request.user
+        
+        # 验证文章存在
+        article = get_object_or_404(Article, id=article_id, tenant=member.tenant)
+        
+        # 查找点赞记录
+        like = ArticleLike.objects.filter(
+            from_member=member,
+            article=article
+        ).first()
+        
+        if like:
+            return Response({
+                'is_liked': True,
+                'like_id': like.id,
+                'created_at': like.created_at
+            })
+        else:
+            return Response({
+                'is_liked': False,
+                'like_id': None,
+                'created_at': None
+            })
+    
+    @extend_schema(
+        summary="获取文章的点赞用户列表",
+        description="""获取指定文章的所有点赞用户列表。
+        
+**权限要求**:
+- 需要认证（登录）
+
+**返回内容**:
+- 点赞用户的完整信息
+- 点赞时间
+- 支持分页
+
+**使用场景**: 显示文章有哪些用户点赞了
+        """,
+        tags=["用户互动-文章点赞"],
+        parameters=[
+            OpenApiParameter(name="article_id", description="文章ID", required=True, type=OpenApiTypes.INT, location=OpenApiParameter.PATH),
+            OpenApiParameter(name="X-Tenant-ID", description="租户ID（必须）", required=True, type=str, location=OpenApiParameter.HEADER),
+            OpenApiParameter(name="page", description="页码", required=False, type=int),
+            OpenApiParameter(name="page_size", description="每页数量", required=False, type=int),
+        ],
+        responses={
+            200: OpenApiResponse(
+                description="获取成功",
+                response=ArticleLikeSerializer(many=True)
+            ),
+            401: OpenApiResponse(description="未认证"),
+            404: OpenApiResponse(description="文章不存在"),
+        },
+        examples=[
+            OpenApiExample(
+                'Article Likers Success',
+                summary='获取文章点赞用户列表成功示例',
+                value={
+                    'count': 42,
+                    'next': None,
+                    'previous': None,
+                    'results': [
+                        {
+                            'id': 45,
+                            'from_member': 5,
+                            'from_member_info': {
+                                'id': 5,
+                                'username': 'member_user1',
+                                'nick_name': '用户1',
+                                'avatar': 'https://example.com/avatar1.jpg'
+                            },
+                            'tenant': 1,
+                            'created_at': '2024-01-20T10:30:00Z'
+                        },
+                        {
+                            'id': 46,
+                            'from_member': 8,
+                            'from_member_info': {
+                                'id': 8,
+                                'username': 'member_user2',
+                                'nick_name': '用户2',
+                                'avatar': 'https://example.com/avatar2.jpg'
+                            },
+                            'tenant': 1,
+                            'created_at': '2024-01-20T11:15:00Z'
+                        }
+                    ]
+                },
+                response_only=True,
+            )
+        ]
+    )
+    @action(detail=False, methods=['get'], url_path='by-article/(?P<article_id>[^/.]+)/likers')
+    def article_likers(self, request, article_id=None):
+        """获取文章的点赞用户列表"""
+        member = request.user
+        
+        # 验证文章存在
+        article = get_object_or_404(Article, id=article_id, tenant=member.tenant)
+        
+        # 获取点赞列表
+        queryset = ArticleLike.objects.filter(
+            article=article,
+            tenant=member.tenant
+        ).select_related('from_member', 'article', 'tenant')
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)

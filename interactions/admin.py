@@ -2,7 +2,7 @@
 用户互动Admin配置
 """
 from django.contrib import admin
-from .models import ArticleFavorite, MemberLike, MemberFollow
+from .models import ArticleFavorite, MemberLike, MemberFollow, ArticleLike
 
 
 @admin.register(ArticleFavorite)
@@ -51,3 +51,19 @@ class MemberFollowAdmin(admin.ModelAdmin):
         """优化查询"""
         qs = super().get_queryset(request)
         return qs.select_related('follower', 'following', 'tenant')
+
+
+@admin.register(ArticleLike)
+class ArticleLikeAdmin(admin.ModelAdmin):
+    """文章点赞Admin"""
+    list_display = ['id', 'from_member', 'article', 'tenant', 'created_at', 'ip_address']
+    list_filter = ['created_at', 'tenant']
+    search_fields = ['from_member__username', 'article__title', 'ip_address']
+    date_hierarchy = 'created_at'
+    readonly_fields = ['created_at', 'ip_address', 'user_agent']
+    raw_id_fields = ['from_member', 'article', 'tenant']
+    
+    def get_queryset(self, request):
+        """优化查询"""
+        qs = super().get_queryset(request)
+        return qs.select_related('from_member', 'article', 'tenant')
