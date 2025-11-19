@@ -839,8 +839,8 @@ class AdminUserAvatarUploadView(APIView):
                 for chunk in avatar_file.chunks():
                     destination.write(chunk)
             
-            # 生成相对URL路径（保存到数据库）
-            relative_url = f"{settings.MEDIA_URL}avatars/{unique_filename}"
+            # 生成相对URL路径（保存到数据库，不带前缀斜杠）
+            relative_url = f"media/avatars/{unique_filename}"
             
             # 更新用户头像URL
             user.avatar = relative_url
@@ -988,8 +988,8 @@ class AdminUserSpecificAvatarUploadView(APIView):
                 for chunk in avatar_file.chunks():
                     destination.write(chunk)
             
-            # 生成相对URL路径（保存到数据库）
-            relative_url = f"{settings.MEDIA_URL}avatars/{unique_filename}"
+            # 生成相对URL路径（保存到数据库，不带前缀斜杠）
+            relative_url = f"media/avatars/{unique_filename}"
             
             # 更新用户头像URL
             target_user.avatar = relative_url

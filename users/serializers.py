@@ -8,6 +8,7 @@ from django.contrib.auth.password_validation import validate_password
 from users.models import User, Member, PasswordResetToken
 from tenants.models import Tenant
 from common.utils.image_url import add_domain_to_image_url
+from common.mixins import ImageFieldNormalizerMixin
 from common.utils.tenant_header import get_header_tenant_id, require_member_header_match
 from common.permissions import IsSuperAdmin, IsAdmin
 from common.utils.user_permissions import is_super_admin, is_admin
@@ -58,17 +59,12 @@ class UserSerializer(serializers.ModelSerializer):
         """获取完整的头像URL"""
         if not obj.avatar:
             return ""
-            
+        
         # 获取请求对象
         request = self.context.get('request')
         if request is not None:
-            # 从请求中获取域名和协议
-            protocol = 'https' if request.is_secure() else 'http'
-            domain = request.get_host()
-            # 确保路径以/开头
-            path = obj.avatar if obj.avatar.startswith('/') else f'/{obj.avatar}'
-            return f"{protocol}://{domain}{path}"
-            
+            return add_domain_to_image_url(request, obj.avatar)
+        
         # 如果无法获取请求对象，使用配置中的BASE_URL
         from django.conf import settings
         base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
@@ -165,10 +161,12 @@ class SuperAdminCreateSerializer(UserCreateSerializer):
         return user
 
 
-class UserUpdateSerializer(serializers.ModelSerializer):
+class UserUpdateSerializer(ImageFieldNormalizerMixin, serializers.ModelSerializer):
     """
     用户更新序列化器
     """
+    image_fields = ['avatar']  # 需要标准化的图片字段
+    
     class Meta:
         model = User
         fields = [
@@ -676,10 +674,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-class SubAccountCreateSerializer(serializers.ModelSerializer):
+class SubAccountCreateSerializer(ImageFieldNormalizerMixin, serializers.ModelSerializer):
     """
     子账号创建序列化器
     """
+    image_fields = ['avatar']  # 需要标准化的图片字段
     
     class Meta:
         model = Member

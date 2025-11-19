@@ -666,8 +666,8 @@ class FileUploadView(APIView):
                 for chunk in upload_file.chunks():
                     destination.write(chunk)
             
-            # 生成相对URL路径
-            relative_url = f"{settings.MEDIA_URL}uploads/{upload_dir_name}/{unique_filename}"
+            # 生成相对URL路径（不带前缀斜杠）
+            relative_url = f"media/uploads/{upload_dir_name}/{unique_filename}"
             
             logger.info(f"用户 {user.username} 上传了图片 {unique_filename} 到目录 {upload_dir_name}")
             
@@ -882,8 +882,8 @@ class ImageUploadWithThumbnailView(APIView):
                 # 获取缩略图文件大小
                 thumbnail_size = os.path.getsize(thumbnail_path)
                 
-                # 生成缩略图URL
-                thumbnail_url = f"{settings.MEDIA_URL}uploads/{upload_dir_name}/{thumbnail_filename}"
+                # 生成缩略图URL（不带前缀斜杠）
+                thumbnail_url = f"media/uploads/{upload_dir_name}/{thumbnail_filename}"
                 
             except Exception as thumb_error:
                 logger.error(f"生成缩略图失败: {str(thumb_error)}")
@@ -899,8 +899,8 @@ class ImageUploadWithThumbnailView(APIView):
                     }
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            # 生成原图相对URL路径
-            relative_url = f"{settings.MEDIA_URL}uploads/{upload_dir_name}/{unique_filename}"
+            # 生成原图相对URL路径（不带前缀斜杠）
+            relative_url = f"media/uploads/{upload_dir_name}/{unique_filename}"
             
             logger.info(f"用户 {user.username} 上传了图片 {unique_filename} 到目录 {upload_dir_name}，并生成了缩略图")
             

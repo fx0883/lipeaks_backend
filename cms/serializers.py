@@ -8,6 +8,7 @@ from django.utils import timezone
 from users.serializers import UserSerializer, MemberSerializer
 from tenants.serializers import TenantSerializer
 from common.utils.image_url import add_domain_to_image_url
+from common.mixins import ImageFieldNormalizerMixin
 from parler_rest.serializers import TranslatableModelSerializer, TranslatedFieldsField
 from parler_rest.fields import TranslatedField
 
@@ -19,9 +20,10 @@ from .models import (
 )
 
 
-class CategorySerializer(TranslatableModelSerializer):
+class CategorySerializer(ImageFieldNormalizerMixin, TranslatableModelSerializer):
     """分类序列化器（支持多语言）"""
     translations = TranslatedFieldsField(shared_model=Category)
+    image_fields = ['cover_image']  # 需要标准化的图片字段
     
     class Meta:
         model = Category
@@ -51,6 +53,12 @@ class CategorySerializer(TranslatableModelSerializer):
         data['description'] = instance.safe_translation_getter('description', any_language=True) or ''
         data['seo_title'] = instance.safe_translation_getter('seo_title', any_language=True) or ''
         data['seo_description'] = instance.safe_translation_getter('seo_description', any_language=True) or ''
+        
+        # 处理cover_image：为相对路径添加domain
+        if data.get('cover_image'):
+            request = self.context.get('request')
+            if request:
+                data['cover_image'] = add_domain_to_image_url(request, data['cover_image'])
         
         return data
 
@@ -476,8 +484,9 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
         return breadcrumb
 
 
-class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
+class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.ModelSerializer):
     """文章创建和更新序列化器"""
+    image_fields = ['cover_image', 'cover_image_small']  # 需要标准化的图片字段
     
     category_ids = serializers.ListField(
         child=serializers.IntegerField(),
