@@ -694,6 +694,242 @@ class FileUploadView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class ImageUploadWithThumbnailView(APIView):
+    """
+    图片上传并生成缩略图视图
+    
+    允许已登录用户上传图片文件，自动生成缩略图，并返回原图和缩略图的URL
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    @extend_schema(
+        summary="上传图片并生成缩略图",
+        description="上传图片文件，自动生成缩略图并返回原图和缩略图的访问URL，仅支持已登录用户。\n\n"
+                   "- 缩略图宽度：200px，高度自适应保持宽高比\n"
+                   "- 缩略图质量：JPEG 85\n"
+                   "- 对于普通租户用户：默认上传到'租户ID/'目录，指定folder参数则上传到'租户ID/{folder}/'目录\n"
+                   "- 对于超级管理员：默认上传到'super_admin/'目录，指定folder参数则上传到'super_admin/{folder}/'目录",
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'file': {
+                        'type': 'string',
+                        'format': 'binary',
+                        'description': '要上传的图片文件，支持JPG、PNG、GIF、WEBP或BMP格式',
+                    },
+                    'folder': {
+                        'type': 'string',
+                        'description': '可选的存储子文件夹名称',
+                    }
+                },
+                'required': ['file']
+            }
+        },
+        responses={
+            200: OpenApiResponse(
+                description="文件上传成功",
+                response={
+                    'type': 'object',
+                    'properties': {
+                        'success': {'type': 'boolean', 'example': True},
+                        'code': {'type': 'integer', 'example': 2000},
+                        'message': {'type': 'string', 'example': '图片上传成功'},
+                        'data': {
+                            'type': 'object',
+                            'properties': {
+                                'url': {'type': 'string', 'example': 'https://example.com/media/uploads/17/image.jpg', 'description': '原图URL'},
+                                'filename': {'type': 'string', 'example': 'c96f4957-af76-456b-80cc-5a343f927cd3.jpg', 'description': '原图文件名'},
+                                'size': {'type': 'integer', 'example': 235065, 'description': '原图大小（字节）'},
+                                'thumbnail_url': {'type': 'string', 'example': 'https://example.com/media/uploads/17/image_thumb_small.jpg', 'description': '缩略图URL'},
+                                'thumbnail_filename': {'type': 'string', 'example': 'c96f4957-af76-456b-80cc-5a343f927cd3_thumb_small.jpg', 'description': '缩略图文件名'},
+                                'thumbnail_size': {'type': 'integer', 'example': 15234, 'description': '缩略图大小（字节）'},
+                            }
+                        }
+                    }
+                }
+            ),
+            400: OpenApiResponse(
+                description="请求错误",
+                response={
+                    'type': 'object',
+                    'properties': {
+                        'success': {'type': 'boolean', 'example': False},
+                        'code': {'type': 'integer', 'example': 4000},
+                        'message': {'type': 'string', 'example': '请求参数错误'},
+                        'data': {
+                            'type': 'object',
+                            'properties': {
+                                'detail': {'type': 'string', 'example': '未提供文件/不支持的文件类型/文件太大'},
+                            }
+                        }
+                    }
+                }
+            ),
+            401: OpenApiResponse(description="未认证"),
+            500: OpenApiResponse(description="服务器内部错误")
+        },
+        tags=["通用功能"]
+    )
+    def post(self, request, *args, **kwargs):
+        """
+        上传图片并生成缩略图
+        """
+        from common.utils.image_utils import create_thumbnail
+        
+        user = request.user
+        
+        # 获取上传的文件
+        upload_file = request.FILES.get('file')
+        
+        if not upload_file:
+            return Response({
+                'success': False,
+                'code': 4000,
+                'message': '请求参数错误',
+                'data': {
+                    'detail': '未提供文件'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 验证文件类型
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']
+        ext = os.path.splitext(upload_file.name)[1].lower()
+        if ext not in valid_extensions:
+            return Response({
+                'success': False,
+                'code': 4000,
+                'message': '请求参数错误',
+                'data': {
+                    'detail': '不支持的文件类型，请上传JPG、PNG、GIF、WEBP或BMP格式的图片'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 验证文件大小
+        if upload_file.size == 0:
+            return Response({
+                'success': False,
+                'code': 4000,
+                'message': '请求参数错误',
+                'data': {
+                    'detail': '文件为空，请上传有效的图片文件'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        max_size = 5 * 1024 * 1024  # 5MB
+        if upload_file.size > max_size:
+            return Response({
+                'success': False,
+                'code': 4000,
+                'message': '请求参数错误',
+                'data': {
+                    'detail': f'文件太大，图片大小不能超过5MB'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # 获取存储子文件夹（如果提供）
+            folder = request.data.get('folder', '')
+            
+            # 安全处理文件夹名称，避免路径遍历
+            folder = folder.replace('..', '').replace('/', '').replace('\\', '')
+            
+            # 根据用户类型确定基础目录
+            if is_super_admin(user):
+                # 超级管理员：默认super_admin目录，有folder则为super_admin/{folder}
+                base_dir = 'super_admin'
+                if folder:
+                    upload_dir_name = f"{base_dir}/{folder}"
+                else:
+                    upload_dir_name = base_dir
+            else:
+                # 普通租户用户：默认租户ID目录，有folder则为租户ID/{folder}
+                if user.tenant:
+                    base_dir = str(user.tenant.id)
+                    if folder:
+                        upload_dir_name = f"{base_dir}/{folder}"
+                    else:
+                        upload_dir_name = base_dir
+                else:
+                    # 如果用户没有关联租户，使用用户ID作为目录
+                    base_dir = f"user_{user.id}"
+                    if folder:
+                        upload_dir_name = f"{base_dir}/{folder}"
+                    else:
+                        upload_dir_name = base_dir
+            
+            # 生成唯一文件名，避免覆盖已有文件
+            file_uuid = str(uuid.uuid4())
+            unique_filename = f"{file_uuid}{ext}"
+            thumbnail_filename = f"{file_uuid}_thumb_small.jpg"
+            
+            # 确保媒体目录存在
+            upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', upload_dir_name)
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            # 保存原图
+            file_path = os.path.join(upload_dir, unique_filename)
+            with open(file_path, 'wb+') as destination:
+                for chunk in upload_file.chunks():
+                    destination.write(chunk)
+            
+            # 生成缩略图
+            thumbnail_path = os.path.join(upload_dir, thumbnail_filename)
+            try:
+                create_thumbnail(file_path, thumbnail_path, width=200, quality=85)
+                
+                # 获取缩略图文件大小
+                thumbnail_size = os.path.getsize(thumbnail_path)
+                
+                # 生成缩略图URL
+                thumbnail_url = f"{settings.MEDIA_URL}uploads/{upload_dir_name}/{thumbnail_filename}"
+                
+            except Exception as thumb_error:
+                logger.error(f"生成缩略图失败: {str(thumb_error)}")
+                # 如果缩略图生成失败，删除原图并返回错误
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                return Response({
+                    'success': False,
+                    'code': 5000,
+                    'message': '服务器内部错误',
+                    'data': {
+                        'detail': f'生成缩略图失败: {str(thumb_error)}'
+                    }
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # 生成原图相对URL路径
+            relative_url = f"{settings.MEDIA_URL}uploads/{upload_dir_name}/{unique_filename}"
+            
+            logger.info(f"用户 {user.username} 上传了图片 {unique_filename} 到目录 {upload_dir_name}，并生成了缩略图")
+            
+            return Response({
+                'success': True,
+                'code': 2000,
+                'message': '图片上传成功',
+                'data': {
+                    'url': relative_url,
+                    'filename': unique_filename,
+                    'size': upload_file.size,
+                    'thumbnail_url': thumbnail_url,
+                    'thumbnail_filename': thumbnail_filename,
+                    'thumbnail_size': thumbnail_size
+                }
+            })
+        
+        except Exception as e:
+            logger.error(f"图片上传失败: {str(e)}")
+            return Response({
+                'success': False,
+                'code': 5000,
+                'message': '服务器内部错误',
+                'data': {
+                    'detail': f'图片上传失败: {str(e)}'
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class SystemInfoView(APIView):
     """
     系统信息API

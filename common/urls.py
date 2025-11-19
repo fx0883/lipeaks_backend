@@ -13,6 +13,7 @@ from common.views import (
     TestAuthErrorResponseView,
     TestPaginationResponseView,
     FileUploadView,
+    ImageUploadWithThumbnailView,
     SystemInfoView
 )
 
@@ -30,6 +31,9 @@ urlpatterns = [
     
     # 通用文件上传
     path('upload-file/', FileUploadView.as_view(), name='file-upload'),
+    
+    # 图片上传并生成缩略图
+    path('upload-image-with-thumbnail/', ImageUploadWithThumbnailView.as_view(), name='image-upload-with-thumbnail'),
     
     # 测试标准响应格式 - 类视图
     path('test-format-class/', TestStandardResponseView.as_view(), name='test-standard-response-class'),

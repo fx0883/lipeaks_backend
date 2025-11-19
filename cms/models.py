@@ -436,6 +436,10 @@ class Tag(models.Model):
 class Comment(models.Model):
     """
     评论模型
+    支持三种评论者类型：
+    1. 管理员用户（User）- user字段非空
+    2. 普通成员（Member）- member字段非空
+    3. 游客 - guest_name字段非空
     """
     STATUS_CHOICES = (
         ('pending', '待审核'),
@@ -458,13 +462,27 @@ class Comment(models.Model):
         blank=True,
         null=True
     )
+    # 双外键支持两种用户类型（User和Member）
+    # 或者是游客评论（guest_name非空）
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name="cms_comments",
-        verbose_name=_("用户"),
+        verbose_name=_("管理员用户"),
         blank=True,
-        null=True
+        null=True,
+        db_index=True,
+        help_text="如果评论者是管理员User，此字段非空"
+    )
+    member = models.ForeignKey(
+        'users.Member',
+        on_delete=models.CASCADE,
+        related_name="cms_comments",
+        verbose_name=_("Member用户"),
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="如果评论者是Member，此字段非空"
     )
     guest_name = models.CharField(_("访客名称"), max_length=50, blank=True, null=True)
     guest_email = models.EmailField(_("访客邮箱"), blank=True, null=True)
@@ -492,17 +510,109 @@ class Comment(models.Model):
         indexes = [
             models.Index(fields=['article']),
             models.Index(fields=['user']),
+            models.Index(fields=['member']),
             models.Index(fields=['parent']),
             models.Index(fields=['status', 'created_at']),
             models.Index(fields=['tenant', 'status', 'created_at']),
+            models.Index(fields=['tenant', 'user']),
+            models.Index(fields=['tenant', 'member']),
+        ]
+        constraints = [
+            # 确保至少有一种评论者类型
+            models.CheckConstraint(
+                check=(
+                    models.Q(user__isnull=False, member__isnull=True, guest_name__isnull=True) |
+                    models.Q(user__isnull=True, member__isnull=False, guest_name__isnull=True) |
+                    models.Q(user__isnull=True, member__isnull=True, guest_name__isnull=False)
+                ),
+                name='comment_one_author_type_required'
+            )
         ]
     
     def __str__(self):
-        if self.user:
-            author = self.user.username
-        else:
-            author = self.guest_name or "访客"
+        author = self.author_username or "访客"
         return f"{author}评论: {self.content[:30]}..."
+    
+    @property
+    def author(self):
+        """
+        返回评论者对象（User、Member或None）
+        用于统一获取评论者
+        """
+        return self.user or self.member
+    
+    @property
+    def author_username(self):
+        """获取评论者用户名"""
+        if self.user:
+            return self.user.username
+        elif self.member:
+            return self.member.username
+        elif self.guest_name:
+            return self.guest_name
+        return None
+    
+    @property
+    def author_display_name(self):
+        """获取评论者显示名称"""
+        if self.user:
+            if hasattr(self.user, 'display_name') and self.user.display_name:
+                return self.user.display_name
+            if hasattr(self.user, 'nick_name') and self.user.nick_name:
+                return self.user.nick_name
+            return self.user.username
+        elif self.member:
+            if hasattr(self.member, 'display_name') and self.member.display_name:
+                return self.member.display_name
+            if hasattr(self.member, 'nick_name') and self.member.nick_name:
+                return self.member.nick_name
+            return self.member.username
+        elif self.guest_name:
+            return self.guest_name
+        return None
+    
+    @property
+    def is_author_member(self):
+        """判断评论者是否为Member类型"""
+        return self.member_id is not None
+    
+    @property
+    def is_author_admin(self):
+        """判断评论者是否为管理员User类型"""
+        return self.user_id is not None
+    
+    @property
+    def is_guest(self):
+        """判断是否为游客评论"""
+        return self.guest_name is not None and self.user_id is None and self.member_id is None
+    
+    @property
+    def author_type(self):
+        """获取评论者类型"""
+        if self.member_id:
+            return 'member'
+        elif self.user_id:
+            return 'admin'
+        elif self.guest_name:
+            return 'guest'
+        return None
+    
+    def clean(self):
+        """验证模型数据"""
+        super().clean()
+        
+        # 验证至少有一种评论者类型
+        has_user = self.user_id is not None
+        has_member = self.member_id is not None
+        has_guest = self.guest_name is not None and self.guest_name.strip() != ''
+        
+        if not (has_user or has_member or has_guest):
+            raise ValidationError(_("必须指定user、member或guest_name中的一个作为评论者"))
+        
+        # 验证只能有一种评论者类型
+        author_count = sum([has_user, has_member, has_guest])
+        if author_count > 1:
+            raise ValidationError(_("user、member和guest_name只能选择其中一个"))
 
 
 class ArticleCategory(models.Model):
@@ -898,6 +1008,9 @@ class AccessLog(models.Model):
 class OperationLog(models.Model):
     """
     操作日志模型
+    支持两种操作者类型：
+    1. 管理员用户（User）- user字段非空
+    2. 普通成员（Member）- member字段非空
     """
     ACTION_CHOICES = (
         ('create', '创建'),
@@ -919,11 +1032,26 @@ class OperationLog(models.Model):
         ('setting', '设置'),
     )
     
+    # 双外键支持两种用户类型（User和Member）
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name="operation_logs",
-        verbose_name=_("用户")
+        verbose_name=_("管理员用户"),
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="如果操作者是管理员User，此字段非空"
+    )
+    member = models.ForeignKey(
+        'users.Member',
+        on_delete=models.CASCADE,
+        related_name="operation_logs",
+        verbose_name=_("Member用户"),
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="如果操作者是Member，此字段非空"
     )
     action = models.CharField(_("操作类型"), max_length=50, choices=ACTION_CHOICES)
     entity_type = models.CharField(_("实体类型"), max_length=50, choices=ENTITY_TYPE_CHOICES)
@@ -946,11 +1074,92 @@ class OperationLog(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['user']),
+            models.Index(fields=['member']),
             models.Index(fields=['entity_type', 'entity_id']),
             models.Index(fields=['action']),
             models.Index(fields=['created_at']),
             models.Index(fields=['tenant', 'entity_type', 'entity_id']),
+            models.Index(fields=['tenant', 'user']),
+            models.Index(fields=['tenant', 'member']),
+        ]
+        constraints = [
+            # 确保user和member有且仅有一个非空
+            models.CheckConstraint(
+                check=(
+                    models.Q(user__isnull=False, member__isnull=True) |
+                    models.Q(user__isnull=True, member__isnull=False)
+                ),
+                name='operation_log_one_operator_required'
+            )
         ]
     
     def __str__(self):
-        return f"{self.user.username} {self.get_action_display()} {self.get_entity_type_display()} {self.entity_id} 于 {self.created_at}"
+        operator = self.operator_username or "未知用户"
+        return f"{operator} {self.get_action_display()} {self.get_entity_type_display()} {self.entity_id} 于 {self.created_at}"
+    
+    @property
+    def operator(self):
+        """
+        返回操作者对象（User或Member）
+        用于统一获取操作者
+        """
+        return self.user or self.member
+    
+    @property
+    def operator_username(self):
+        """获取操作者用户名"""
+        if self.user:
+            return self.user.username
+        elif self.member:
+            return self.member.username
+        return None
+    
+    @property
+    def operator_display_name(self):
+        """获取操作者显示名称"""
+        if self.user:
+            if hasattr(self.user, 'display_name') and self.user.display_name:
+                return self.user.display_name
+            if hasattr(self.user, 'nick_name') and self.user.nick_name:
+                return self.user.nick_name
+            return self.user.username
+        elif self.member:
+            if hasattr(self.member, 'display_name') and self.member.display_name:
+                return self.member.display_name
+            if hasattr(self.member, 'nick_name') and self.member.nick_name:
+                return self.member.nick_name
+            return self.member.username
+        return None
+    
+    @property
+    def is_operator_member(self):
+        """判断操作者是否为Member类型"""
+        return self.member_id is not None
+    
+    @property
+    def is_operator_admin(self):
+        """判断操作者是否为管理员User类型"""
+        return self.user_id is not None
+    
+    @property
+    def operator_type(self):
+        """获取操作者类型"""
+        if self.member_id:
+            return 'member'
+        elif self.user_id:
+            return 'admin'
+        return None
+    
+    def clean(self):
+        """验证模型数据"""
+        super().clean()
+        
+        # 验证user和member有且仅有一个非空
+        has_user = self.user_id is not None
+        has_member = self.member_id is not None
+        
+        if not has_user and not has_member:
+            raise ValidationError(_("必须指定user或member中的一个作为操作者"))
+        
+        if has_user and has_member:
+            raise ValidationError(_("user和member不能同时指定，只能选择其中一个"))

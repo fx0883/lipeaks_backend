@@ -52,18 +52,33 @@
 - 创建标签 (`POST /cms/tags/`)
 - 获取标签分组列表 (`GET /cms/tag-groups/`)
 
-### 6. 💬 [评论系统](06_comments.md) - 13个接口
-        - 获取文章评论列表 (`GET /cms/comments/`)
-        - 获取单条评论详情 (`GET /cms/comments/{id}/`)
-        - 发表评论 (`POST /cms/comments/`)
-        - 回复评论 (`POST /cms/comments/{id}/replies/`)
-        - 更新评论 (`PUT/PATCH /cms/comments/{id}/`)
-        - 删除评论 (`DELETE /cms/comments/{id}/`)
-        - 获取评论回复 (`GET /cms/comments/{id}/replies/`)
-        - 点赞评论 (`POST /cms/comments/{id}/like/`)
-        - 取消点赞评论 (`DELETE /cms/comments/{id}/like/`)
-        - 举报评论 (`POST /cms/comments/{id}/report/`)
-        - 审核评论 (`POST /cms/comments/{id}/moderate/`)
+### 6. 💬 [评论系统](06_comments_api.md) - 5个核心接口 ⭐ 已升级
+**📢 重要更新**: 评论系统已升级为双外键架构，支持 Member/Admin/游客三种评论者
+- 获取评论列表 (`GET /cms/comments/`) - 支持匿名访问
+- Member 创建评论 (`POST /cms/comments/`) - 自动批准
+- 游客创建评论 (`POST /cms/comments/`) - 需要审核
+- 更新评论 (`PATCH /cms/comments/{id}/`) - Member可更新自己的评论
+- 删除评论 (`DELETE /cms/comments/{id}/`) - Member可删除自己的评论
+
+**新特性**:
+- ✅ 支持 Member 用户直接评论（自动批准）
+- ✅ 支持游客匿名评论（需要审核）
+- ✅ Member 可管理自己的评论
+- ✅ 双外键架构（user_id + member_id）
+- 📄 详细文档: [COMMENT_SYSTEM_UPDATE.md](COMMENT_SYSTEM_UPDATE.md)
+
+### 7. 🛠️ [管理员CMS管理](07_admin_cms_management.md) - 11个接口
+- 获取文章列表 (`GET /cms/articles/`)
+- 获取单篇文章 (`GET /cms/articles/{id}/`)
+- 创建文章 (`POST /cms/articles/`)
+- 更新文章 (`PUT/PATCH /cms/articles/{id}/`)
+- 删除文章 (`DELETE /cms/articles/{id}/`)
+- 发布文章 (`POST /cms/articles/{id}/publish/`)
+- 取消发布 (`POST /cms/articles/{id}/unpublish/`)
+- 归档文章 (`POST /cms/articles/{id}/archive/`)
+- 获取文章统计 (`GET /cms/articles/{id}/statistics/`)
+- 获取版本历史 (`GET /cms/articles/{id}/versions/`)
+- 批量删除文章 (`POST /cms/articles/batch-delete/`)
 
 ## 🔑 通用规范
 
@@ -138,6 +153,7 @@ curl -X POST https://your-domain.com/api/v1/auth/member/register/ \
 
 ---
 
-**文档版本**: v2.0 (双外键架构优化版)  
-**更新时间**: 2025-11-10  
-**适用对象**: 前端开发人员
+**文档版本**: v3.0 (评论系统双外键升级版)  
+**更新时间**: 2025-11-13  
+**适用对象**: 前端开发人员  
+**最新更新**: 评论系统支持 Member 用户和游客评论

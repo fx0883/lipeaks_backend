@@ -128,35 +128,69 @@ class ArticleVersionSerializer(serializers.ModelSerializer):
 
 
 class CommentSerializer(serializers.ModelSerializer):
-    """评论序列化器"""
+    """
+    评论序列化器
+    支持三种评论者类型：管理员用户、普通成员、游客
+    """
     
-    user_info = UserSerializer(source='user', read_only=True)
+    author_info = serializers.SerializerMethodField()
+    author_type = serializers.SerializerMethodField()
     replies_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Comment
         fields = [
-            'id', 'article', 'parent', 'user', 'user_info', 'guest_name',
-            'guest_email', 'guest_website', 'content', 'status', 'ip_address',
-            'user_agent', 'created_at', 'updated_at', 'is_pinned', 'likes_count',
-            'tenant', 'replies_count'
+            'id', 'article', 'parent', 'user', 'member', 'author_info', 'author_type',
+            'guest_name', 'guest_email', 'guest_website', 'content',
+            'status', 'ip_address', 'user_agent', 'created_at', 'updated_at', 
+            'is_pinned', 'likes_count', 'tenant', 'replies_count'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'ip_address', 'user_agent', 'tenant']
+    
+    def get_author_info(self, obj) -> dict:
+        """获取评论者信息（支持User、Member和游客）"""
+        if obj.member_id:
+            # Member评论者
+            return MemberSerializer(obj.member).data
+        elif obj.user_id:
+            # User评论者
+            return UserSerializer(obj.user).data
+        elif obj.guest_name:
+            # 游客评论
+            return {
+                'name': obj.guest_name,
+                'email': obj.guest_email,
+                'website': obj.guest_website,
+                'type': 'guest'
+            }
+        return None
+    
+    def get_author_type(self, obj) -> str:
+        """获取评论者类型"""
+        return obj.author_type
     
     def get_replies_count(self, obj) -> int:
         return obj.replies.count()
     
     def validate(self, data):
         """验证评论数据"""
-        # 对于已认证用户，不需要检查user字段，因为它会在perform_create中自动设置
-        # 对于游客评论，才需要检查guest_name
+        # 已认证用户的评论会在perform_create中自动设置user或member字段
+        # 游客评论需要验证guest_name
         guest_name = data.get('guest_name')
-
-        # 如果提供了guest_name，说明是游客评论，需要验证
+        user = data.get('user')
+        member = data.get('member')
+        
+        # 验证至少有一种评论者类型
+        if not user and not member and not guest_name:
+            # 如果三个都没有，说明是已认证用户调用，会在perform_create中设置
+            # 这里不报错，让perform_create处理
+            pass
+        
+        # 如果提供了guest_name，验证格式
         if guest_name is not None:
             if not guest_name.strip():
                 raise serializers.ValidationError(_("Guest name cannot be empty"))
-
+        
         return data
 
 

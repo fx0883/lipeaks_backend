@@ -217,9 +217,10 @@ class CommentPermission(CMSBasePermission):
     评论权限控制
     
     额外规则：
-    - 所有认证用户都可以给开放评论的文章添加评论
+    - 所有认证用户（User和Member）都可以给开放评论的文章添加评论
     - 评论作者可以编辑或删除自己的评论
     - 文章作者可以管理其文章下的所有评论
+    - Admin可以管理所有评论
     """
     
     def has_permission(self, request, view):
@@ -227,7 +228,41 @@ class CommentPermission(CMSBasePermission):
         if "/cms/" not in request.path:
             logger.debug(f"非CMS路径，跳过租户验证: {request.path}")
             return True
-            
+        
+        # GET请求允许匿名访问
+        if request.method in permissions.SAFE_METHODS:
+            return super().has_permission(request, view)
+        
+        # POST 游客评论：如果提供了 guest_name，允许匿名访问
+        if request.method == 'POST':
+            guest_name = request.data.get('guest_name')
+            if guest_name and guest_name.strip():
+                # 游客评论，检查文章是否允许评论
+                article_id = request.data.get('article') or request.data.get('article_id')
+                if article_id:
+                    from .models import Article
+                    try:
+                        article = Article.objects.get(id=article_id, tenant_id=request.tenant_id)
+                        if not article.allow_comment:
+                            return False
+                        # 游客评论允许
+                        return True
+                    except Article.DoesNotExist:
+                        return False
+        
+        # POST/PUT/DELETE 其他情况需要认证
+        user = request.user
+        if not user or not user.is_authenticated:
+            logger.warning(f"未认证用户尝试访问 {request.path}")
+            return False
+        
+        # Member用户需要有租户绑定
+        from users.models import Member
+        if isinstance(user, Member):
+            if not hasattr(user, 'tenant') or not user.tenant:
+                logger.warning(f"Member用户 {user.username} 未关联租户")
+                return False
+        
         # 添加评论需要检查文章是否允许评论
         if request.method == 'POST':
             article_id = request.data.get('article') or request.data.get('article_id')
@@ -247,15 +282,42 @@ class CommentPermission(CMSBasePermission):
         if "/cms/" not in request.path:
             logger.debug(f"非CMS路径，跳过租户验证: {request.path}")
             return True
-            
-        # 首先检查基本权限
-        if super().has_object_permission(request, view, obj):
-            return True
+        
+        user = request.user
+        
+        # GET请求基本权限检查
+        if request.method in permissions.SAFE_METHODS:
+            return super().has_object_permission(request, view, obj)
+        
+        # 超级管理员可以管理所有评论
+        if getattr(user, 'is_super_admin', False):
+            return super().has_object_permission(request, view, obj)
+        
+        # 租户管理员可以管理其租户内的所有评论
+        if getattr(user, 'is_admin', False):
+            return super().has_object_permission(request, view, obj)
+        
+        # 检查是否是评论作者（支持User和Member）
+        from users.models import Member
+        if isinstance(user, Member):
+            # Member用户只能操作自己的评论
+            if obj.member_id == user.id:
+                return True
+        else:
+            # User用户只能操作自己的评论
+            if obj.user_id == user.id:
+                return True
         
         # 文章作者可以管理其文章下的所有评论
-        user = request.user
-        if hasattr(obj, 'article') and obj.article.author_id == user.id:
-            return True
+        if hasattr(obj, 'article'):
+            article = obj.article
+            # 检查是否是文章的User作者或Member作者
+            if isinstance(user, Member):
+                if article.member_id == user.id:
+                    return True
+            else:
+                if article.user_id == user.id:
+                    return True
         
         return False
 

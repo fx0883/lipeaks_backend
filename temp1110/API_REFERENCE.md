@@ -13,6 +13,7 @@
 | [认证系统](#认证系统) | `01_authentication.md` | 5个 | 用户注册、登录、Token管理 |
 | [用户管理](#用户管理) | `02_user_management.md` | 5个 | 个人信息、密码、头像管理 |
 | [文章管理](#文章管理) | `03_article_management.md` | 7个 | 文章CRUD、发布、统计 |
+| [管理员CMS管理](#管理员cms管理) | `07_admin_cms_management.md` | 11个 | 后台内容管理、批量操作 |
 | [互动功能](#互动功能) | `04_interactions.md` | 6个 | 收藏、点赞、关注 |
 | [分类标签](#分类标签) | `05_categories_tags.md` | 6个 | 分类、标签、标签分组管理 |
 | [评论系统](#评论系统) | `06_comments.md` | 13个 | 评论CRUD、回复、审核 |
@@ -141,6 +142,42 @@ sort=created_at&sort_direction=desc  # created_at/updated_at/published_at/title
      ↓             ↓                        ↓
    保存草稿 → 提交审核 → 管理员审核 → 手动归档
 ```
+
+---
+
+## 🛠️ 管理员CMS管理
+
+**文件**: `07_admin_cms_management.md`
+**基础路径**: `/api/v1/cms/articles/`
+
+### 核心接口
+
+| 接口 | 方法 | 路径 | 功能描述 |
+|------|------|------|----------|
+| [获取文章列表](#获取文章列表) | GET | `/` | 获取所有文章列表（管理员视角） |
+| [获取单篇文章](#获取单篇文章) | GET | `/{id}/` | 获取文章详情 |
+| [创建文章](#创建文章) | POST | `/` | 创建新文章 |
+| [更新文章](#更新文章) | PUT/PATCH | `/{id}/` | 更新文章内容 |
+| [删除文章](#删除文章) | DELETE | `/{id}/` | 删除文章 |
+| [发布文章](#发布文章) | POST | `/{id}/publish/` | 发布文章 |
+| [取消发布](#取消发布) | POST | `/{id}/unpublish/` | 取消发布文章 |
+| [归档文章](#归档文章) | POST | `/{id}/archive/` | 归档文章 |
+| [获取统计](#获取统计) | GET | `/{id}/statistics/` | 获取文章统计 |
+| [版本历史](#版本历史) | GET | `/{id}/versions/` | 获取版本历史 |
+| [批量删除](#批量删除) | POST | `/batch-delete/` | 批量删除文章 |
+
+### 权限说明
+- **超级管理员**: 管理所有租户内容
+- **租户管理员**: 管理本租户内容
+- **内容管理员**: 有限的管理权限
+
+### 高级筛选功能
+- 按内容类型筛选：`content_type=image_upload`
+- 按作者类型筛选：`author_type=member` 或 `author_type=admin`
+- 按具体作者筛选：`user_id=1` 或 `member_id=1`
+- 按父子关系筛选：`has_parent=true`
+- 日期范围筛选：`date_from=2024-01-01&date_to=2024-12-31`
+- 统计数据排序：`sort=views_count`
 
 ---
 
@@ -499,6 +536,6 @@ async function loadUserArticles() {
 4. 参考文档中的示例代码
 5. 检查Token和权限配置
 
-**文档版本**: v2.0  
-**更新时间**: 2025-11-10  
-**适用对象**: 前端开发人员
+**文档版本**: v2.1 (新增Admin CMS管理)
+**更新时间**: 2025-11-10
+**适用对象**: 前端开发人员、管理员

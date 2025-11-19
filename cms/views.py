@@ -257,14 +257,15 @@ logger = logging.getLogger(__name__)
 class ArticleViewSet(TenantModelViewSet):
     """
     文章视图集，提供增删改查API
-    
+
     继承自TenantModelViewSet，自动处理租户隔离
+    支持按作者类型过滤：author_type=member（Member作者）或author_type=admin（管理员作者）
     """
     authentication_classes = [JWTAuthentication]
     permission_classes = [ArticlePermission]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['id', 'status', 'visibility', 'is_featured', 'is_pinned']
+    filterset_fields = ['id', 'status', 'visibility', 'is_featured', 'is_pinned', 'content_type']
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['created_at', 'updated_at', 'published_at', 'title']
     ordering = ['-is_pinned', '-created_at']
@@ -273,8 +274,17 @@ class ArticleViewSet(TenantModelViewSet):
     def get_queryset(self):
         """
         获取文章查询集，支持多种过滤条件
-        
+
         已通过TenantModelViewSet处理租户过滤
+        支持的查询参数：
+        - author_type: 按作者类型过滤 ('member' 或 'admin')
+        - status: 按状态过滤
+        - content_type: 按内容类型过滤
+        - category_id: 按分类过滤
+        - tag_id: 按标签过滤
+        - user_id/member_id: 按具体作者过滤
+        - has_parent: 按是否有父文章过滤
+        - date_from/date_to: 按日期范围过滤
         """
         # 获取基础查询集，已经按照租户过滤
         queryset = super().get_queryset()
@@ -307,6 +317,14 @@ class ArticleViewSet(TenantModelViewSet):
         author_id = self.request.query_params.get('author_id')
         if author_id:
             queryset = queryset.filter(Q(user_id=author_id) | Q(member_id=author_id))
+
+        # 处理作者类型过滤
+        author_type = self.request.query_params.get('author_type')
+        if author_type:
+            if author_type == 'member':
+                queryset = queryset.filter(member_id__isnull=False)
+            elif author_type == 'admin':
+                queryset = queryset.filter(user_id__isnull=False)
         
         # 处理特色和置顶过滤
         is_featured = self.request.query_params.get('is_featured')
@@ -2252,7 +2270,7 @@ class CommentViewSet(TenantModelViewSet):
     serializer_class = CommentSerializer
     permission_classes = [CommentPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['article', 'parent', 'user', 'status', 'is_pinned']
+    filterset_fields = ['article', 'user', 'status', 'is_pinned']  # 移除 parent，在 get_queryset 中手动处理
     search_fields = ['content', 'guest_name', 'guest_email']
     ordering_fields = ['created_at', 'updated_at', 'likes_count']
     ordering = ['-created_at']
@@ -2287,11 +2305,19 @@ class CommentViewSet(TenantModelViewSet):
         
         # 基于用户角色和权限的过滤
         if not (is_super_admin(user) or is_admin(user)):
-            # 普通用户只能看到已批准的评论或自己的评论
-            queryset = queryset.filter(
-                Q(status='approved') |  # 已批准的评论
-                Q(user=user)            # 自己的评论
-            )
+            # 普通用户（包括Member）只能看到已批准的评论或自己的评论
+            # 使用ID比较避免跨模型类型错误
+            from users.models import Member
+            if isinstance(user, Member):
+                queryset = queryset.filter(
+                    Q(status='approved') |  # 已批准的评论
+                    Q(member_id=user.id)    # 自己的评论（Member）
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(status='approved') |  # 已批准的评论
+                    Q(user_id=user.id)      # 自己的评论（User）
+                )
         
         # 处理特定的查询参数
         article_id = self.request.query_params.get('article')
@@ -2307,6 +2333,13 @@ class CommentViewSet(TenantModelViewSet):
                 # 获取指定父评论下的回复
                 queryset = queryset.filter(parent_id=parent_param)
         
+        # 支持 has_parent 参数（与文章API保持一致）
+        has_parent = self.request.query_params.get('has_parent')
+        if has_parent == 'true':
+            queryset = queryset.filter(parent__isnull=False)
+        elif has_parent == 'false':
+            queryset = queryset.filter(parent__isnull=True)
+        
         # 排序处理
         sort = self.request.query_params.get('sort')
         sort_direction = self.request.query_params.get('sort_direction', 'desc')
@@ -2321,21 +2354,33 @@ class CommentViewSet(TenantModelViewSet):
         执行评论创建操作
         
         - 自动设置current用户和租户
-        - 设置初始状态
+        - 根据用户类型设置user或member字段
+        - 设置初始状态（认证用户自动批准）
         - 记录IP和User-Agent
         - 记录操作日志
         """
         user = self.request.user
-        tenant = user.tenant
+        
+        # 获取租户（从中间件或用户）
+        from common.utils.tenant_context import get_current_tenant
+        tenant = get_current_tenant()
+        if not tenant and user.is_authenticated:
+            tenant = user.tenant
         
         # 设置租户ID
         serializer.validated_data['tenant'] = tenant
         
-        # 设置用户ID（如果未提供）
-        if 'user' not in serializer.validated_data and not serializer.validated_data.get('guest_name'):
-            serializer.validated_data['user'] = user
+        # 根据用户类型设置对应的外键字段（如果未提供且不是游客评论）
+        if not serializer.validated_data.get('guest_name'):
+            from users.models import Member
+            if isinstance(user, Member):
+                serializer.validated_data['member'] = user
+                serializer.validated_data['user'] = None
+            else:
+                serializer.validated_data['user'] = user
+                serializer.validated_data['member'] = None
         
-        # 验证用户权限
+        # 验证文章权限
         article_id = serializer.validated_data.get('article').id
         try:
             article = Article.objects.get(id=article_id, tenant=tenant)
@@ -2344,11 +2389,12 @@ class CommentViewSet(TenantModelViewSet):
         except Article.DoesNotExist:
             raise serializers.ValidationError(_("Article does not exist or no permission to access"))
         
-        # 设置初始状态（管理员和作者的评论自动批准，其他需要审核）
-        if is_super_admin(user) or is_admin(user) or user.id == article.author_id:
-            serializer.validated_data['status'] = 'approved'
-        else:
+        # 设置初始状态：所有认证用户评论自动批准（TODO: 可通过配置控制）
+        # 游客评论需要审核
+        if serializer.validated_data.get('guest_name'):
             serializer.validated_data['status'] = 'pending'
+        else:
+            serializer.validated_data['status'] = 'approved'
         
         # 记录IP和User-Agent
         serializer.validated_data['ip_address'] = self.request.META.get('REMOTE_ADDR')
@@ -2371,20 +2417,28 @@ class CommentViewSet(TenantModelViewSet):
         except Exception as e:
             logger.error(f"更新文章评论统计失败: {str(e)}")
         
-        # 记录操作日志
-        try:
-            OperationLog.objects.create(
-                user=user,
-                action='create',
-                entity_type='comment',
-                entity_id=comment.id,
-                details=f"创建评论: {comment.id}",
-                ip_address=self.request.META.get('REMOTE_ADDR'),
-                user_agent=self.request.META.get('HTTP_USER_AGENT'),
-                tenant=tenant
-            )
-        except Exception as e:
-            logger.error(f"记录评论创建操作日志失败: {str(e)}")
+        # 记录操作日志（支持User和Member，游客不记录）
+        if user.is_authenticated:
+            try:
+                from users.models import Member, User as AdminUser
+                log_data = {
+                    'action': 'create',
+                    'entity_type': 'comment',
+                    'entity_id': comment.id,
+                    'details': f"创建评论: {comment.id}",
+                    'ip_address': self.request.META.get('REMOTE_ADDR'),
+                    'user_agent': self.request.META.get('HTTP_USER_AGENT'),
+                    'tenant': tenant
+                }
+                
+                if isinstance(user, Member):
+                    log_data['member'] = user
+                else:
+                    log_data['user'] = user
+                
+                OperationLog.objects.create(**log_data)
+            except Exception as e:
+                logger.error(f"记录评论创建操作日志失败: {str(e)}")
         
         return comment
     
@@ -2392,6 +2446,7 @@ class CommentViewSet(TenantModelViewSet):
         """
         执行评论更新操作
         
+        - 支持User和Member更新自己的评论
         - 记录操作日志
         - 状态变更时更新文章统计
         """
@@ -2420,18 +2475,25 @@ class CommentViewSet(TenantModelViewSet):
             except Exception as e:
                 logger.error(f"更新文章评论统计失败: {str(e)}")
         
-        # 记录操作日志
+        # 记录操作日志（支持User和Member）
         try:
-            OperationLog.objects.create(
-                user=user,
-                action='update',
-                entity_type='comment',
-                entity_id=comment.id,
-                details=f"更新评论: {comment.id}",
-                ip_address=self.request.META.get('REMOTE_ADDR'),
-                user_agent=self.request.META.get('HTTP_USER_AGENT'),
-                tenant=tenant
-            )
+            from users.models import Member, User as AdminUser
+            log_data = {
+                'action': 'update',
+                'entity_type': 'comment',
+                'entity_id': comment.id,
+                'details': f"更新评论: {comment.id}",
+                'ip_address': self.request.META.get('REMOTE_ADDR'),
+                'user_agent': self.request.META.get('HTTP_USER_AGENT'),
+                'tenant': tenant
+            }
+            
+            if isinstance(user, Member):
+                log_data['member'] = user
+            else:
+                log_data['user'] = user
+            
+            OperationLog.objects.create(**log_data)
         except Exception as e:
             logger.error(f"记录评论更新操作日志失败: {str(e)}")
         
@@ -2441,6 +2503,8 @@ class CommentViewSet(TenantModelViewSet):
         """
         执行评论删除操作
         
+        - 支持User和Member删除自己的评论
+        - Admin可以删除所有评论
         - 记录操作日志
         - 更新文章评论数统计
         """
@@ -2448,18 +2512,25 @@ class CommentViewSet(TenantModelViewSet):
         tenant = user.tenant
         article = instance.article
         
-        # 记录操作日志
+        # 记录操作日志（支持User和Member）
         try:
-            OperationLog.objects.create(
-                user=user,
-                action='delete',
-                entity_type='comment',
-                entity_id=instance.id,
-                details=f"删除评论: {instance.id}",
-                ip_address=self.request.META.get('REMOTE_ADDR'),
-                user_agent=self.request.META.get('HTTP_USER_AGENT'),
-                tenant=tenant
-            )
+            from users.models import Member, User as AdminUser
+            log_data = {
+                'action': 'delete',
+                'entity_type': 'comment',
+                'entity_id': instance.id,
+                'details': f"删除评论: {instance.id}",
+                'ip_address': self.request.META.get('REMOTE_ADDR'),
+                'user_agent': self.request.META.get('HTTP_USER_AGENT'),
+                'tenant': tenant
+            }
+            
+            if isinstance(user, Member):
+                log_data['member'] = user
+            else:
+                log_data['user'] = user
+            
+            OperationLog.objects.create(**log_data)
         except Exception as e:
             logger.error(f"记录评论删除操作日志失败: {str(e)}")
         
@@ -2559,7 +2630,7 @@ class CommentViewSet(TenantModelViewSet):
             )
         
         # 验证权限（只有管理员和文章作者可以批准评论）
-        if not can_moderate_comments(user, comment.article.author_id):
+        if not can_moderate_comments(user, comment.article.author):
             return Response(
                 {"detail": _("您没有权限批准此评论")},
                 status=status.HTTP_403_FORBIDDEN
@@ -2644,7 +2715,7 @@ class CommentViewSet(TenantModelViewSet):
             )
         
         # 验证权限（只有管理员和文章作者可以拒绝评论）
-        if not can_moderate_comments(user, comment.article.author_id):
+        if not can_moderate_comments(user, comment.article.author):
             return Response(
                 {"detail": _("您没有权限拒绝此评论")},
                 status=status.HTTP_403_FORBIDDEN
@@ -2729,7 +2800,7 @@ class CommentViewSet(TenantModelViewSet):
             )
         
         # 验证权限（只有管理员和文章作者可以标记垃圾评论）
-        if not can_moderate_comments(user, comment.article.author_id):
+        if not can_moderate_comments(user, comment.article.author):
             return Response(
                 {"detail": _("您没有权限标记此评论为垃圾评论")},
                 status=status.HTTP_403_FORBIDDEN
