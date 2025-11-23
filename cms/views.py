@@ -16,7 +16,7 @@ from rest_framework.exceptions import ValidationError
 
 from common.permissions import IsSuperAdmin, IsAdmin
 from common.pagination import StandardResultsSetPagination
-from common.authentication.jwt_auth import JWTAuthentication
+from common.authentication.api_auth import APIJWTAuthentication
 from common.viewsets import TenantModelViewSet
 from common.exceptions import CMSException, TenantException
 from common.utils.user_permissions import (
@@ -261,7 +261,7 @@ class ArticleViewSet(TenantModelViewSet):
     继承自TenantModelViewSet，自动处理租户隔离
     支持按作者类型过滤：author_type=member（Member作者）或author_type=admin（管理员作者）
     """
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [ArticlePermission]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -298,6 +298,11 @@ class ArticleViewSet(TenantModelViewSet):
         category_id = self.request.query_params.get('category_id')
         if category_id:
             queryset = queryset.filter(article_categories__category_id=category_id)
+        
+        # 处理分类应用过滤（通过分类关联的应用过滤文章）
+        category_application_id = self.request.query_params.get('category_application_id')
+        if category_application_id:
+            queryset = queryset.filter(article_categories__category__application_id=category_application_id)
         
         # 处理标签过滤
         tag_id = self.request.query_params.get('tag_id')
@@ -1350,12 +1355,12 @@ class CategoryViewSet(TenantModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [CategoryPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['parent', 'is_active', 'is_pinned']
+    filterset_fields = ['parent', 'is_active', 'is_pinned', 'application']
     search_fields = ['translations__name', 'slug', 'translations__description']  # 搜索翻译字段
     ordering_fields = ['sort_order', 'created_at', 'is_pinned']  # 移除name（翻译字段不能直接排序）
     ordering = ['-is_pinned', 'sort_order', 'id']  # 使用id替代name
     pagination_class = None  # 禁用分页
-    queryset = Category.objects.all().select_related('parent', 'tenant')  # 添加select_related优化查询
+    queryset = Category.objects.all().select_related('parent', 'tenant', 'application')  # 添加select_related优化查询
     
     def get_queryset(self):
         """

@@ -16,6 +16,7 @@ from django.utils.translation import gettext_lazy as _
 from django.db.models import Q, Count, Avg, Sum
 from django.utils import timezone
 from datetime import timedelta
+from common.viewsets import TenantModelViewSet
 from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
@@ -70,8 +71,12 @@ from .permissions import (
         }
     )
 )
-class FeedbackReplyViewSet(viewsets.ModelViewSet):
-    """ViewSet for feedback replies"""
+class FeedbackReplyViewSet(TenantModelViewSet):
+    """
+    ViewSet for feedback replies
+    
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
     serializer_class = FeedbackReplySerializer
     permission_classes = [FeedbackReplyPermission]
     
@@ -374,14 +379,22 @@ class FeedbackStatisticsView(APIView):
         }
     )
 )
-class FeedbackAttachmentViewSet(viewsets.ModelViewSet):
-    """ViewSet for feedback attachments"""
+class FeedbackAttachmentViewSet(TenantModelViewSet):
+    """
+    ViewSet for feedback attachments
+    
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
     serializer_class = FeedbackAttachmentSerializer
     parser_classes = (MultiPartParser, FormParser)
     
     def get_queryset(self):
+        # 先获取租户过滤的queryset
+        queryset = super().get_queryset()
+        
+        # 然后按feedback_id过滤
         feedback_id = self.kwargs.get('feedback_pk')
-        return FeedbackAttachment.objects.filter(
+        return queryset.filter(
             feedback_id=feedback_id,
             is_deleted=False
         )
@@ -428,16 +441,19 @@ class FeedbackAttachmentViewSet(viewsets.ModelViewSet):
         }
     )
 )
-class EmailTemplateViewSet(viewsets.ModelViewSet):
-    """ViewSet for email templates"""
+class EmailTemplateViewSet(TenantModelViewSet):
+    """
+    ViewSet for email templates
+    
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
     queryset = EmailTemplate.objects.filter(is_deleted=False)
     serializer_class = EmailTemplateSerializer
     permission_classes = [EmailTemplatePermission]
     
     def get_queryset(self):
+        # TenantModelViewSet已经处理租户过滤
         queryset = super().get_queryset()
-        if hasattr(self.request, 'tenant'):
-            queryset = queryset.filter(tenant=self.request.tenant)
         return queryset
 
 

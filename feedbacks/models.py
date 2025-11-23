@@ -18,271 +18,8 @@ User = get_user_model()
 
 
 # ===================== Software Management Models =====================
-
-class SoftwareCategory(BaseModel):
-    """
-    Software Category Model
-    Manages different categories of software products (e.g., Web, Mobile, API)
-    """
-    name = models.CharField(
-        _("Category Name"), 
-        max_length=50, 
-        help_text="Category name, e.g., Web Application, Mobile APP"
-    )
-    code = models.CharField(
-        _("Category Code"), 
-        max_length=20, 
-        unique=True, 
-        help_text="Unique identifier, e.g., web, mobile"
-    )
-    description = models.TextField(
-        _("Category Description"), 
-        blank=True, 
-        null=True
-    )
-    icon = models.CharField(
-        _("Icon"), 
-        max_length=50, 
-        blank=True, 
-        null=True, 
-        help_text="Material Icon name"
-    )
-    sort_order = models.IntegerField(
-        _("Sort Order"), 
-        default=0
-    )
-    is_active = models.BooleanField(
-        _("Is Active"), 
-        default=True
-    )
-    
-    class Meta:
-        db_table = 'feedback_software_category'
-        verbose_name = _('Software Category')
-        verbose_name_plural = _('Software Categories')
-        ordering = ['sort_order', 'name']
-        indexes = [
-            models.Index(fields=['code']),
-            models.Index(fields=['tenant', 'is_active']),
-        ]
-        unique_together = [['tenant', 'code']]
-    
-    def __str__(self):
-        return self.name
-
-
-class Software(BaseModel):
-    """
-    Software/Product/Service Model
-    Main entity for managing software products that can receive feedback
-    """
-    STATUS_CHOICES = [
-        ('development', 'Development'),
-        ('testing', 'Testing'),
-        ('released', 'Released'),
-        ('maintenance', 'Maintenance'),
-        ('deprecated', 'Deprecated'),
-    ]
-    
-    name = models.CharField(
-        _("Software Name"), 
-        max_length=100, 
-        help_text="Name of software/product/service"
-    )
-    code = models.CharField(
-        _("Software Code"), 
-        max_length=50, 
-        help_text="Unique identifier, e.g., crm_system"
-    )
-    description = models.TextField(
-        _("Software Description"), 
-        help_text="Detailed description of software functionality and purpose"
-    )
-    category = models.ForeignKey(
-        SoftwareCategory,
-        on_delete=models.SET_NULL,
-        related_name='software_list',
-        verbose_name=_("Software Category"),
-        null=True,
-        blank=True
-    )
-    logo = models.ImageField(
-        _("Logo Image"), 
-        upload_to='feedbacks/software/logos/%Y/%m/', 
-        blank=True, 
-        null=True, 
-        help_text="Recommended size: 200x200px"
-    )
-    website = models.URLField(
-        _("Official Website"), 
-        blank=True, 
-        null=True, 
-        help_text="Software official website"
-    )
-    current_version = models.CharField(
-        _("Current Version"), 
-        max_length=50, 
-        blank=True, 
-        null=True, 
-        help_text="e.g., v1.2.3"
-    )
-    owner = models.CharField(
-        _("Owner"), 
-        max_length=100, 
-        blank=True, 
-        null=True, 
-        help_text="Product owner name"
-    )
-    team = models.CharField(
-        _("Development Team"), 
-        max_length=200, 
-        blank=True, 
-        null=True, 
-        help_text="Development team name"
-    )
-    contact_email = models.EmailField(
-        _("Contact Email"), 
-        blank=True, 
-        null=True, 
-        help_text="Technical support email"
-    )
-    tags = models.JSONField(
-        _("Tags"), 
-        default=list, 
-        blank=True, 
-        help_text="Custom tags, e.g., ['Enterprise', 'Open Source', 'SaaS']"
-    )
-    metadata = models.JSONField(
-        _("Metadata"), 
-        default=dict, 
-        blank=True, 
-        help_text="Additional extension information"
-    )
-    status = models.CharField(
-        _("Status"), 
-        max_length=20, 
-        choices=STATUS_CHOICES, 
-        default='released'
-    )
-    is_active = models.BooleanField(
-        _("Is Active"), 
-        default=True, 
-        help_text="Whether to accept feedback"
-    )
-    
-    # Statistics fields
-    total_feedbacks = models.PositiveIntegerField(
-        _("Total Feedbacks"), 
-        default=0
-    )
-    open_feedbacks = models.PositiveIntegerField(
-        _("Open Feedbacks"), 
-        default=0
-    )
-    
-    class Meta:
-        db_table = 'feedback_software'
-        verbose_name = _('Software')
-        verbose_name_plural = _('Software')
-        ordering = ['name']
-        indexes = [
-            models.Index(fields=['code']),
-            models.Index(fields=['tenant', 'status']),
-            models.Index(fields=['tenant', 'category']),
-            models.Index(fields=['tenant', 'is_active']),
-        ]
-        unique_together = [['tenant', 'code']]
-    
-    def __str__(self):
-        return f"{self.name} ({self.current_version or 'N/A'})"
-    
-    def update_statistics(self):
-        """Update feedback statistics for this software"""
-        from django.db.models import Q
-        self.total_feedbacks = self.feedbacks.count()
-        self.open_feedbacks = self.feedbacks.filter(
-            Q(status='submitted') | Q(status='reviewing') | Q(status='confirmed')
-        ).count()
-        self.save(update_fields=['total_feedbacks', 'open_feedbacks'])
-
-
-class SoftwareVersion(BaseModel):
-    """
-    Software Version Model
-    Tracks different versions of a software product
-    """
-    software = models.ForeignKey(
-        Software,
-        on_delete=models.CASCADE,
-        related_name='versions',
-        verbose_name=_("Related Software")
-    )
-    version = models.CharField(
-        _("Version Number"), 
-        max_length=50, 
-        help_text="e.g., v1.2.3, 2.0.0-beta"
-    )
-    version_code = models.IntegerField(
-        _("Version Code"), 
-        default=0, 
-        help_text="Numeric code for version comparison"
-    )
-    release_date = models.DateField(
-        _("Release Date"), 
-        blank=True, 
-        null=True
-    )
-    release_notes = models.TextField(
-        _("Release Notes"), 
-        blank=True, 
-        null=True, 
-        help_text="Version updates, fixed issues, etc."
-    )
-    is_stable = models.BooleanField(
-        _("Is Stable"), 
-        default=True, 
-        help_text="Distinguish between stable and beta versions"
-    )
-    is_active = models.BooleanField(
-        _("Is Active"), 
-        default=True
-    )
-    download_url = models.URLField(
-        _("Download URL"), 
-        blank=True, 
-        null=True
-    )
-    
-    class Meta:
-        db_table = 'feedback_software_version'
-        verbose_name = _('Software Version')
-        verbose_name_plural = _('Software Versions')
-        ordering = ['-version_code', '-release_date']
-        indexes = [
-            models.Index(fields=['software', 'version']),
-            models.Index(fields=['software', 'is_stable']),
-            models.Index(fields=['release_date']),
-        ]
-        unique_together = [['software', 'version']]
-    
-    def __str__(self):
-        return f"{self.software.name} - {self.version}"
-    
-    def save(self, *args, **kwargs):
-        """Update software's current version if this is the latest stable version"""
-        is_new = self.pk is None
-        super().save(*args, **kwargs)
-        
-        if is_new and self.is_stable and self.is_active:
-            # Check if this is the latest version
-            latest_version = self.software.versions.filter(
-                is_stable=True,
-                is_active=True
-            ).order_by('-version_code').first()
-            
-            if latest_version == self:
-                self.software.current_version = self.version
-                self.software.save(update_fields=['current_version'])
+# Software/SoftwareCategory/SoftwareVersion已移至applications模块
+# 现在使用 applications.Application 和 applications.ApplicationVersion
 
 
 # ===================== Feedback Management Models =====================
@@ -350,22 +87,15 @@ class Feedback(BaseModel):
         db_index=True
     )
     
-    # Software Association
-    software = models.ForeignKey(
-        Software,
+    # Application Association
+    application = models.ForeignKey(
+        'applications.Application',
         on_delete=models.CASCADE,
         related_name='feedbacks',
-        verbose_name=_("Related Software"),
-        db_index=True
-    )
-    software_version = models.ForeignKey(
-        SoftwareVersion,
-        on_delete=models.SET_NULL,
-        related_name='feedbacks',
-        verbose_name=_("Software Version"),
-        blank=True,
+        verbose_name=_("Related Application"),
+        db_index=True,
         null=True,
-        help_text="Related to specific software version"
+        blank=True
     )
     
     # Submitter Information
@@ -476,7 +206,7 @@ class Feedback(BaseModel):
             models.Index(fields=['tenant', 'status']),
             models.Index(fields=['tenant', 'feedback_type']),
             models.Index(fields=['tenant', 'priority']),
-            models.Index(fields=['software', 'status']),
+            models.Index(fields=['application', 'status']),
             models.Index(fields=['user', 'status']),
             models.Index(fields=['contact_email']),
             models.Index(fields=['created_at']),
@@ -491,10 +221,6 @@ class Feedback(BaseModel):
             self.email_verification_token = uuid.uuid4().hex
             self.email_verification_sent_at = timezone.now()
         super().save(*args, **kwargs)
-        
-        # Update software statistics
-        if self.software:
-            self.software.update_statistics()
 
 
 class FeedbackReply(BaseModel):

@@ -52,7 +52,7 @@ class BaseModel(models.Model):
         return self
 
 
-class APILog(models.Model):
+class APILog(BaseModel):
     """
     API访问日志模型
     
@@ -92,14 +92,6 @@ class APILog(models.Model):
         related_name='api_logs',
         verbose_name=_("用户")
     )
-    tenant = models.ForeignKey(
-        'tenants.Tenant', 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True,
-        related_name='api_logs',
-        verbose_name=_("租户")
-    )
     ip_address = models.CharField(_("IP地址"), max_length=50)
     request_method = models.CharField(_("请求方法"), max_length=10, choices=REQUEST_METHOD_CHOICES)
     request_path = models.CharField(_("请求路径"), max_length=255)
@@ -116,7 +108,6 @@ class APILog(models.Model):
     
     # 其他信息
     user_agent = models.CharField(_("用户代理"), max_length=500, null=True, blank=True)
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
     
     class Meta:
         verbose_name = _('API日志')

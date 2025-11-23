@@ -14,6 +14,7 @@ from django.core.cache import cache
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
+from applications.models import Application
 from licenses.serializers import (
     AvailableProductSerializer, LicenseApplicationSerializer,
     MemberLicenseSerializer, MemberLicenseListSerializer,
@@ -22,7 +23,6 @@ from licenses.serializers import (
 from licenses.services.member_license_service import (
     MemberLicenseApplicationService, MemberLicenseManagementService
 )
-from licenses.models import SoftwareProduct
 from common.permissions import IsMemberUser, CanApplyTrialLicense
 import logging
 

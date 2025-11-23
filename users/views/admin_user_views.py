@@ -24,7 +24,7 @@ from users.serializers import (
     UserCreateSerializer, 
     ChangePasswordSerializer,
     SuperAdminCreateSerializer,
-    UserRoleSerializer,
+    UserRoleUpdateSerializer,
     UserUpdateSerializer
 )
 from common.schema import api_schema, common_search_parameter, user_status_parameter, user_admin_parameter, common_pagination_parameters, common_error_responses
@@ -731,6 +731,7 @@ class AdminUserAvatarUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     
     @extend_schema(
+        operation_id="admin_users_current_avatar_upload",
         summary="上传current管理员头像",
         description="上传并更新current登录管理员用户的头像图片",
         request={
@@ -871,6 +872,7 @@ class AdminUserSpecificAvatarUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     
     @extend_schema(
+        operation_id="admin_users_specific_avatar_upload",
         summary="为特定管理员上传头像",
         description="允许超级管理员和租户管理员为特定管理员用户上传头像。租户管理员只能为其所属租户的管理员上传头像，超级管理员可以为任何管理员上传头像。",
         request={

@@ -2,6 +2,7 @@
 租户和租户配额的序列化器
 """
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from tenants.models import Tenant, TenantQuota
 from users.serializers import UserMinimalSerializer
 from django.utils.translation import gettext_lazy as _
@@ -19,6 +20,7 @@ class TenantSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('created_at', 'updated_at', 'is_deleted')
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_quota(self, obj):
         """获取租户配额"""
         try:
@@ -26,6 +28,7 @@ class TenantSerializer(serializers.ModelSerializer):
         except TenantQuota.DoesNotExist:
             return None
     
+    @extend_schema_field(serializers.BooleanField)
     def get_has_business_info(self, obj):
         """检查租户是否有企业信息"""
         # 始终返回 False，因为 TenantBusinessInfo 模型已被删除
@@ -166,6 +169,7 @@ class TenantComprehensiveSerializer(serializers.ModelSerializer):
         """获取租户管理员数量"""
         return obj.users.filter(is_deleted=False, is_admin=True).count()
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_quota(self, obj):
         """获取租户配额信息"""
         try:

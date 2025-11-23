@@ -13,7 +13,8 @@ import logging
 from common.permissions import IsSuperAdmin, IsAdmin
 from common.utils.user_permissions import is_super_admin, is_admin
 from common.pagination import StandardResultsSetPagination
-from common.authentication.jwt_auth import JWTAuthentication
+from common.authentication.api_auth import APIJWTAuthentication
+from common.viewsets import TenantModelViewSet
 from users.models import User
 from .models import TaskCategory, Task, CheckRecord, TaskTemplate
 from .serializers import (
@@ -183,15 +184,18 @@ logger = logging.getLogger(__name__)
         ]
     ),
 )
-class TaskCategoryViewSet(viewsets.ModelViewSet):
+class TaskCategoryViewSet(TenantModelViewSet):
     """
     打卡类型视图集，提供增删改查API
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    
     可以管理系统预设和用户自定义的打卡类型，支持多语言。
-    - 普通用户: 只能查看系统预设类型和自己创建的类型
+    - 普通用户: 可以查看系统预设类型和自己创建的类型
     - 租户管理员: 可以查看系统预设类型和该租户下的所有类型
     - 超级管理员: 可以查看所有类型
     """
+    queryset = TaskCategory.objects.all().select_related('user', 'tenant')
     serializer_class = TaskCategorySerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -199,38 +203,29 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'description']
     ordering_fields = ['created_at', 'name']
     ordering = ['-created_at']
-    
-    # 添加认证和权限类
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [TaskCategoryPermission]
     
     def get_queryset(self):
         """
-        获取查询集，根据用户角色过滤
-        - 普通用户: 可以查看系统预设类型和自己创建的类型
-        - 租户管理员: 可以查看系统预设类型和该租户下的所有类型
-        - 超级管理员: 可以查看所有类型
+        获取查询集，先调用父类获取租户过滤的queryset
+        然后根据用户角色应用额外过滤逻辑
         """
-        # 检查是否是drf-spectacular的假视图调用
-        if getattr(self, 'swagger_fake_view', False):
-            return TaskCategory.objects.none()
+        # 获取租户过滤后的基础queryset
+        queryset = super().get_queryset()
             
         user = self.request.user
         
-        # 超级管理员可以查看所有任务类型
+        # 超级管理员已经在父类中处理，返回所有
         if user.is_superuser:
-            return TaskCategory.objects.all().select_related('user', 'tenant')
+            return queryset
         
-        # 租户管理员可以查看所属租户的所有任务类型
+        # 租户管理员：系统预设 + 租户数据（租户过滤已在父类处理）
         if is_admin(user):
-            return TaskCategory.objects.filter(
-                Q(is_system=True) | Q(tenant=user.tenant)
-            ).select_related('user', 'tenant')
+            return queryset.filter(Q(is_system=True) | Q(tenant=user.tenant))
         
-        # 普通用户只能查看系统预设类型和自己创建的类型
-        return TaskCategory.objects.filter(
-            Q(is_system=True) | Q(user=user)
-        ).select_related('user', 'tenant')
+        # 普通用户：系统预设 + 自己创建
+        return queryset.filter(Q(is_system=True) | Q(user=user))
         
     def perform_create(self, serializer):
         """
@@ -597,15 +592,18 @@ class TaskCategoryViewSet(viewsets.ModelViewSet):
         ]
     ),
 )
-class TaskViewSet(viewsets.ModelViewSet):
+class TaskViewSet(TenantModelViewSet):
     """
     打卡任务视图集，提供增删改查API
+    
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
     
     可以创建和管理打卡任务，支持任务提醒。
     - 普通用户: 只能查看自己的任务
     - 租户管理员: 可以查看该租户下的所有任务
     - 超级管理员: 可以查看所有任务
     """
+    queryset = Task.objects.all().select_related('user', 'tenant', 'category')
     serializer_class = TaskSerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -613,34 +611,29 @@ class TaskViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'description']
     ordering_fields = ['created_at', 'name', 'start_date', 'end_date']
     ordering = ['-created_at']
-    
-    # 添加认证和权限类
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [TaskPermission]
     
     def get_queryset(self):
         """
-        获取查询集，根据用户角色过滤
-        - 普通用户: 只能查看自己的任务
-        - 租户管理员: 可以查看该租户下的所有任务
-        - 超级管理员: 可以查看所有任务
+        获取查询集，先调用父类获取租户过滤的queryset
+        然后根据用户角色应用额外过滤逻辑
         """
-        # 检查是否是drf-spectacular的假视图调用
-        if getattr(self, 'swagger_fake_view', False):
-            return Task.objects.none()
+        # 获取租户过滤后的基础queryset
+        queryset = super().get_queryset()
             
         user = self.request.user
         
-        # 超级管理员可以查看所有任务
+        # 超级管理员已经在父类中处理
         if user.is_superuser:
-            return Task.objects.all().select_related('user', 'tenant', 'category')
+            return queryset
         
-        # 租户管理员可以查看该租户下的所有任务
+        # 租户管理员：租户过滤已在父类处理
         if user.is_staff and user.tenant:
-            return Task.objects.filter(tenant=user.tenant).select_related('user', 'tenant', 'category')
+            return queryset
         
-        # 普通用户只能查看自己的任务
-        return Task.objects.filter(user=user).select_related('user', 'tenant', 'category')
+        # 普通用户：只看自己的
+        return queryset.filter(user=user)
     
     def perform_create(self, serializer):
         """
@@ -872,15 +865,18 @@ class TaskViewSet(viewsets.ModelViewSet):
         ],
     )
 )
-class CheckRecordViewSet(viewsets.ModelViewSet):
+class CheckRecordViewSet(TenantModelViewSet):
     """
     打卡记录视图集，提供增删改查API
+    
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
     
     记录用户的打卡情况，支持添加备注。
     - 普通用户: 只能查看自己的打卡记录
     - 租户管理员: 可以查看该租户下的所有打卡记录
     - 超级管理员: 可以查看所有打卡记录
     """
+    queryset = CheckRecord.objects.all().select_related('user', 'task', 'task__category', 'task__tenant')
     serializer_class = CheckRecordSerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -888,36 +884,33 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
     search_fields = ['remarks']
     ordering_fields = ['check_date', 'check_time', 'created_at']
     ordering = ['-check_date', '-check_time']
-    
-    # 添加认证和权限类
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [CheckRecordPermission]
     
     def get_queryset(self):
         """
-        获取查询集，根据用户角色过滤
-        - 普通用户: 只能查看自己的打卡记录
-        - 租户管理员: 可以查看该租户下的所有打卡记录
-        - 超级管理员: 可以查看所有打卡记录
+        获取查询集，先调用父类获取租户过滤的queryset
+        然后根据用户角色应用额外过滤逻辑
+        
+        注意：CheckRecord没有tenant字段，通过task关联租户
         """
-        # 检查是否是drf-spectacular的假视图调用
-        if getattr(self, 'swagger_fake_view', False):
-            return CheckRecord.objects.none()
+        # CheckRecord没有tenant字段，直接使用基础queryset
+        queryset = CheckRecord.objects.all().select_related('user', 'task', 'task__category', 'task__tenant')
             
         user = self.request.user
         
-        # 超级管理员可以查看所有打卡记录
+        # 超级管理员
         if user.is_superuser:
-            return CheckRecord.objects.all().select_related('user', 'task', 'task__category', 'task__tenant')
+            return queryset
         
-        # 租户管理员可以查看该租户下的所有打卡记录
+        # 租户管理员：通过task和user过滤
         if user.is_staff and user.tenant:
-            return CheckRecord.objects.filter(
+            return queryset.filter(
                 Q(user__tenant=user.tenant) | Q(task__tenant=user.tenant)
-            ).select_related('user', 'task', 'task__category', 'task__tenant')
+            )
         
-        # 普通用户只能查看自己的打卡记录
-        return CheckRecord.objects.filter(user=user).select_related('user', 'task', 'task__category', 'task__tenant')
+        # 普通用户：只看自己的
+        return queryset.filter(user=user)
     
     def perform_create(self, serializer):
         """
@@ -1124,15 +1117,18 @@ class CheckRecordViewSet(viewsets.ModelViewSet):
         ],
     )
 )
-class TaskTemplateViewSet(viewsets.ModelViewSet):
+class TaskTemplateViewSet(TenantModelViewSet):
     """
     任务模板视图集，提供增删改查API
+    
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
     
     可以管理系统预设和用户自定义的任务模板，支持多语言和基于模板创建任务。
     - 普通用户: 只能查看系统预设模板和自己创建的模板
     - 租户管理员: 可以查看系统预设模板和该租户下的所有模板
     - 超级管理员: 可以查看所有模板
     """
+    queryset = TaskTemplate.objects.all().select_related('user', 'tenant', 'category')
     serializer_class = TaskTemplateSerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -1140,38 +1136,29 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'description']
     ordering_fields = ['created_at', 'name']
     ordering = ['-created_at']
-    
-    # 添加认证和权限类
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [TaskTemplatePermission]
     
     def get_queryset(self):
         """
-        获取查询集，根据用户角色过滤
-        - 普通用户: 只能查看系统预设模板和自己创建的模板
-        - 租户管理员: 可以查看系统预设模板和该租户下的所有模板
-        - 超级管理员: 可以查看所有模板
+        获取查询集，先调用父类获取租户过滤的queryset
+        然后根据用户角色应用额外过滤逻辑
         """
-        # 检查是否是drf-spectacular的假视图调用
-        if getattr(self, 'swagger_fake_view', False):
-            return TaskTemplate.objects.none()
+        # 获取租户过滤后的基础queryset
+        queryset = super().get_queryset()
             
         user = self.request.user
         
-        # 超级管理员可以查看所有模板
+        # 超级管理员已经在父类中处理
         if user.is_superuser:
-            return TaskTemplate.objects.all().select_related('user', 'tenant', 'category')
+            return queryset
         
-        # 租户管理员可以查看系统预设模板和该租户下的所有模板
+        # 租户管理员：系统预设 + 租户数据
         if user.is_staff and user.tenant:
-            return TaskTemplate.objects.filter(
-                Q(is_system=True) | Q(tenant=user.tenant)
-            ).select_related('user', 'tenant', 'category')
+            return queryset.filter(Q(is_system=True) | Q(tenant=user.tenant))
         
-        # 普通用户只能查看系统预设模板和自己创建的模板
-        return TaskTemplate.objects.filter(
-            Q(is_system=True) | Q(user=user)
-        ).select_related('user', 'tenant', 'category')
+        # 普通用户：系统预设 + 自己创建
+        return queryset.filter(Q(is_system=True) | Q(user=user))
     
     def perform_create(self, serializer):
         """

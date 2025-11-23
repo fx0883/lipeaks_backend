@@ -4,6 +4,7 @@
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from django.utils import timezone
 from decimal import Decimal
 
@@ -77,6 +78,7 @@ class TenantUserProfileSerializer(serializers.ModelSerializer):
             'points_summary', 'active_tags', 'effective_permissions'
         ]
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_member_info(self, obj):
         """获取成员基本信息"""
         if obj.member:
@@ -88,6 +90,7 @@ class TenantUserProfileSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_tenant_info(self, obj):
         """获取租户基本信息"""
         if obj.tenant:
@@ -98,6 +101,7 @@ class TenantUserProfileSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_current_level_info(self, obj):
         """获取current等级详细信息"""
         if obj.current_level:
@@ -113,6 +117,7 @@ class TenantUserProfileSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField)
     def get_points_summary(self, obj):
         """获取积分统计摘要"""
         # 调用服务层方法获取积分摘要
@@ -121,6 +126,7 @@ class TenantUserProfileSerializer(serializers.ModelSerializer):
             obj.member, obj.tenant, days=30
         )
     
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_active_tags(self, obj):
         """获取活跃的用户标签"""
         active_tags = TenantUserTypeTag.objects.filter(
@@ -143,6 +149,7 @@ class TenantUserProfileSerializer(serializers.ModelSerializer):
             for tag in active_tags
         ]
     
+    @extend_schema_field(serializers.DictField)
     def get_effective_permissions(self, obj):
         """获取用户的有效权限"""
         from points.services.permission_service import TenantAwarePermissionService
@@ -181,6 +188,7 @@ class TenantUserPointsSerializer(serializers.ModelSerializer):
             'is_expired', 'days_until_expiry'
         ]
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_member_info(self, obj):
         """获取成员基本信息"""
         if obj.member:
@@ -190,6 +198,7 @@ class TenantUserPointsSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_tenant_info(self, obj):
         """获取租户基本信息"""
         if obj.tenant:
@@ -199,6 +208,7 @@ class TenantUserPointsSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_profile_info(self, obj):
         """获取用户档案基本信息"""
         if obj.tenant_user_profile:
@@ -209,12 +219,14 @@ class TenantUserPointsSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.BooleanField)
     def get_is_expired(self, obj):
         """检查积分是否已过期"""
         if obj.expires_at and obj.status == 'active':
             return timezone.now() > obj.expires_at
         return obj.status == 'expired'
     
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_days_until_expiry(self, obj):
         """计算距离过期的天数"""
         if obj.expires_at and obj.status == 'active':
@@ -256,6 +268,7 @@ class TenantUserTypeTagSerializer(serializers.ModelSerializer):
             'tenant_info', 'vip_status', 'days_until_expiry', 'usage_summary'
         ]
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_tag_info(self, obj):
         """获取标签详细信息"""
         if obj.tag:
@@ -272,6 +285,7 @@ class TenantUserTypeTagSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_member_info(self, obj):
         """获取成员基本信息"""
         if obj.member:
@@ -281,6 +295,7 @@ class TenantUserTypeTagSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_tenant_info(self, obj):
         """获取租户基本信息"""
         if obj.tenant:
@@ -290,10 +305,12 @@ class TenantUserTypeTagSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField)
     def get_vip_status(self, obj):
         """获取VIP状态详情"""
         return obj.calculate_vip_status()
     
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_days_until_expiry(self, obj):
         """计算距离过期的天数"""
         if obj.expires_at and obj.is_active:
@@ -301,6 +318,7 @@ class TenantUserTypeTagSerializer(serializers.ModelSerializer):
             return max(0, days)
         return None
     
+    @extend_schema_field(serializers.DictField)
     def get_usage_summary(self, obj):
         """获取使用情况摘要"""
         return {

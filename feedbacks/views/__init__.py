@@ -22,15 +22,8 @@ from .feedback_attachment_api_views import (
     FeedbackAttachmentListView,
     FeedbackAttachmentDetailView,
 )
-from .software_api_views import (
-    SoftwareCategoryListView,
-    SoftwareCategoryDetailView,
-    SoftwareListView,
-    SoftwareDetailView,
-    SoftwareVersionsView,
-    SoftwareVersionListView,
-    SoftwareVersionDetailView,
-)
+# Application/Software management has been moved to applications module
+# from .application_api_views import (...)
 from .email_api_views import (
     EmailTemplateListView,
     EmailTemplateDetailView,
@@ -51,14 +44,7 @@ __all__ = [
     # Feedback Attachment
     'FeedbackAttachmentListView',
     'FeedbackAttachmentDetailView',
-    # Software Management
-    'SoftwareCategoryListView',
-    'SoftwareCategoryDetailView',
-    'SoftwareListView',
-    'SoftwareDetailView',
-    'SoftwareVersionsView',
-    'SoftwareVersionListView',
-    'SoftwareVersionDetailView',
+    # Software Management moved to applications module
     # Email Management
     'EmailTemplateListView',
     'EmailTemplateDetailView',

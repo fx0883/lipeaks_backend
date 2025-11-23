@@ -11,101 +11,20 @@ from django.urls import reverse
 from django.db.models import Count, Q
 
 from .models import (
-    SoftwareCategory, Software, SoftwareVersion,
     Feedback, FeedbackReply, FeedbackStatusHistory,
     FeedbackAttachment, FeedbackVote,
     FeedbackEmailLog, EmailTemplate
 )
 
 
-# ===================== Software Management Admin =====================
-
-@admin.register(SoftwareCategory)
-class SoftwareCategoryAdmin(admin.ModelAdmin):
-    """Admin configuration for Software Categories"""
-    list_display = ['name', 'code', 'icon', 'sort_order', 'is_active', 'software_count', 'created_at']
-    list_filter = ['is_active', 'created_at']
-    search_fields = ['name', 'code', 'description']
-    ordering = ['sort_order', 'name']
-    
-    def software_count(self, obj):
-        """Get count of software in this category"""
-        return obj.software_list.count()
-    software_count.short_description = _('Software Count')
+# ===================== Application Management Admin =====================
+# Application相关Admin已移至applications模块
+# 应用管理请使用 applications.admin
 
 
-class SoftwareVersionInline(admin.TabularInline):
-    """Inline admin for Software Versions"""
-    model = SoftwareVersion
-    extra = 0
-    fields = ['version', 'version_code', 'release_date', 'is_stable', 'is_active']
-    ordering = ['-version_code']
+# ===================== Feedback Management Admin =====================
 
-
-@admin.register(Software)
-class SoftwareAdmin(admin.ModelAdmin):
-    """Admin configuration for Software"""
-    list_display = [
-        'name', 'code', 'category', 'current_version', 'status', 
-        'is_active', 'total_feedbacks', 'open_feedbacks', 'created_at'
-    ]
-    list_filter = ['category', 'status', 'is_active', 'created_at']
-    search_fields = ['name', 'code', 'description', 'tags']
-    readonly_fields = ['total_feedbacks', 'open_feedbacks', 'created_at', 'updated_at']
-    inlines = [SoftwareVersionInline]
-    
-    fieldsets = (
-        (_('Basic Information'), {
-            'fields': ('name', 'code', 'description', 'category')
-        }),
-        (_('Details'), {
-            'fields': ('logo', 'website', 'current_version', 'status', 'is_active')
-        }),
-        (_('Team Information'), {
-            'fields': ('owner', 'team', 'contact_email')
-        }),
-        (_('Metadata'), {
-            'fields': ('tags', 'metadata')
-        }),
-        (_('Statistics'), {
-            'fields': ('total_feedbacks', 'open_feedbacks', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    actions = ['update_statistics', 'activate_software', 'deactivate_software']
-    
-    def update_statistics(self, request, queryset):
-        """Update feedback statistics for selected software"""
-        for software in queryset:
-            software.update_statistics()
-        self.message_user(request, _('Statistics updated successfully.'))
-    update_statistics.short_description = _('Update statistics')
-    
-    def activate_software(self, request, queryset):
-        """Activate selected software"""
-        queryset.update(is_active=True)
-        self.message_user(request, _('Software activated successfully.'))
-    activate_software.short_description = _('Activate selected software')
-    
-    def deactivate_software(self, request, queryset):
-        """Deactivate selected software"""
-        queryset.update(is_active=False)
-        self.message_user(request, _('Software deactivated successfully.'))
-    deactivate_software.short_description = _('Deactivate selected software')
-
-
-@admin.register(SoftwareVersion)
-class SoftwareVersionAdmin(admin.ModelAdmin):
-    """Admin configuration for Software Versions"""
-    list_display = [
-        'software', 'version', 'version_code', 'release_date', 
-        'is_stable', 'is_active', 'created_at'
-    ]
-    list_filter = ['software', 'is_stable', 'is_active', 'release_date']
-    search_fields = ['software__name', 'version', 'release_notes']
-    date_hierarchy = 'release_date'
-    ordering = ['-version_code']
+# 继续保留原FeedbackAdmin配置...
 
 
 # ===================== Feedback Management Admin =====================
@@ -140,7 +59,7 @@ class FeedbackStatusHistoryInline(admin.TabularInline):
 class FeedbackAdmin(admin.ModelAdmin):
     """Admin configuration for Feedback"""
     list_display = [
-        'title_truncated', 'software', 'feedback_type', 'priority', 'status',
+        'title_truncated', 'application', 'feedback_type', 'priority', 'status',
         'submitter_info', 'vote_count', 'reply_count', 'created_at'
     ]
     list_filter = [
@@ -161,8 +80,8 @@ class FeedbackAdmin(admin.ModelAdmin):
         (_('Feedback Information'), {
             'fields': ('title', 'description', 'feedback_type', 'priority', 'status')
         }),
-        (_('Software Association'), {
-            'fields': ('software', 'software_version')
+        (_('Application Association'), {
+            'fields': ('application', 'application_version')
         }),
         (_('Submitter Information'), {
             'fields': ('user', 'contact_email', 'contact_name', 'email_verified')

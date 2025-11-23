@@ -47,6 +47,10 @@ def custom_exception_handler(exc, context):
     request = context.get('request')
     view = context.get('view')
     
+    # 跳过OpenAPI schema端点，使用DRF默认异常处理
+    if request and request.path in ['/api/v1/schema/', '/api/v1/schema']:
+        return drf_exception_handler(exc, context)
+    
     # 1. 处理BusinessException及其子类（我们的业务异常）
     if isinstance(exc, BusinessException):
         return _handle_business_exception(exc, request, view)

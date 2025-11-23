@@ -216,7 +216,6 @@ class BulkCustomerUpdateSerializer(serializers.Serializer):
     """
     customers = serializers.ListField(
         child=serializers.DictField(
-            child=serializers.Field(),
             allow_empty=False
         ),
         min_length=1

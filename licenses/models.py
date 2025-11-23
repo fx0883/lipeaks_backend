@@ -8,40 +8,8 @@ import json
 import uuid
 
 
-class SoftwareProduct(BaseModel):
-    """软件产品模型"""
-    
-    name = models.CharField(_("产品名称"), max_length=100)
-    code = models.CharField(_("产品代码"), max_length=50, unique=True)
-    description = models.TextField(_("产品描述"), blank=True)
-    version = models.CharField(_("版本号"), max_length=20, default="1.0.0")
-    
-    # RSA密钥对（公钥存储，私钥哈希）
-    public_key = models.TextField(_("RSA公钥"))
-    private_key_hash = models.CharField(_("私钥哈希"), max_length=64)
-    
-    # 安全配置
-    max_activations = models.PositiveIntegerField(_("最大激活数"), default=5)
-    offline_days = models.PositiveIntegerField(_("离线允许天数"), default=30)
-    
-    # 状态管理
-    status = models.CharField(_("状态"), max_length=20, choices=[
-        ('active', '启用'),
-        ('inactive', '禁用'),
-        ('deprecated', '已弃用')
-    ], default='active')
-    
-    class Meta:
-        db_table = 'licenses_software_product'
-        verbose_name = _("软件产品")
-        verbose_name_plural = _("软件产品")
-        indexes = [
-            models.Index(fields=['code']),
-            models.Index(fields=['status', 'created_at']),
-        ]
-    
-    def __str__(self):
-        return f"{self.name} ({self.code})"
+# SoftwareProduct模型已删除，现在使用applications.Application
+# 许可证相关配置（RSA密钥等）存储在Application.metadata中
 
 
 class LicensePlan(BaseModel):
@@ -55,8 +23,14 @@ class LicensePlan(BaseModel):
         ('custom', '定制版')
     ]
     
-    product = models.ForeignKey(SoftwareProduct, on_delete=models.CASCADE, 
-                               related_name='license_plans', verbose_name=_("关联产品"))
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.CASCADE, 
+        related_name='license_plans',
+        verbose_name=_("关联应用"),
+        null=True,
+        blank=True
+    )
     name = models.CharField(_("方案名称"), max_length=100)
     code = models.CharField(_("方案代码"), max_length=50)
     plan_type = models.CharField(_("方案类型"), max_length=20, choices=PLAN_TYPES)
@@ -81,14 +55,14 @@ class LicensePlan(BaseModel):
         db_table = 'licenses_license_plan'
         verbose_name = _("许可证方案")
         verbose_name_plural = _("许可证方案")
-        unique_together = [['product', 'code']]
+        unique_together = [['application', 'code']]
         indexes = [
-            models.Index(fields=['product', 'plan_type']),
+            models.Index(fields=['application', 'plan_type']),
             models.Index(fields=['status']),
         ]
     
     def __str__(self):
-        return f"{self.product.name} - {self.name}"
+        return f"{self.application.name} - {self.name}"
 
 
 class License(BaseModel):
@@ -103,10 +77,20 @@ class License(BaseModel):
     ]
     
     # 基本信息
-    product = models.ForeignKey(SoftwareProduct, on_delete=models.CASCADE,
-                               related_name='licenses', verbose_name=_("关联产品"))
-    plan = models.ForeignKey(LicensePlan, on_delete=models.CASCADE,
-                            related_name='licenses', verbose_name=_("许可方案"))
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.CASCADE,
+        related_name='licenses',
+        verbose_name=_("关联应用"),
+        null=True,
+        blank=True
+    )
+    plan = models.ForeignKey(
+        LicensePlan,
+        on_delete=models.CASCADE,
+        related_name='licenses',
+        verbose_name=_("许可方案")
+    )
     tenant = models.ForeignKey('tenants.Tenant', on_delete=models.CASCADE,
                               related_name='licenses', verbose_name=_("租户"))
     
@@ -142,7 +126,7 @@ class License(BaseModel):
         indexes = [
             models.Index(fields=['license_hash']),
             models.Index(fields=['tenant', 'status']),
-            models.Index(fields=['product', 'status']),
+            models.Index(fields=['application', 'status']),
             models.Index(fields=['expires_at']),
             models.Index(fields=['status', 'created_at']),
         ]
@@ -151,18 +135,18 @@ class License(BaseModel):
         """数据验证"""
         super().clean()
         
-        # 验证plan和product的一致性
-        if self.plan and self.product:
-            if self.plan.product != self.product:
+        # 验证plan和application的一致性
+        if self.plan and self.application:
+            if self.plan.application != self.application:
                 from django.core.exceptions import ValidationError
                 raise ValidationError({
-                    'product': f'所选产品({self.product.name})与方案所属产品({self.plan.product.name})不一致',
-                    'plan': f'方案({self.plan.name})属于产品({self.plan.product.name})，不能用于产品({self.product.name})'
+                    'application': f'所选应用({self.application.name})与方案所属应用({self.plan.application.name})不一致',
+                    'plan': f'方案({self.plan.name})属于应用({self.plan.application.name})，不能用于应用({self.application.name})'
                 })
         
-        # 如果只有plan没有product，自动设置product
-        if self.plan and not self.product:
-            self.product = self.plan.product
+        # 如果只有plan没有application，自动设置application
+        if self.plan and not self.application:
+            self.application = self.plan.application
 
     def save(self, *args, **kwargs):
         """保存时自动生成许可证哈希并验证数据"""
@@ -175,7 +159,7 @@ class License(BaseModel):
         super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"{self.product.name} - {self.customer_name or 'Unknown'} ({self.status})"
+        return f"{self.application.name} - {self.customer_name or 'Unknown'} ({self.status})"
     
     def update_from_plan(self, force=False):
         """
@@ -410,7 +394,7 @@ class LicenseUsageLog(BaseModel):
         ]
     
     def __str__(self):
-        return f"{self.license.product.name} - {self.event_type} ({self.timestamp})"
+        return f"{self.license.application.name} - {self.event_type} ({self.timestamp})"
 
 
 class TenantLicenseQuota(BaseModel):
@@ -418,8 +402,14 @@ class TenantLicenseQuota(BaseModel):
     
     tenant = models.ForeignKey('tenants.Tenant', on_delete=models.CASCADE,
                               related_name='license_quotas', verbose_name=_("租户"))
-    product = models.ForeignKey(SoftwareProduct, on_delete=models.CASCADE,
-                               related_name='tenant_quotas', verbose_name=_("产品"))
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.CASCADE,
+        related_name='tenant_quotas',
+        verbose_name=_("应用"),
+        null=True,
+        blank=True
+    )
     
     # 配额限制
     max_licenses = models.PositiveIntegerField(_("最大许可证数"), default=10)
@@ -436,14 +426,14 @@ class TenantLicenseQuota(BaseModel):
         db_table = 'licenses_tenant_quota'
         verbose_name = _("租户许可证配额")
         verbose_name_plural = _("租户许可证配额")
-        unique_together = [['tenant', 'product']]
+        unique_together = [['tenant', 'application']]
         indexes = [
             models.Index(fields=['tenant', 'is_active']),
-            models.Index(fields=['product', 'is_active']),
+            models.Index(fields=['application', 'is_active']),
         ]
     
     def __str__(self):
-        return f"{self.tenant.name} - {self.product.name} ({self.current_licenses}/{self.max_licenses})"
+        return f"{self.tenant.name} - {self.application.name} ({self.current_licenses}/{self.max_licenses})"
 
 
 class SecurityAuditLog(BaseModel):

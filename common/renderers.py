@@ -38,6 +38,18 @@ class StandardJSONRenderer(JSONRenderer):
         response = renderer_context.get('response')
         request = renderer_context.get('request')
         
+        # 跳过OpenAPI schema端点，直接返回原始数据
+        if request and request.path in ['/api/v1/schema/', '/api/v1/schema']:
+            return super().render(data, accepted_media_type, renderer_context)
+        
+        # 跳过drf-spectacular的OpenAPI格式（检查Content-Type）
+        if accepted_media_type and 'openapi' in str(accepted_media_type).lower():
+            return super().render(data, accepted_media_type, renderer_context)
+        
+        # 跳过OpenAPI格式的数据（检查数据结构）
+        if isinstance(data, dict) and 'openapi' in data and 'info' in data and 'paths' in data:
+            return super().render(data, accepted_media_type, renderer_context)
+        
         # 已处理过的标准格式响应直接返回
         if isinstance(data, dict) and all(k in data for k in ['success', 'code', 'message', 'data']):
             return super().render(data, accepted_media_type, renderer_context)

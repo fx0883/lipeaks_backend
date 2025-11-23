@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Feedback Submitted" %} - {% trans "Multi-Tenant Management System" %}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-check-circle"></i> {% trans "Feedback Submitted Successfully" %}</h4>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-check-circle text-success" style="font-size: 5rem;"></i>
+                    </div>
+                    
+                    <h5 class="mb-3">{% trans "Thank you for your feedback!" %}</h5>
+                    
+                    <p class="text-muted mb-4">
+                        {% trans "We have received your feedback and our team will review it shortly." %}
+                    </p>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>{% trans "What's next?" %}</strong>
+                        <ul class="mb-0 mt-2 text-start">
+                            <li>{% trans "Our team will review your feedback within 1-2 business days" %}</li>
+                            <li>{% trans "You will be notified via email if you provided contact information" %}</li>
+                            <li>{% trans "High priority issues will be addressed first" %}</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -15,11 +15,13 @@ from django.db.models import Count, Q
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 from common.permissions import IsSuperAdminOrTenantAdmin
-from common.authentication.jwt_auth import JWTAuthentication
+from common.authentication.api_auth import APIJWTAuthentication
+from common.viewsets import TenantModelViewSet
 from licenses.models import (
-    SoftwareProduct, LicensePlan, License, MachineBinding, 
+    LicensePlan, License, MachineBinding, 
     LicenseActivation, SecurityAuditLog, TenantLicenseQuota
 )
+from applications.models import Application
 from licenses.serializers import (
     SoftwareProductSerializer, SoftwareProductCreateSerializer,
     LicensePlanSerializer, LicenseSerializer, LicenseDetailSerializer,
@@ -78,57 +80,26 @@ logger = logging.getLogger('licenses.admin')
         responses={200: OpenApiResponse(description='统计信息')}
     )
 )
-class SoftwareProductViewSet(viewsets.ModelViewSet):
-    """软件产品管理视图集"""
+class ApplicationViewSet(TenantModelViewSet):
+    """
+    软件产品管理视图集
     
-    authentication_classes = [JWTAuthentication]
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
+    queryset = Application.objects.filter(is_deleted=False)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status']
     search_fields = ['name', 'code', 'description']
     ordering_fields = ['name', 'created_at', 'updated_at']
     ordering = ['-created_at']
     
-    def get_queryset(self):
-        """根据用户权限返回产品列表"""
-        queryset = SoftwareProduct.objects.filter(is_deleted=False)
-        
-        if self.request.user.is_super_admin:
-            return queryset
-        
-        # 租户管理员只能看到自己租户的产品
-        if hasattr(self.request.user, 'tenant') and self.request.user.tenant:
-            return queryset.filter(tenant=self.request.user.tenant)
-        
-        return queryset.none()
-    
     def get_serializer_class(self):
         """根据操作返回不同的序列化器"""
         if self.action == 'create':
             return SoftwareProductCreateSerializer
         return SoftwareProductSerializer
-    
-    def perform_create(self, serializer):
-        """创建产品时自动设置租户信息"""
-        # 从中间件获取current租户信息
-        tenant_id = getattr(self.request, 'tenant_id', None)
-        if tenant_id:
-            from tenants.models import Tenant
-            try:
-                tenant = Tenant.objects.get(id=int(tenant_id))
-                serializer.save(tenant=tenant)
-                logger.info(f"产品创建成功，关联租户: {tenant.name} (ID: {tenant_id})")
-            except Tenant.DoesNotExist:
-                logger.error(f"指定的租户ID不存在: {tenant_id}")
-                serializer.save()
-        else:
-            # 如果没有租户信息但用户已认证，尝试使用用户关联的租户
-            if hasattr(self.request.user, 'tenant') and self.request.user.tenant:
-                serializer.save(tenant=self.request.user.tenant)
-                logger.info(f"产品创建成功，使用用户关联租户: {self.request.user.tenant.name}")
-            else:
-                serializer.save()
-                logger.warning("产品创建时未设置租户信息")
     
     @action(detail=True, methods=['post'])
     def regenerate_keypair(self, request, pk=None):
@@ -261,52 +232,21 @@ class SoftwareProductViewSet(viewsets.ModelViewSet):
         responses={201: OpenApiResponse(description='方案复制成功')}
     )
 )
-class LicensePlanViewSet(viewsets.ModelViewSet):
-    """许可证方案管理视图集"""
+class LicensePlanViewSet(TenantModelViewSet):
+    """
+    许可证方案管理视图集
     
-    authentication_classes = [JWTAuthentication]
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
+    queryset = LicensePlan.objects.filter(is_deleted=False)
     serializer_class = LicensePlanSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['product', 'plan_type', 'status']
+    filterset_fields = ['application', 'plan_type', 'status']
     search_fields = ['name', 'code']
     ordering_fields = ['name', 'price', 'created_at']
     ordering = ['-created_at']
-    
-    def get_queryset(self):
-        """根据用户权限返回方案列表"""
-        queryset = LicensePlan.objects.filter(is_deleted=False)
-        
-        if self.request.user.is_super_admin:
-            return queryset
-        
-        # 租户管理员只能看到自己租户的方案
-        if hasattr(self.request.user, 'tenant') and self.request.user.tenant:
-            return queryset.filter(tenant=self.request.user.tenant)
-        
-        return queryset.none()
-    
-    def perform_create(self, serializer):
-        """创建方案时自动设置租户信息"""
-        # 从中间件获取current租户信息
-        tenant_id = getattr(self.request, 'tenant_id', None)
-        if tenant_id:
-            from tenants.models import Tenant
-            try:
-                tenant = Tenant.objects.get(id=int(tenant_id))
-                serializer.save(tenant=tenant)
-                logger.info(f"方案创建成功，关联租户: {tenant.name} (ID: {tenant_id})")
-            except Tenant.DoesNotExist:
-                logger.error(f"指定的租户ID不存在: {tenant_id}")
-                serializer.save()
-        else:
-            # 如果没有租户信息但用户已认证，尝试使用用户关联的租户
-            if hasattr(self.request.user, 'tenant') and self.request.user.tenant:
-                serializer.save(tenant=self.request.user.tenant)
-                logger.info(f"方案创建成功，使用用户关联租户: {self.request.user.tenant.name}")
-            else:
-                serializer.save()
-                logger.warning("方案创建时未设置租户信息")
     
     @action(detail=True, methods=['post'])
     def duplicate(self, request, pk=None):
@@ -317,21 +257,12 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
             # 复制方案，确保设置正确的租户信息
             new_code = f"{original_plan.code}_copy_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
             
-            # 确定租户信息
-            target_tenant = original_plan.tenant
-            tenant_id = getattr(self.request, 'tenant_id', None)
-            if tenant_id:
-                from tenants.models import Tenant
-                try:
-                    target_tenant = Tenant.objects.get(id=int(tenant_id))
-                except Tenant.DoesNotExist:
-                    pass
-            elif hasattr(self.request.user, 'tenant') and self.request.user.tenant:
-                target_tenant = self.request.user.tenant
+            # 使用TenantModelViewSet提供的方法获取租户ID
+            tenant_id = self.get_tenant_id()
             
             new_plan = LicensePlan.objects.create(
-                product=original_plan.product,
-                tenant=target_tenant,  # 设置租户信息
+                application=original_plan.application,
+                tenant_id=tenant_id,  # 使用获取到的租户ID
                 name=f"{original_plan.name} (副本)",
                 code=new_code,
                 plan_type=original_plan.plan_type,
@@ -372,7 +303,7 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
 
         ## 业务逻辑
         
-        1. **产品自动关联**: product字段不需要提供，系统会从plan自动获取对应的产品
+        1. **产品自动关联**: application字段不需要提供，系统会从plan自动获取对应的产品
         2. **租户自动关联**: tenant字段可选，如未提供将从current用户的租户自动获取  
         3. **许可证密钥生成**: 系统自动生成25字符格式的许可证密钥 (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)
         4. **过期时间计算**: 可通过validity_days指定有效期，否则使用方案的default_validity_days
@@ -593,33 +524,20 @@ class LicensePlanViewSet(viewsets.ModelViewSet):
         }
     )
 )
-class LicenseViewSet(viewsets.ModelViewSet):
-    """许可证管理视图集"""
+class LicenseViewSet(TenantModelViewSet):
+    """
+    许可证管理视图集
     
-    authentication_classes = [JWTAuthentication]
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
+    queryset = License.objects.filter(is_deleted=False)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['product', 'plan', 'status', 'tenant']
+    filterset_fields = ['application', 'plan', 'status', 'tenant']
     search_fields = ['license_key', 'customer_name', 'customer_email']
     ordering_fields = ['issued_at', 'expires_at', 'customer_name']
     ordering = ['-issued_at']
-    
-    def get_queryset(self):
-        """根据用户权限返回许可证列表"""
-        # OpenAPI schema 生成时跳过权限检查
-        if getattr(self, 'swagger_fake_view', False):
-            return License.objects.none()
-            
-        queryset = License.objects.filter(is_deleted=False)
-        
-        if self.request.user.is_super_admin:
-            return queryset
-        
-        # 租户管理员只能看到自己租户的许可证
-        if hasattr(self.request.user, 'tenant'):
-            return queryset.filter(tenant=self.request.user.tenant)
-        
-        return queryset.none()
     
     def get_serializer_class(self):
         """根据操作返回不同的序列化器"""
@@ -633,36 +551,22 @@ class LicenseViewSet(viewsets.ModelViewSet):
         """创建许可证时自动填充缺失的字段"""
         save_kwargs = {}
         
-        # 自动获取product字段
-        if not serializer.validated_data.get('product') and serializer.validated_data.get('plan'):
+        # 自动获取application字段
+        if not serializer.validated_data.get('application') and serializer.validated_data.get('plan'):
             plan = serializer.validated_data['plan']
-            save_kwargs['product'] = plan.product
-            logger.info(f"自动从plan获取product: {plan.product.name}")
+            save_kwargs['application'] = plan.application
+            logger.info(f"自动从plan获取application: {plan.application.name}")
         
-        # 自动获取tenant字段
-        if not serializer.validated_data.get('tenant'):
-            # 尝试从中间件获取current租户信息
-            tenant_id = getattr(self.request, 'tenant_id', None)
-            if tenant_id:
-                from tenants.models import Tenant
-                try:
-                    tenant = Tenant.objects.get(id=int(tenant_id))
-                    save_kwargs['tenant'] = tenant
-                    logger.info(f"从中间件获取租户: {tenant.name} (ID: {tenant_id})")
-                except Tenant.DoesNotExist:
-                    logger.error(f"指定的租户ID不存在: {tenant_id}")
-            
-            # 如果仍然没有租户信息，尝试使用用户关联的租户
-            if 'tenant' not in save_kwargs and hasattr(self.request.user, 'tenant') and self.request.user.tenant:
-                save_kwargs['tenant'] = self.request.user.tenant
-                logger.info(f"使用用户关联租户: {self.request.user.tenant.name}")
-            
-            # 如果还是没有租户信息，记录警告
-            if 'tenant' not in save_kwargs:
-                logger.warning("许可证创建时未能自动获取租户信息")
+        # TenantModelViewSet会自动处理tenant，但如果需要特殊逻辑可以在这里添加
+        # 调用父类方法，它会自动设置tenant_id
+        super().perform_create(serializer)
         
-        # 调用serializer.save()，传入额外的字段
-        return serializer.save(**save_kwargs)
+        # 如果有额外的save_kwargs，需要更新对象
+        if save_kwargs:
+            instance = serializer.instance
+            for key, value in save_kwargs.items():
+                setattr(instance, key, value)
+            instance.save()
     
     @action(detail=True, methods=['post'])
     def revoke(self, request, pk=None):
@@ -778,7 +682,7 @@ class LicenseViewSet(viewsets.ModelViewSet):
                         'application/json': {
                             'license_key': 'XXXX-XXXX-XXXX-XXXX',
                             'customer_info': {'name': 'Customer Name', 'email': 'email@example.com'},
-                            'product_info': {'name': 'Product Name', 'version': '1.0.0'},
+                            'application_info': {'name': 'Application Name', 'version': '1.0.0'},
                             'activation_info': {'max_activations': 5, 'current_activations': 2},
                             'validity_info': {'issued_at': '2023-01-01T00:00:00Z', 'expires_at': '2024-01-01T00:00:00Z'},
                             'instructions': 'License usage instructions...'
@@ -804,11 +708,11 @@ class LicenseViewSet(viewsets.ModelViewSet):
                     'name': license_obj.customer_name,
                     'email': license_obj.customer_email,
                 },
-                'product_info': {
-                    'name': license_obj.product.name,
-                    'code': license_obj.product.code,
-                    'version': license_obj.product.version,
-                    'description': license_obj.product.description
+                'application_info': {
+                    'name': license_obj.application.name,
+                    'code': license_obj.application.code,
+                    'version': license_obj.application.version,
+                    'description': license_obj.application.description
                 },
                 'plan_info': {
                     'name': license_obj.plan.name,
@@ -888,12 +792,12 @@ class LicenseViewSet(viewsets.ModelViewSet):
 许可证使用说明
 =============
 
-产品名称: {license_obj.product.name}
+产品名称: {license_obj.application.name}
 许可方案: {license_obj.plan.name}
 许可证密钥: {license_obj.license_key}
 
 安装说明:
-1. 下载并安装 {license_obj.product.name} 软件
+1. 下载并安装 {license_obj.application.name} 软件
 2. 启动软件后，在许可证激活界面输入上述许可证密钥
 3. 按照软件提示完成激活流程
 
@@ -930,10 +834,10 @@ class LicenseViewSet(viewsets.ModelViewSet):
 
 产品信息:
 --------
-产品名称: {license_data['product_info']['name']}
-产品代码: {license_data['product_info']['code']}
-产品版本: {license_data['product_info']['version']}
-产品描述: {license_data['product_info']['description']}
+产品名称: {license_data['application_info']['name']}
+产品代码: {license_data['application_info']['code']}
+产品版本: {license_data['application_info']['version']}
+产品描述: {license_data['application_info']['description']}
 
 方案信息:
 --------
@@ -979,11 +883,11 @@ current激活数: {license_data['activation_info']['current_activations']}
         SubElement(customer_elem, 'email').text = license_data['customer_info']['email']
         
         # 产品信息
-        product_elem = SubElement(root, 'product_info')
-        SubElement(product_elem, 'name').text = license_data['product_info']['name']
-        SubElement(product_elem, 'code').text = license_data['product_info']['code']
-        SubElement(product_elem, 'version').text = license_data['product_info']['version']
-        SubElement(product_elem, 'description').text = license_data['product_info']['description']
+        application_elem = SubElement(root, 'application_info')
+        SubElement(application_elem, 'name').text = license_data['application_info']['name']
+        SubElement(application_elem, 'code').text = license_data['application_info']['code']
+        SubElement(application_elem, 'version').text = license_data['application_info']['version']
+        SubElement(application_elem, 'description').text = license_data['application_info']['description']
         
         # 方案信息
         plan_elem = SubElement(root, 'plan_info')
@@ -1092,7 +996,7 @@ current激活数: {license_data['activation_info']['current_activations']}
                                         'license_key': license_obj.license_key[-8:],
                                         'operation': 'batch_suspend',
                                         'reason': reason,
-                                        'product': license_obj.product.name,
+                                        'application': license_obj.application.name,
                                         'customer': license_obj.customer_name
                                     }
                                 )
@@ -1125,7 +1029,7 @@ current激活数: {license_data['activation_info']['current_activations']}
                                         'license_key': license_obj.license_key[-8:],
                                         'operation': 'batch_activate',
                                         'reason': reason,
-                                        'product': license_obj.product.name,
+                                        'application': license_obj.application.name,
                                         'customer': license_obj.customer_name
                                     }
                                 )
@@ -1165,7 +1069,7 @@ current激活数: {license_data['activation_info']['current_activations']}
                                     'license_key': license_obj.license_key[-8:],
                                     'operation': 'batch_delete',
                                     'reason': reason,
-                                    'product': license_obj.product.name,
+                                    'application': license_obj.application.name,
                                     'customer': license_obj.customer_name
                                 }
                             )
@@ -1229,7 +1133,7 @@ current激活数: {license_data['activation_info']['current_activations']}
 class MachineBindingViewSet(viewsets.ReadOnlyModelViewSet):
     """机器绑定管理视图集（只读）"""
     
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
     serializer_class = MachineBindingSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -1240,16 +1144,22 @@ class MachineBindingViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         """根据用户权限返回机器绑定列表"""
-        queryset = MachineBinding.objects.all()
+        # Swagger文档生成时返回空queryset
+        if getattr(self, 'swagger_fake_view', False):
+            return MachineBinding.objects.none()
         
-        if self.request.user.is_super_admin:
+        queryset = MachineBinding.objects.all()
+        user = self.request.user
+        
+        # 安全检查：确保用户有is_super_admin属性
+        if hasattr(user, 'is_super_admin') and user.is_super_admin:
             return queryset
         
         # 租户管理员只能看到自己租户的机器绑定
-        if hasattr(self.request.user, 'tenant'):
-            return queryset.filter(license__tenant=self.request.user.tenant)
+        if hasattr(user, 'tenant') and user.tenant:
+            return queryset.filter(license__tenant=user.tenant)
         
-        return queryset.none()
+        return MachineBinding.objects.none()
     
     @action(detail=True, methods=['post'])
     def block(self, request, pk=None):
@@ -1303,7 +1213,7 @@ class MachineBindingViewSet(viewsets.ReadOnlyModelViewSet):
 class LicenseActivationViewSet(viewsets.ReadOnlyModelViewSet):
     """许可证激活记录视图集（只读）"""
     
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
     serializer_class = LicenseActivationSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -1314,16 +1224,22 @@ class LicenseActivationViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         """根据用户权限返回激活记录列表"""
-        queryset = LicenseActivation.objects.all()
+        # Swagger文档生成时返回空queryset
+        if getattr(self, 'swagger_fake_view', False):
+            return LicenseActivation.objects.none()
         
-        if self.request.user.is_super_admin:
+        queryset = LicenseActivation.objects.all()
+        user = self.request.user
+        
+        # 安全检查
+        if hasattr(user, 'is_super_admin') and user.is_super_admin:
             return queryset
         
         # 租户管理员只能看到自己租户的激活记录
-        if hasattr(self.request.user, 'tenant'):
-            return queryset.filter(license__tenant=self.request.user.tenant)
+        if hasattr(user, 'tenant') and user.tenant:
+            return queryset.filter(license__tenant=user.tenant)
         
-        return queryset.none()
+        return LicenseActivation.objects.none()
 
 
 @extend_schema_view(
@@ -1341,7 +1257,7 @@ class LicenseActivationViewSet(viewsets.ReadOnlyModelViewSet):
 class SecurityAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """安全审计日志视图集（只读）"""
     
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
     serializer_class = SecurityAuditLogSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
@@ -1351,18 +1267,24 @@ class SecurityAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         """根据用户权限返回审计日志列表"""
-        queryset = SecurityAuditLog.objects.all()
+        # Swagger文档生成时返回空queryset
+        if getattr(self, 'swagger_fake_view', False):
+            return SecurityAuditLog.objects.none()
         
-        if self.request.user.is_super_admin:
+        queryset = SecurityAuditLog.objects.all()
+        user = self.request.user
+        
+        # 安全检查
+        if hasattr(user, 'is_super_admin') and user.is_super_admin:
             return queryset
         
         # 租户管理员只能看到自己租户的审计日志
-        if hasattr(self.request.user, 'tenant'):
+        if hasattr(user, 'tenant') and user.tenant:
             return queryset.filter(
-                Q(tenant=self.request.user.tenant) | Q(tenant__isnull=True)
+                Q(tenant=user.tenant) | Q(tenant__isnull=True)
             )
         
-        return queryset.none()
+        return SecurityAuditLog.objects.none()
 
 
 @extend_schema_view(
@@ -1397,26 +1319,17 @@ class SecurityAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         description='软删除指定的租户许可证配额'
     )
 )
-class TenantLicenseQuotaViewSet(viewsets.ModelViewSet):
-    """租户许可证配额管理视图集"""
+class TenantLicenseQuotaViewSet(TenantModelViewSet):
+    """
+    租户许可证配额管理视图集
     
-    authentication_classes = [JWTAuthentication]
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
+    queryset = TenantLicenseQuota.objects.filter(is_deleted=False)
     serializer_class = TenantLicenseQuotaSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ['tenant', 'product', 'is_active']
+    filterset_fields = ['tenant', 'application', 'is_active']
     ordering_fields = ['quota_start_date', 'quota_end_date']
     ordering = ['-quota_start_date']
-    
-    def get_queryset(self):
-        """根据用户权限返回配额列表"""
-        queryset = TenantLicenseQuota.objects.filter(is_deleted=False)
-        
-        if self.request.user.is_super_admin:
-            return queryset
-        
-        # 租户管理员只能看到自己租户的配额
-        if hasattr(self.request.user, 'tenant'):
-            return queryset.filter(tenant=self.request.user.tenant)
-        
-        return queryset.none()

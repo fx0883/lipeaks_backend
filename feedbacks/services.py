@@ -302,7 +302,7 @@ class EmailService:
                 <p>{reply_content}</p>
             </div>
             
-            <p>Software: {software_name} {software_version}</p>
+            <p>Software: {software_name} {application_version}</p>
             
             <p style="text-align: center;">
                 <a href="{view_url}" class="button">View Feedback</a>
@@ -326,7 +326,7 @@ You have received a new reply to your feedback: {feedback_title}
 {reply_user} replied:
 {reply_content}
 
-Software: {software_name} {software_version}
+Software: {software_name} {application_version}
 
 View feedback: {view_url}
 
@@ -339,7 +339,7 @@ Unsubscribe: {unsubscribe_url}
                 'reply_content': 'Reply content',
                 'reply_user': 'User who replied',
                 'software_name': 'Software name',
-                'software_version': 'Software version',
+                'application_version': 'Software version',
                 'view_url': 'URL to view feedback',
                 'unsubscribe_url': 'URL to unsubscribe'
             }
@@ -522,8 +522,8 @@ class FeedbackService:
             EmailService.send_verification(feedback)
         
         # Update software statistics
-        if feedback.software:
-            feedback.software.update_statistics()
+        if feedback.application:
+            feedback.application.update_statistics()
         
         logger.info(f"Created feedback {feedback.id}")
         return feedback
@@ -570,8 +570,8 @@ class FeedbackService:
         EmailService.send_status_notification(history)
         
         # Update software statistics
-        if feedback.software:
-            feedback.software.update_statistics()
+        if feedback.application:
+            feedback.application.update_statistics()
         
         logger.info(f"Changed feedback {feedback.id} status from {old_status} to {new_status}")
         return history

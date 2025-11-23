@@ -21,6 +21,119 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 logger = logging.getLogger(__name__)
 
+
+class TenantApiView(APIView):
+    """
+    租户隔离的APIView基类
+    
+    提供与TenantModelViewSet相同的租户处理逻辑，适用于非ModelViewSet的API视图
+    
+    功能：
+    1. 支持header方式获取租户ID: X-Tenant-ID
+    2. 支持query参数方式: ?tenant_id=1
+    3. 自动验证租户权限
+    4. 区分超管/租户管理员/成员角色
+    
+    使用示例：
+        class MyAPIView(TenantApiView):
+            def get(self, request):
+                tenant_id = self.get_tenant_id()
+                # 使用tenant_id进行业务逻辑
+                return Response(...)
+    """
+    
+    def get_tenant_id(self):
+        """
+        获取当前请求的租户ID
+        
+        根据用户角色和请求参数自动判断：
+        - 超级管理员：从query参数获取tenant_id，如果没有则返回None（可访问所有数据）
+        - 租户管理员：从query参数获取tenant_id，如果没有则使用用户绑定的租户
+        - 普通成员/匿名：从header获取X-Tenant-ID，必须提供
+        
+        Returns:
+            int or None: 租户ID，如果是超管且未指定则返回None
+            
+        Raises:
+            PermissionDenied: 权限不足或租户ID无效
+        """
+        from rest_framework.exceptions import PermissionDenied
+        from django.conf import settings
+        from common.utils.tenant_header import get_header_tenant_id, require_member_header_match
+        from common.exceptions import TenantHeaderInvalidOrMissing, TenantMismatchOrNoPermission
+        
+        request = self.request
+        user = getattr(request, 'user', None)
+        is_auth = bool(user and getattr(user, 'is_authenticated', False))
+        is_super_admin = bool(is_auth and getattr(request, 'auth_type', None) == 'jwt' and getattr(user, 'is_super_admin', False))
+        is_tenant_admin = bool(is_auth and getattr(user, 'is_admin', False) and not is_super_admin)
+        
+        # 防御性：管理员/超管禁止使用header
+        header_tid = get_header_tenant_id(request)
+        if (is_super_admin or is_tenant_admin) and header_tid is not None:
+            logger.warning(f"[TenantApiView] 管理员/超管携带X-Tenant-ID被拒绝")
+            raise TenantHeaderInvalidOrMissing()
+        
+        # 计算有效租户ID
+        if is_super_admin:
+            q_tid = request.GET.get('tenant_id')
+            if q_tid is not None:
+                try:
+                    return int(q_tid)
+                except (TypeError, ValueError):
+                    raise TenantHeaderInvalidOrMissing()
+            # 超管可以不指定租户ID，返回None表示访问所有数据
+            return None
+            
+        elif is_tenant_admin:
+            q_tid = request.GET.get('tenant_id')
+            if q_tid is not None:
+                try:
+                    return int(q_tid)
+                except (TypeError, ValueError):
+                    raise TenantHeaderInvalidOrMissing()
+            # 管理员未指定则使用自己的租户
+            user_tenant = getattr(user, 'tenant', None)
+            if user_tenant:
+                return int(user_tenant.id)
+            raise TenantMismatchOrNoPermission()
+            
+        else:
+            # 成员或匿名：必须使用header并校验匹配
+            require_member_header_match(request)
+            header_tid_val = get_header_tenant_id(request)
+            if header_tid_val is None:
+                raise TenantHeaderInvalidOrMissing()
+            return int(header_tid_val)
+    
+    def verify_tenant_access(self, obj):
+        """
+        验证对象是否属于当前租户
+        
+        Args:
+            obj: 需要验证的对象，必须有tenant属性
+            
+        Raises:
+            PermissionDenied: 对象不属于当前租户
+        """
+        from rest_framework.exceptions import PermissionDenied
+        
+        if not hasattr(obj, 'tenant'):
+            return
+        
+        tenant_id = self.get_tenant_id()
+        
+        # 如果是超管且未指定租户，可以访问所有数据
+        if tenant_id is None:
+            return
+        
+        obj_tenant_id = obj.tenant.id if obj.tenant else None
+        
+        if obj_tenant_id and obj_tenant_id != tenant_id:
+            logger.warning(f"[TenantApiView] 尝试访问不属于当前租户的对象: 对象租户ID={obj_tenant_id}, 当前租户ID={tenant_id}")
+            raise PermissionDenied("无法访问不属于当前租户的对象")
+
+
 class APILogListView(generics.ListAPIView):
     """
     API日志列表视图

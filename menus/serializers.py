@@ -2,6 +2,7 @@
 菜单管理系统序列化器
 """
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import Menu, UserMenu
 from users.models import User
 
@@ -60,6 +61,7 @@ class MenuTreeSerializer(MenuSerializer):
     class Meta(MenuSerializer.Meta):
         fields = MenuSerializer.Meta.fields + ['children']
     
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_children(self, obj):
         """
         获取子菜单

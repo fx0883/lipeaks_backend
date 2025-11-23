@@ -14,8 +14,9 @@ from typing import Dict, Any, Optional, Tuple
 from django.utils import timezone
 from django.db import transaction
 from django.core.exceptions import ValidationError
+from applications.models import Application
 from licenses.models import (
-    SoftwareProduct, LicensePlan, License, MachineBinding, 
+    LicensePlan, License, MachineBinding, 
     LicenseActivation, SecurityAuditLog
 )
 from licenses.services.security_service import SecurityService
@@ -33,7 +34,7 @@ class LicenseGenerationService:
     
     def generate_license_key(
         self, 
-        product: SoftwareProduct, 
+        product: Application, 
         plan: LicensePlan, 
         customer_info: Dict[str, Any] = None
     ) -> str:
@@ -66,7 +67,7 @@ class LicenseGenerationService:
             logger.error(f"许可证密钥生成失败: {str(e)}")
             raise Exception(f"许可证生成失败: {str(e)}")
     
-    def verify_license_key(self, license_key: str, product: SoftwareProduct) -> Dict[str, Any]:
+    def verify_license_key(self, license_key: str, product: Application) -> Dict[str, Any]:
         """
         验证许可证密钥有效性
         
@@ -133,7 +134,7 @@ class LicenseGenerationService:
             logger.error(f"许可证验证失败: {str(e)}")
             return {'valid': False, 'error': f'Verification error: {str(e)}'}
     
-    def _get_product_private_key(self, product: SoftwareProduct) -> bytes:
+    def _get_product_private_key(self, product: Application) -> bytes:
         """
         获取产品私钥（实际实现中应从安全存储获取）
         
@@ -618,7 +619,7 @@ class LicenseManagementService:
         """
         try:
             # 获取产品和方案
-            product = SoftwareProduct.objects.get(id=product_id)
+            product = Application.objects.get(id=product_id)
             plan = LicensePlan.objects.get(id=plan_id, product=product)
             
             # 生成许可证密钥

@@ -9,11 +9,13 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from parler.models import TranslatableModel, TranslatedFields
 from parler.managers import TranslatableManager
+from common.models import BaseModel
+from common.managers import TranslatableTenantManager
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
-class Article(models.Model):
+class Article(BaseModel):
     """
     文章模型
     """
@@ -91,19 +93,11 @@ class Article(models.Model):
     allow_comment = models.BooleanField(_("允许评论"), default=True)
     visibility = models.CharField(_("可见性"), max_length=20, choices=VISIBILITY_CHOICES, default='public')
     password = models.CharField(_("访问密码"), max_length=128, blank=True, null=True)
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
     published_at = models.DateTimeField(_("发布时间"), blank=True, null=True)
     cover_image = models.CharField(_("封面图片"), max_length=255, blank=True, null=True)
     cover_image_small = models.CharField(_("封面小图"), max_length=255, blank=True, null=True, help_text="封面图片的缩略图版本")
     template = models.CharField(_("模板"), max_length=100, blank=True, null=True)
     sort_order = models.IntegerField(_("排序"), default=0)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="articles",
-        verbose_name=_("所属租户")
-    )
     
     class Meta:
         verbose_name = _('文章')
@@ -279,7 +273,11 @@ class Article(models.Model):
 class Category(TranslatableModel):
     """
     分类模型（支持多语言）
+    
+    注意：由于django-parler的限制，无法继承BaseModel
+    但添加了is_deleted字段以支持软删除
     """
+    
     # 可翻译字段
     translations = TranslatedFields(
         name=models.CharField(_("分类名称"), max_length=100),
@@ -308,11 +306,21 @@ class Category(TranslatableModel):
         related_name="categories",
         verbose_name=_("所属租户")
     )
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.PROTECT,
+        related_name="categories",
+        verbose_name=_("关联应用"),
+        null=True,
+        blank=True,
+        help_text=_("分类所属的应用，留空表示全局分类")
+    )
     is_active = models.BooleanField(_("是否激活"), default=True)
     is_pinned = models.BooleanField(_("是否置顶"), default=False)
+    is_deleted = models.BooleanField(_("是否删除"), default=False, db_index=True)
     
-    # 使用TranslatableManager以支持翻译字段的查询
-    objects = TranslatableManager()
+    # 使用TranslatableTenantManager以同时支持翻译和租户过滤
+    objects = TranslatableTenantManager()
     
     class Meta:
         verbose_name = _('分类')
@@ -323,9 +331,12 @@ class Category(TranslatableModel):
             models.Index(fields=['parent']),
             models.Index(fields=['is_active']),
             models.Index(fields=['is_pinned']),
+            models.Index(fields=['application']),
             models.Index(fields=['tenant', 'parent']),
             models.Index(fields=['tenant', 'is_active']),
             models.Index(fields=['tenant', 'is_pinned']),
+            models.Index(fields=['tenant', 'application']),
+            models.Index(fields=['tenant', 'application', 'is_active']),
         ]
     
     def __str__(self):
@@ -347,22 +358,14 @@ class Category(TranslatableModel):
         super().save(*args, **kwargs)
 
 
-class TagGroup(models.Model):
+class TagGroup(BaseModel):
     """
     标签组模型
     """
     name = models.CharField(_("标签组名称"), max_length=50)
     slug = models.SlugField(_("URL别名"), max_length=50, unique=True)
     description = models.TextField(_("标签组描述"), blank=True, null=True)
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
     is_active = models.BooleanField(_("是否激活"), default=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="tag_groups",
-        verbose_name=_("所属租户")
-    )
     
     class Meta:
         verbose_name = _('标签组')
@@ -384,7 +387,7 @@ class TagGroup(models.Model):
         super().save(*args, **kwargs)
 
 
-class Tag(models.Model):
+class Tag(BaseModel):
     """
     标签模型
     """
@@ -399,16 +402,8 @@ class Tag(models.Model):
         blank=True,
         null=True
     )
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
     color = models.CharField(_("颜色"), max_length=20, blank=True, null=True)
     is_active = models.BooleanField(_("是否激活"), default=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="tags",
-        verbose_name=_("所属租户")
-    )
     
     class Meta:
         verbose_name = _('标签')
@@ -433,7 +428,7 @@ class Tag(models.Model):
         super().save(*args, **kwargs)
 
 
-class Comment(models.Model):
+class Comment(BaseModel):
     """
     评论模型
     支持三种评论者类型：
@@ -491,16 +486,8 @@ class Comment(models.Model):
     status = models.CharField(_("状态"), max_length=20, choices=STATUS_CHOICES, default='pending')
     ip_address = models.GenericIPAddressField(_("IP地址"), blank=True, null=True)
     user_agent = models.CharField(_("用户代理"), max_length=255, blank=True, null=True)
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
     is_pinned = models.BooleanField(_("是否置顶"), default=False)
     likes_count = models.IntegerField(_("点赞数"), default=0)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="comments",
-        verbose_name=_("所属租户")
-    )
     
     class Meta:
         verbose_name = _('评论')
@@ -615,7 +602,7 @@ class Comment(models.Model):
             raise ValidationError(_("user、member和guest_name只能选择其中一个"))
 
 
-class ArticleCategory(models.Model):
+class ArticleCategory(BaseModel):
     """
     文章分类关系
     """
@@ -630,13 +617,6 @@ class ArticleCategory(models.Model):
         on_delete=models.CASCADE,
         related_name="article_categories",
         verbose_name=_("分类")
-    )
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="article_categories",
-        verbose_name=_("所属租户")
     )
     
     class Meta:
@@ -653,7 +633,7 @@ class ArticleCategory(models.Model):
         return f"{self.article.title} - {self.category.name}"
 
 
-class ArticleTag(models.Model):
+class ArticleTag(BaseModel):
     """
     文章标签关系
     """
@@ -668,13 +648,6 @@ class ArticleTag(models.Model):
         on_delete=models.CASCADE,
         related_name="article_tags",
         verbose_name=_("标签")
-    )
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="article_tags",
-        verbose_name=_("所属租户")
     )
     
     class Meta:
@@ -691,7 +664,7 @@ class ArticleTag(models.Model):
         return f"{self.article.title} - {self.tag.name}"
 
 
-class ArticleMeta(models.Model):
+class ArticleMeta(BaseModel):
     """
     文章元数据
     """
@@ -711,14 +684,6 @@ class ArticleMeta(models.Model):
     canonical_url = models.URLField(_("规范URL"), blank=True, null=True)
     robots = models.CharField(_("Robots指令"), max_length=100, blank=True, null=True)
     custom_meta = models.TextField(_("自定义元数据"), blank=True, null=True)
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="article_metas",
-        verbose_name=_("所属租户")
-    )
     
     class Meta:
         verbose_name = _('文章元数据')
@@ -732,9 +697,11 @@ class ArticleMeta(models.Model):
         return f"{self.article.title}的元数据"
 
 
-class ArticleStatistics(models.Model):
+class ArticleStatistics(BaseModel):
     """
     文章统计
+    
+    注意：这个模型原本有last_updated_at字段，但BaseModel已提供updated_at
     """
     article = models.OneToOneField(
         Article,
@@ -751,13 +718,6 @@ class ArticleStatistics(models.Model):
     bookmarks_count = models.IntegerField(_("收藏数"), default=0)
     avg_reading_time = models.IntegerField(_("平均阅读时长(秒)"), default=0)
     bounce_rate = models.DecimalField(_("跳出率(%)"), max_digits=5, decimal_places=2, default=0)
-    last_updated_at = models.DateTimeField(_("最后更新时间"), auto_now=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="article_statistics",
-        verbose_name=_("所属租户")
-    )
     
     class Meta:
         verbose_name = _('文章统计')
@@ -774,7 +734,7 @@ class ArticleStatistics(models.Model):
         return f"{self.article.title}的统计数据"
         
         
-class ArticleVersion(models.Model):
+class ArticleVersion(BaseModel):
     """
     文章版本
     """
@@ -796,14 +756,7 @@ class ArticleVersion(models.Model):
     )
     version_number = models.IntegerField(_("版本号"))
     change_description = models.TextField(_("变更说明"), blank=True, null=True)
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
     diff_data = models.TextField(_("差异数据"), blank=True, null=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="article_versions",
-        verbose_name=_("所属租户")
-    )
     
     class Meta:
         verbose_name = _('文章版本')
@@ -821,16 +774,10 @@ class ArticleVersion(models.Model):
         return f"{self.article.title} - 版本 {self.version_number}"
 
 
-class UserLevel(models.Model):
+class UserLevel(BaseModel):
     """
     用户等级
     """
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="user_levels",
-        verbose_name=_("所属租户")
-    )
     name = models.CharField(_("等级名称"), max_length=50)
     description = models.TextField(_("等级描述"), blank=True, null=True)
     level = models.IntegerField(_("等级值"))
@@ -838,8 +785,6 @@ class UserLevel(models.Model):
     max_storage_mb = models.IntegerField(_("最大存储空间(MB)"), default=100)
     permissions = models.TextField(_("权限"), blank=True, null=True)
     is_default = models.BooleanField(_("是否默认"), default=False)
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
     
     class Meta:
         verbose_name = _('用户等级')
@@ -856,7 +801,7 @@ class UserLevel(models.Model):
         return f"{self.tenant.name} - {self.name}"
 
 
-class UserLevelRelation(models.Model):
+class UserLevelRelation(BaseModel):
     """
     用户等级关系
     """
@@ -874,14 +819,6 @@ class UserLevelRelation(models.Model):
     )
     start_time = models.DateTimeField(_("开始时间"), auto_now_add=True)
     end_time = models.DateTimeField(_("结束时间"), blank=True, null=True)
-    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
-    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="user_level_relations",
-        verbose_name=_("所属租户")
-    )
     
     class Meta:
         verbose_name = _('用户等级关系')
@@ -898,7 +835,7 @@ class UserLevelRelation(models.Model):
         return f"{self.user.username} - {self.level.name}"
 
 
-class AccessLog(models.Model):
+class AccessLog(BaseModel):
     """
     访问日志模型
     """
@@ -920,7 +857,6 @@ class AccessLog(models.Model):
     ip_address = models.GenericIPAddressField(_("IP地址"), blank=True, null=True)
     user_agent = models.CharField(_("用户代理"), max_length=255, blank=True, null=True)
     referer = models.URLField(_("来源URL"), blank=True, null=True)
-    created_at = models.DateTimeField(_("访问时间"), auto_now_add=True)
     reading_time = models.IntegerField(_("阅读时长(秒)"), blank=True, null=True)
     country = models.CharField(_("国家"), max_length=50, blank=True, null=True)
     region = models.CharField(_("区域/省份"), max_length=100, blank=True, null=True)
@@ -928,12 +864,6 @@ class AccessLog(models.Model):
     device = models.CharField(_("设备类型"), max_length=50, blank=True, null=True)
     browser = models.CharField(_("浏览器"), max_length=50, blank=True, null=True)
     os = models.CharField(_("操作系统"), max_length=50, blank=True, null=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="access_logs",
-        verbose_name=_("所属租户")
-    )
     
     class Meta:
         verbose_name = _('访问日志')
@@ -954,7 +884,7 @@ class AccessLog(models.Model):
         return f"{user_info} 访问 {self.article.title} 于 {self.created_at}"
 
 
-class OperationLog(models.Model):
+class OperationLog(BaseModel):
     """
     操作日志模型
     支持两种操作者类型：
@@ -1008,13 +938,6 @@ class OperationLog(models.Model):
     details = models.TextField(_("操作详情"), blank=True, null=True)
     ip_address = models.GenericIPAddressField(_("IP地址"))
     user_agent = models.CharField(_("用户代理"), max_length=255, blank=True, null=True)
-    created_at = models.DateTimeField(_("操作时间"), auto_now_add=True)
-    tenant = models.ForeignKey(
-        'tenants.Tenant',
-        on_delete=models.CASCADE,
-        related_name="operation_logs",
-        verbose_name=_("所属租户")
-    )
     
     class Meta:
         verbose_name = _('操作日志')
@@ -1112,3 +1035,55 @@ class OperationLog(models.Model):
         
         if has_user and has_member:
             raise ValidationError(_("user和member不能同时指定，只能选择其中一个"))
+
+
+class ArticleApplication(BaseModel):
+    """
+    文章-应用关联（中间表）
+    支持一篇文章关联到多个应用
+    """
+    article = models.ForeignKey(
+        'Article',
+        on_delete=models.CASCADE,
+        verbose_name=_("关联文章")
+    )
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.CASCADE,
+        verbose_name=_("关联应用")
+    )
+    
+    # === 扩展字段 ===
+    display_order = models.IntegerField(
+        _("显示顺序"),
+        default=0,
+        help_text="在该应用中的显示顺序，数字越小越靠前"
+    )
+    is_featured = models.BooleanField(
+        _("特色展示"),
+        default=False,
+        help_text="是否在该应用中作为特色文章展示"
+    )
+    assigned_at = models.DateTimeField(
+        _("关联时间"),
+        auto_now_add=True
+    )
+    
+    class Meta:
+        db_table = 'cms_article_application'
+        verbose_name = _('文章-应用关联')
+        verbose_name_plural = _('文章-应用关联')
+        ordering = ['display_order', '-assigned_at']
+        indexes = [
+            # 核心查询索引
+            models.Index(fields=['application', 'article']),
+            models.Index(fields=['article', 'application']),
+            # 租户+应用联合索引
+            models.Index(fields=['tenant', 'application']),
+            # 排序索引
+            models.Index(fields=['application', 'display_order']),
+        ]
+        unique_together = [['article', 'application']]
+    
+    def __str__(self):
+        return f"{self.article.title} -> {self.application.name}"

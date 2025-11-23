@@ -53,7 +53,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = get_required_env('SECRET_KEY', 'django-insecure-w7&3bzjc1s*bty@)%c3w&#fro!wu5@(9jxac46lqm^klo9^1df')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = get_env_with_validation('DEBUG', lambda x: x.lower() == 'true', 'True')
+DEBUG = get_env_with_validation('INFO', lambda x: x.lower() == 'true', 'True')
 
 # 从环境变量读取日志输出方式，默认跟随DEBUG设置
 LOG_TO_CONSOLE = os.getenv('LOG_TO_CONSOLE', str(DEBUG)).lower() == 'true'
@@ -100,6 +100,7 @@ INSTALLED_APPS = [
     'orders',  # 订单管理应用
     'licenses',  # 许可证管理应用
     'points',  # 多租户积分系统
+    'applications',  # 应用管理（整合licenses和feedbacks的软件实体）
     'feedbacks',  # User Feedback System
     'interactions',  # 用户互动应用（收藏、点赞等）
 ]
@@ -388,6 +389,10 @@ SPECTACULAR_SETTINGS = {
             'description': '请输入 "Bearer {token}" 格式的JWT令牌'
         }
     },
+    # 只使用APIJWTAuthentication，避免重复的Bearer组件
+    'AUTHENTICATION_WHITELIST': [
+        'common.authentication.api_auth.APIJWTAuthentication',
+    ],
     # 添加JWT认证映射
     'COMPONENT_SPLIT_REQUEST': True,
     'COMPONENT_NO_READ_ONLY_REQUIRED': False,
@@ -445,14 +450,14 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',  # 使用轮转日志
-            'filename': get_log_filename('debug'),  # 使用带日期的文件名
+            'filename': get_log_filename('INFO'),  # 使用带日期的文件名
             'maxBytes': 10 * 1024 * 1024,  # 10MB
             'backupCount': 5,  # 保留5个备份文件
             'formatter': 'verbose',
@@ -478,20 +483,28 @@ LOGGING = {
         'drf_spectacular': {
             # 根据LOG_TO_CONSOLE环境变量决定日志输出方式
             'handlers': ['console'] if LOG_TO_CONSOLE else ['file'],
-            'level': 'DEBUG',
+            'level': 'INFO',
             'propagate': True,
+        },
+        'users': {
+            'handlers': ['console'] if LOG_TO_CONSOLE else ['file', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
         },
     },
 }
 
 # 邮件设置（QQ邮箱SMTP）
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# 支持通过环境变量控制：EMAIL_USE_CONSOLE=true 使用控制台模式（仅调试）
+USE_CONSOLE_EMAIL = os.getenv('EMAIL_USE_CONSOLE', 'false').lower() == 'true'
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' if USE_CONSOLE_EMAIL else 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.qq.com'
 EMAIL_PORT = 465
 EMAIL_USE_SSL = True
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')  # QQ邮箱地址
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')  # QQ邮箱授权码
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')  # 发件人邮箱
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER if EMAIL_HOST_USER else 'noreply@example.com')  # 发件人邮箱
+EMAIL_TIMEOUT = 30  # SMTP 连接超时（秒）
 
 # 前端URL（用于构建密码重置链接）
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')

@@ -47,7 +47,6 @@ class FeedbackListView(APIView):
                    'tenant admins see all tenant feedback, regular users see only their own.',
         parameters=[
             OpenApiParameter('software', OpenApiTypes.INT, OpenApiParameter.QUERY, description='Filter by software ID'),
-            OpenApiParameter('software_version', OpenApiTypes.INT, OpenApiParameter.QUERY, description='Filter by version ID'),
             OpenApiParameter('feedback_type', OpenApiTypes.STR, OpenApiParameter.QUERY, 
                            enum=['bug', 'feature', 'improvement', 'question', 'other']),
             OpenApiParameter('status', OpenApiTypes.STR, OpenApiParameter.QUERY,
@@ -85,10 +84,6 @@ class FeedbackListView(APIView):
         software = request.query_params.get('software')
         if software:
             queryset = queryset.filter(software_id=software)
-        
-        software_version = request.query_params.get('software_version')
-        if software_version:
-            queryset = queryset.filter(software_version_id=software_version)
         
         feedback_type = request.query_params.get('feedback_type')
         if feedback_type:
@@ -336,10 +331,12 @@ class FeedbackVerifyEmailView(APIView):
 class FeedbackToggleNotificationsView(APIView):
     """切换反馈通知API"""
     permission_classes = [IsAuthenticated]
+    serializer_class = FeedbackDetailSerializer  # For schema generation
     
     @extend_schema(
         tags=['Feedback System'],
         summary='Toggle feedback notifications',
+        request=None,  # No request body
         responses={200: FeedbackDetailSerializer}
     )
     def patch(self, request, pk):

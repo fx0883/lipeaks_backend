@@ -24,15 +24,17 @@ class CategorySerializer(ImageFieldNormalizerMixin, TranslatableModelSerializer)
     """分类序列化器（支持多语言）"""
     translations = TranslatedFieldsField(shared_model=Category)
     image_fields = ['cover_image']  # 需要标准化的图片字段
+    application_name = serializers.CharField(source='application.name', read_only=True, allow_null=True)
     
     class Meta:
         model = Category
         fields = [
             'id', 'slug', 'parent', 'cover_image', 'created_at', 'updated_at', 
-            'sort_order', 'tenant', 'is_active', 'is_pinned',
+            'sort_order', 'tenant', 'application', 'application_name', 
+            'is_active', 'is_pinned',
             'translations',  # 包含所有语言的翻译
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'tenant', 'application_name']
     
     def to_representation(self, instance):
         """
@@ -115,9 +117,9 @@ class ArticleStatisticsSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'article', 'views_count', 'unique_views_count', 'likes_count',
             'dislikes_count', 'comments_count', 'shares_count', 'bookmarks_count',
-            'avg_reading_time', 'bounce_rate', 'last_updated_at', 'tenant'
+            'avg_reading_time', 'bounce_rate', 'updated_at', 'tenant'
         ]
-        read_only_fields = ['id', 'last_updated_at', 'tenant']
+        read_only_fields = ['id', 'updated_at', 'tenant']
 
 
 class ArticleVersionSerializer(serializers.ModelSerializer):

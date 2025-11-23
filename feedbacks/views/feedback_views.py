@@ -11,6 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils.translation import gettext_lazy as _
 from django.db.models import Q, Count, Avg
 from django.utils import timezone
+from common.viewsets import TenantModelViewSet
 from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
@@ -52,12 +53,6 @@ from ..permissions import (
                 type=OpenApiTypes.INT,
                 location=OpenApiParameter.QUERY,
                 description='Filter by software ID'
-            ),
-            OpenApiParameter(
-                name='software_version',
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                description='Filter by software version ID'
             ),
             OpenApiParameter(
                 name='feedback_type',
@@ -128,8 +123,6 @@ from ..permissions import (
                                 'status_display': 'Reviewing',
                                 'software': 1,
                                 'software_name': 'CRM System',
-                                'software_version': 10,
-                                'version_number': 'v2.1.0',
                                 'submitter': {
                                     'id': 1,
                                     'username': 'johndoe',
@@ -170,7 +163,6 @@ from ..permissions import (
                     'feedback_type': 'feature',
                     'priority': 'medium',
                     'software': 1,
-                    'software_version': 10,
                     'contact_email': 'user@example.com',
                     'contact_name': 'John Doe',
                     'environment_info': {
@@ -234,12 +226,16 @@ from ..permissions import (
         }
     )
 )
-class FeedbackViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing feedback"""
+class FeedbackViewSet(TenantModelViewSet):
+    """
+    ViewSet for managing feedback
+    
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
     queryset = Feedback.objects.filter(is_deleted=False)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
-        'software', 'software_version', 'feedback_type', 
+        'software', 'feedback_type', 
         'status', 'priority', 'email_verified'
     ]
     search_fields = ['title', 'description', 'contact_email', 'contact_name']
@@ -274,16 +270,15 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def get_queryset(self):
-        """Filter queryset based on user permissions"""
-        queryset = super().get_queryset()
+        """
+        Filter queryset based on user permissions
+        TenantModelViewSet已经处理租户过滤
+        """
+        queryset = super().get_queryset()  # 租户过滤已处理
         user = self.request.user
         
         if not user.is_authenticated:
             return queryset.none()
-        
-        # Filter by tenant
-        if hasattr(self.request, 'tenant'):
-            queryset = queryset.filter(tenant=self.request.tenant)
         
         # Additional filtering based on user role
         if not user.is_superuser and not getattr(user, 'is_tenant_admin', False):
@@ -299,11 +294,12 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        """Set tenant when creating feedback"""
-        if hasattr(self.request, 'tenant'):
-            serializer.save(tenant=self.request.tenant)
-        else:
-            serializer.save()
+        """
+        Set tenant when creating feedback
+        TenantModelViewSet自动设置租户
+        """
+        # TenantModelViewSet会自动设置tenant
+        super().perform_create(serializer)
     
     def retrieve(self, request, *args, **kwargs):
         """Increment view count when retrieving feedback"""

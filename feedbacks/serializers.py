@@ -6,168 +6,26 @@ providing data validation and transformation for API operations.
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from .models import (
-    SoftwareCategory, Software, SoftwareVersion,
     Feedback, FeedbackReply, FeedbackStatusHistory,
     FeedbackAttachment, FeedbackVote,
     FeedbackEmailLog, EmailTemplate
 )
+from applications.models import Application
+from applications.serializers import ApplicationListSerializer
 import mimetypes
 import os
 
 User = get_user_model()
 
 
-# ===================== Software Management Serializers =====================
-
-class SoftwareCategorySerializer(serializers.ModelSerializer):
-    """Serializer for Software Category"""
-    software_count = serializers.SerializerMethodField(read_only=True)
-    
-    class Meta:
-        model = SoftwareCategory
-        fields = [
-            'id', 'name', 'code', 'description', 'icon', 
-            'sort_order', 'is_active', 'software_count',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'software_count']
-        
-    def get_software_count(self, obj):
-        """Get count of active software in this category"""
-        return obj.software_list.filter(is_active=True).count()
-    
-    def validate_code(self, value):
-        """Ensure code is unique within tenant"""
-        request = self.context.get('request')
-        if request and hasattr(request, 'tenant'):
-            queryset = SoftwareCategory.objects.filter(
-                tenant=request.tenant,
-                code=value
-            )
-            if self.instance:
-                queryset = queryset.exclude(pk=self.instance.pk)
-            if queryset.exists():
-                raise serializers.ValidationError(
-                    _("Category with this code already exists in your tenant.")
-                )
-        return value
-
-
-class SoftwareVersionSerializer(serializers.ModelSerializer):
-    """Serializer for Software Version"""
-    software_name = serializers.CharField(source='software.name', read_only=True)
-    software_code = serializers.CharField(source='software.code', read_only=True)
-    
-    class Meta:
-        model = SoftwareVersion
-        fields = [
-            'id', 'software', 'software_name', 'software_code', 
-            'version', 'version_code', 'release_date',
-            'release_notes', 'is_stable', 'is_active', 'download_url',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'software_name', 'software_code', 'created_at', 'updated_at']
-        
-    def validate(self, attrs):
-        """Ensure version is unique for the software"""
-        software = attrs.get('software')
-        version = attrs.get('version')
-        
-        if software and version:
-            queryset = SoftwareVersion.objects.filter(
-                software=software,
-                version=version
-            )
-            if self.instance:
-                queryset = queryset.exclude(pk=self.instance.pk)
-            if queryset.exists():
-                raise serializers.ValidationError({
-                    'version': _("This version already exists for the software.")
-                })
-        
-        return attrs
-
-
-class SoftwareListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for Software listing"""
-    category_name = serializers.CharField(source='category.name', read_only=True)
-    version_count = serializers.SerializerMethodField(read_only=True)
-    
-    class Meta:
-        model = Software
-        fields = [
-            'id', 'name', 'code', 'description', 'category', 'category_name',
-            'logo', 'current_version', 'status', 'is_active',
-            'total_feedbacks', 'open_feedbacks', 'version_count',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = [
-            'id', 'total_feedbacks', 'open_feedbacks', 
-            'version_count', 'created_at', 'updated_at'
-        ]
-        
-    def get_version_count(self, obj):
-        """Get count of versions for this software"""
-        return obj.versions.count()
-
-
-class SoftwareDetailSerializer(serializers.ModelSerializer):
-    """Detailed serializer for Software with nested data"""
-    category = SoftwareCategorySerializer(read_only=True)
-    category_id = serializers.PrimaryKeyRelatedField(
-        queryset=SoftwareCategory.objects.all(),
-        source='category',
-        write_only=True,
-        required=False
-    )
-    versions = SoftwareVersionSerializer(many=True, read_only=True)
-    latest_stable_version = serializers.SerializerMethodField(read_only=True)
-    
-    class Meta:
-        model = Software
-        fields = [
-            'id', 'name', 'code', 'description', 'category', 'category_id',
-            'logo', 'website', 'current_version', 'owner', 'team',
-            'contact_email', 'tags', 'metadata', 'status', 'is_active',
-            'total_feedbacks', 'open_feedbacks', 'versions',
-            'latest_stable_version', 'created_at', 'updated_at'
-        ]
-        read_only_fields = [
-            'id', 'total_feedbacks', 'open_feedbacks',
-            'created_at', 'updated_at'
-        ]
-        
-    def get_latest_stable_version(self, obj):
-        """Get latest stable version"""
-        version = obj.versions.filter(
-            is_stable=True,
-            is_active=True
-        ).order_by('-version_code').first()
-        
-        if version:
-            return SoftwareVersionSerializer(version).data
-        return None
-    
-    def validate_code(self, value):
-        """Ensure code is unique within tenant"""
-        request = self.context.get('request')
-        if request and hasattr(request, 'tenant'):
-            queryset = Software.objects.filter(
-                tenant=request.tenant,
-                code=value
-            )
-            if self.instance:
-                queryset = queryset.exclude(pk=self.instance.pk)
-            if queryset.exists():
-                raise serializers.ValidationError(
-                    _("Software with this code already exists in your tenant.")
-                )
-        return value
-
+# ===================== Application Management Serializers =====================
+# Application相关序列化器已废弃，现在使用applications模块
+# 请使用 applications.serializers 中的序列化器
 
 # ===================== Feedback Management Serializers =====================
 
@@ -185,6 +43,7 @@ class FeedbackAttachmentSerializer(serializers.ModelSerializer):
             'id', 'file_size', 'mime_type', 'uploaded_by', 'created_at'
         ]
         
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_file_url(self, obj):
         """Get full URL for the file"""
         request = self.context.get('request')
@@ -308,8 +167,7 @@ class FeedbackVoteSerializer(serializers.ModelSerializer):
 
 class FeedbackListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for Feedback listing"""
-    software_name = serializers.CharField(source='software.name', read_only=True)
-    version_number = serializers.CharField(source='software_version.version', read_only=True)
+    application_name = serializers.CharField(source='application.name', read_only=True)
     submitter = serializers.SerializerMethodField(read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     type_display = serializers.CharField(source='get_feedback_type_display', read_only=True)
@@ -320,7 +178,7 @@ class FeedbackListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'feedback_type', 'type_display',
             'priority', 'priority_display', 'status', 'status_display',
-            'software', 'software_name', 'software_version', 'version_number',
+            'application', 'application_name',
             'submitter', 'contact_email', 'vote_count', 'reply_count',
             'created_at', 'updated_at'
         ]
@@ -328,6 +186,7 @@ class FeedbackListSerializer(serializers.ModelSerializer):
             'id', 'vote_count', 'reply_count', 'created_at', 'updated_at'
         ]
         
+    @extend_schema_field(serializers.DictField())
     def get_submitter(self, obj):
         """Get submitter information"""
         if obj.user:
@@ -359,24 +218,9 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
         model = Feedback
         fields = [
             'title', 'description', 'feedback_type', 'priority',
-            'software', 'software_version', 'contact_email', 'contact_name',
+            'application', 'contact_email', 'contact_name',
             'environment_info', 'attachments'
         ]
-        
-    def validate(self, attrs):
-        """Validate feedback data"""
-        # ✅ Email对所有用户都是可选的（匿名用户和已登录用户）
-        # 不再强制要求匿名用户提供email
-        
-        # Validate software version belongs to software
-        software = attrs.get('software')
-        version = attrs.get('software_version')
-        if version and version.software != software:
-            raise serializers.ValidationError({
-                'software_version': _("Version does not belong to selected software.")
-            })
-        
-        return attrs
     
     def create(self, validated_data):
         """Create feedback with attachments"""
@@ -419,7 +263,8 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
                 filename=file.name,
                 file_size=file.size,
                 mime_type=mimetypes.guess_type(file.name)[0],
-                uploaded_by=request.user if request.user.is_authenticated else None
+                uploaded_by=request.user if request.user.is_authenticated else None,
+                tenant=feedback.tenant
             )
         
         return feedback
@@ -436,8 +281,7 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
 
 class FeedbackDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for Feedback with nested data"""
-    software = SoftwareListSerializer(read_only=True)
-    software_version = SoftwareVersionSerializer(read_only=True)
+    application = ApplicationListSerializer(read_only=True)
     user_info = serializers.SerializerMethodField(read_only=True)
     attachments = FeedbackAttachmentSerializer(many=True, read_only=True)
     replies = serializers.SerializerMethodField(read_only=True)
@@ -448,7 +292,7 @@ class FeedbackDetailSerializer(serializers.ModelSerializer):
         model = Feedback
         fields = [
             'id', 'title', 'description', 'feedback_type', 'priority', 'status',
-            'software', 'software_version', 'user', 'user_info',
+            'application', 'user', 'user_info',
             'contact_email', 'contact_name', 'email_verified',
             'email_notification_enabled', 'environment_info',
             'ip_address', 'user_agent', 'assigned_to', 'resolved_at',
@@ -461,6 +305,7 @@ class FeedbackDetailSerializer(serializers.ModelSerializer):
             'reply_count', 'created_at', 'updated_at'
         ]
         
+    @extend_schema_field(serializers.DictField())
     def get_user_info(self, obj):
         """Get submitter information"""
         if obj.user:
@@ -476,6 +321,7 @@ class FeedbackDetailSerializer(serializers.ModelSerializer):
             'is_registered': False
         }
     
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_replies(self, obj):
         """Get non-internal replies"""
         request = self.context.get('request')
@@ -488,6 +334,7 @@ class FeedbackDetailSerializer(serializers.ModelSerializer):
         
         return FeedbackReplySerializer(replies, many=True, context=self.context).data
     
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_user_vote(self, obj):
         """Get current user's vote on this feedback"""
         request = self.context.get('request')

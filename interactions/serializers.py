@@ -2,6 +2,7 @@
 用户互动序列化器
 """
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import ArticleFavorite, MemberLike, MemberFollow, ArticleLike
 from cms.serializers import ArticleListSerializer
 from users.models import Member
@@ -21,6 +22,7 @@ class ArticleFavoriteSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'tenant', 'created_at']
     
+    @extend_schema_field(serializers.DictField())
     def get_user_info(self, obj):
         """获取用户信息"""
         return {
@@ -65,6 +67,7 @@ class MemberLikeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'from_member', 'tenant', 'created_at']
     
+    @extend_schema_field(serializers.DictField())
     def get_from_member_info(self, obj):
         """获取点赞发起者信息"""
         return {
@@ -74,6 +77,7 @@ class MemberLikeSerializer(serializers.ModelSerializer):
             'avatar': obj.from_member.avatar
         }
     
+    @extend_schema_field(serializers.DictField())
     def get_to_member_info(self, obj):
         """获取被点赞用户信息"""
         return {
@@ -130,6 +134,7 @@ class MemberFollowSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'follower', 'tenant', 'created_at']
     
+    @extend_schema_field(serializers.DictField())
     def get_follower_info(self, obj):
         """获取关注者信息"""
         return {
@@ -139,6 +144,7 @@ class MemberFollowSerializer(serializers.ModelSerializer):
             'avatar': obj.follower.avatar
         }
     
+    @extend_schema_field(serializers.DictField())
     def get_following_info(self, obj):
         """获取被关注者信息"""
         return {
@@ -148,6 +154,7 @@ class MemberFollowSerializer(serializers.ModelSerializer):
             'avatar': obj.following.avatar
         }
     
+    @extend_schema_field(serializers.BooleanField())
     def get_is_mutual(self, obj):
         """检查是否互相关注"""
         return obj.is_mutual()
@@ -199,6 +206,7 @@ class ArticleLikeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'from_member', 'tenant', 'created_at', 'ip_address', 'user_agent']
     
+    @extend_schema_field(serializers.DictField())
     def get_from_member_info(self, obj):
         """获取点赞发起者信息"""
         return {

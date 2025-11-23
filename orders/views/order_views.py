@@ -16,6 +16,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiPara
 import io
 
 from common.permissions import IsAdmin
+from common.viewsets import TenantModelViewSet
 from orders.models import Order
 from orders.serializers import (
     OrderSerializer, OrderCreateSerializer, OrderUpdateSerializer,
@@ -279,16 +280,19 @@ logger = logging.getLogger(__name__)
         tags=["订单管理"]
     ),
 )
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderViewSet(TenantModelViewSet):
     """
     订单管理视图集
     
     提供订单的增删改查、搜索、筛选、导出等功能
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    
     HTTP方法说明:
     - PUT (update): 需要传入订单的完整对象，包含所有字段
     - PATCH (partial_update): 允许只传入需要更新的字段
     """
+    queryset = Order.objects.all()
     permission_classes = [IsAuthenticated, IsAdmin]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['payment_status', 'service_type', 'language', 'customer', 'customer_type']
@@ -315,8 +319,12 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         获取订单查询集，默认不返回已删除的订单
+        
+        先调用父类TenantModelViewSet的get_queryset获取租户过滤的基础queryset
+        然后应用额外的筛选条件
         """
-        queryset = Order.objects.all()
+        # 获取租户过滤后的基础queryset
+        queryset = super().get_queryset()
         
         # 默认不显示已删除订单，除非明确要求
         show_deleted = self.request.query_params.get('show_deleted', 'false').lower() == 'true'

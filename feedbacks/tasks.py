@@ -76,8 +76,8 @@ def send_feedback_reply_email(self, reply_id: int) -> Dict[str, any]:
             'feedback_id': feedback.id,
             'reply_content': reply.content,
             'reply_user': reply.user.username if reply.user else 'Support Team',
-            'software_name': feedback.software.name,
-            'software_version': feedback.software_version.version if feedback.software_version else 'N/A',
+            'software_name': feedback.application.name,
+            'application_version': feedback.application_version.version if feedback.application_version else 'N/A',
             'view_url': f"{settings.FRONTEND_URL}/feedback/{feedback.id}",
             'unsubscribe_url': f"{settings.FRONTEND_URL}/feedback/{feedback.id}/unsubscribe",
         }
@@ -107,7 +107,7 @@ def send_feedback_reply_email(self, reply_id: int) -> Dict[str, any]:
                 body=body_text,
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[feedback.contact_email],
-                reply_to=[feedback.software.contact_email] if feedback.software.contact_email else None
+                reply_to=[feedback.application.contact_email] if feedback.application.contact_email else None
             )
             msg.attach_alternative(body_html, "text/html")
             msg.send()
@@ -197,7 +197,7 @@ def send_status_change_email(self, status_history_id: int) -> Dict[str, any]:
             'new_status': history.get_to_status_display(),
             'changed_by': history.changed_by.username if history.changed_by else 'System',
             'change_reason': history.reason or 'Status updated',
-            'software_name': feedback.software.name,
+            'software_name': feedback.application.name,
             'view_url': f"{settings.FRONTEND_URL}/feedback/{feedback.id}",
         }
         
@@ -292,7 +292,7 @@ def send_verification_email(self, feedback_id: int) -> Dict[str, any]:
             verification_url = f"{settings.FRONTEND_URL}/feedback/{feedback.id}/verify?token={feedback.email_verification_token}"
             body_html = f"""
             <h2>Email Verification Required</h2>
-            <p>Thank you for submitting feedback for {feedback.software.name}.</p>
+            <p>Thank you for submitting feedback for {feedback.application.name}.</p>
             <p>Please verify your email address to receive updates about your feedback:</p>
             <p><a href="{verification_url}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Verify Email</a></p>
             <p>Or copy this link: {verification_url}</p>
@@ -301,7 +301,7 @@ def send_verification_email(self, feedback_id: int) -> Dict[str, any]:
             body_text = f"""
             Email Verification Required
             
-            Thank you for submitting feedback for {feedback.software.name}.
+            Thank you for submitting feedback for {feedback.application.name}.
             
             Please verify your email address by visiting:
             {verification_url}
@@ -313,7 +313,7 @@ def send_verification_email(self, feedback_id: int) -> Dict[str, any]:
             context = {
                 'feedback_title': feedback.title,
                 'feedback_id': feedback.id,
-                'software_name': feedback.software.name,
+                'software_name': feedback.application.name,
                 'verification_url': f"{settings.FRONTEND_URL}/feedback/{feedback.id}/verify?token={feedback.email_verification_token}",
                 'contact_name': feedback.contact_name or 'User',
             }

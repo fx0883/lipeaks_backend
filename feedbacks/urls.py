@@ -8,16 +8,8 @@ User Feedback System URL Configuration - APIView Version
 
 from django.urls import path
 
-# Import Software Management APIViews
-from .views.software_api_views import (
-    SoftwareCategoryListView,
-    SoftwareCategoryDetailView,
-    SoftwareListView,
-    SoftwareDetailView,
-    SoftwareVersionsView,
-    SoftwareVersionListView,
-    SoftwareVersionDetailView,
-)
+# Software Management has been moved to applications module
+# See /api/v1/applications/ for application management APIs
 
 # Import Email Management APIViews
 from .views.email_api_views import (
@@ -57,19 +49,16 @@ from .complete_system import (
 # Health check views (already APIView)
 from .views.health_views import SystemHealthView, RedisStatusView
 
+# Import Feedback Submission Page Views
+from .views.feedback_submit_views import (
+    FeedbackSubmitPageView,
+    FeedbackSubmitSuccessView,
+)
+
 app_name = 'feedbacks'
 
 urlpatterns = [
-    # ==================== Software Management APIs ====================
-    path('software-categories/', SoftwareCategoryListView.as_view(), name='software-category-list'),
-    path('software-categories/<int:pk>/', SoftwareCategoryDetailView.as_view(), name='software-category-detail'),
-    
-    path('software/', SoftwareListView.as_view(), name='software-list'),
-    path('software/<int:pk>/', SoftwareDetailView.as_view(), name='software-detail'),
-    path('software/<int:software_pk>/versions/', SoftwareVersionsView.as_view(), name='software-versions'),
-    
-    path('software-versions/', SoftwareVersionListView.as_view(), name='software-version-list'),
-    path('software-versions/<int:pk>/', SoftwareVersionDetailView.as_view(), name='software-version-detail'),
+    # Software Management APIs have been moved to /api/v1/applications/
     
     # ==================== Email Management APIs ====================
     path('email-templates/', EmailTemplateListView.as_view(), name='email-template-list'),
@@ -98,6 +87,10 @@ urlpatterns = [
     path('statistics/', FeedbackStatisticsView.as_view(), name='feedback-statistics'),
     path('health/', SystemHealthView.as_view(), name='system-health'),
     path('health/redis/', RedisStatusView.as_view(), name='redis-status'),
+    
+    # ==================== Feedback Submission Pages (Server-side) ====================
+    path('submit/', FeedbackSubmitPageView.as_view(), name='feedback-submit'),
+    path('submit/success/', FeedbackSubmitSuccessView.as_view(), name='feedback-submit-success'),
 ]
 
 # API Documentation
