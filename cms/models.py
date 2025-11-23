@@ -192,7 +192,14 @@ class Article(BaseModel):
     def save(self, *args, **kwargs):
         # 如果没有设置slug，根据标题自动生成
         if not self.slug:
-            self.slug = slugify(self.title)
+            base_slug = slugify(self.title) or 'article'
+            self.slug = base_slug
+            
+            # 如果slug冲突，自动添加后缀
+            counter = 1
+            while Article.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+                self.slug = f"{base_slug}-{counter}"
+                counter += 1
         
         # 如果没有设置摘要，从内容中提取
         if not self.excerpt and self.content:

@@ -40,7 +40,7 @@ class FeedbackAttachmentSerializer(serializers.ModelSerializer):
             'mime_type', 'uploaded_by', 'created_at'
         ]
         read_only_fields = [
-            'id', 'file_size', 'mime_type', 'uploaded_by', 'created_at'
+            'id', 'filename', 'file_size', 'mime_type', 'uploaded_by', 'created_at'
         ]
         
     @extend_schema_field(serializers.CharField(allow_null=True))

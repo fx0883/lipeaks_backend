@@ -1,0 +1,161 @@
+=========================================
+  CMS API Complete Test Suite (Fixed)
+=========================================
+
+租户ID传递规则:
+- Admin用户: 使用查询参数 ?tenant_id=3
+- Member用户: 使用HTTP Header X-Tenant-ID: 3
+=========================================
+
+
+[0;34m===== 文章管理 API 测试 =====[0m
+
+[1;33m[1] Testing: cms_articles_list - Admin[0m
+  URL: /articles/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[2] Testing: cms_articles_list - Member[0m
+  URL: /articles/
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[3] Testing: cms_articles_create - Admin[0m
+  URL: /articles/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 201)
+
+[1;33m[4] Testing: cms_articles_create - Member[0m
+  URL: /articles/
+  [0;32m✓ PASSED[0m (Status: 201)
+
+[1;33m[5] Testing: cms_articles_retrieve - Admin[0m
+  URL: /articles/10298/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[6] Testing: cms_articles_retrieve - Member[0m
+  URL: /articles/10298/
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[7] Testing: cms_articles_update - Admin[0m
+  URL: /articles/10292/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[8] Testing: cms_articles_partial_update - Admin[0m
+  URL: /articles/10292/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[9] Testing: cms_articles_delete - Admin[0m
+  URL: /articles/10285/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 204)
+
+[1;33m[10] Testing: cms_articles_statistics - Admin[0m
+  URL: /articles/10298/statistics/ (with ?tenant_id=3)
+  [0;31m✗ FAILED[0m (Expected: 200, Got: 500)
+  Response: {"success":false,"code":5000,"message":"服务器内部错误","data":null,"error_code":"INTERNAL_SERVER_ERROR"}...
+
+[1;33m[11] Testing: cms_articles_view - No Auth[0m
+  URL: /articles/10298/view/
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[12] Testing: cms_articles_versions - Admin[0m
+  URL: /articles/10298/versions/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[13] Testing: cms_articles_batch_delete - Admin[0m
+  URL: /articles/batch-delete/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+
+[0;34m===== 分类管理 API 测试 =====[0m
+
+[1;33m[14] Testing: cms_categories_list - Admin[0m
+  URL: /categories/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[15] Testing: cms_categories_create - Admin[0m
+  URL: /categories/ (with ?tenant_id=3)
+  [0;31m✗ FAILED[0m (Expected: 201, Got: 400)
+  Response: {"success":false,"code":4000,"message":"数据验证失败","data":{"translations":["该字段是必填项。"]},"error_code":"VALIDATION_ERROR"}...
+
+[1;33m[16] Testing: cms_categories_tree - Admin[0m
+  URL: /categories/tree/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+
+[0;34m===== 标签管理 API 测试 =====[0m
+
+[1;33m[17] Testing: cms_tags_list - Admin[0m
+  URL: /tags/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[18] Testing: cms_tags_create - Admin[0m
+  URL: /tags/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 201)
+
+[1;33m[19] Testing: cms_tags_usage_stats - Admin[0m
+  URL: /tags/usage-stats/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+
+[0;34m===== 标签组管理 API 测试 =====[0m
+
+[1;33m[20] Testing: cms_tag_groups_list - Admin[0m
+  URL: /tag-groups/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[21] Testing: cms_tag_groups_create - Admin[0m
+  URL: /tag-groups/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 201)
+
+
+[0;34m===== 评论管理 API 测试 =====[0m
+
+[1;33m[22] Testing: cms_comments_list - Admin[0m
+  URL: /comments/ (with ?tenant_id=3)
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[23] Testing: cms_comments_create - Member[0m
+  URL: /comments/
+  [0;32m✓ PASSED[0m (Status: 201)
+
+
+[0;34m===== Member文章管理 API 测试 =====[0m
+
+[1;33m[24] Testing: cms_member_articles_list[0m
+  URL: /member/articles/
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[25] Testing: cms_member_articles_create[0m
+  URL: /member/articles/
+  [0;32m✓ PASSED[0m (Status: 201)
+
+[1;33m[26] Testing: cms_member_articles_retrieve[0m
+  URL: /member/articles/10295/
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[27] Testing: cms_member_articles_update[0m
+  URL: /member/articles/10295/
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[28] Testing: cms_member_articles_partial_update[0m
+  URL: /member/articles/10295/
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[29] Testing: cms_member_articles_publish[0m
+  URL: /member/articles/10295/publish/
+  [0;32m✓ PASSED[0m (Status: 200)
+
+[1;33m[30] Testing: cms_member_articles_statistics[0m
+  URL: /member/articles/10295/statistics/
+  [0;32m✓ PASSED[0m (Status: 200)
+
+
+=========================================
+          Test Summary
+=========================================
+Total Tests: 30
+[0;32mPassed: 28[0m
+[0;31mFailed: 2[0m
+Pass Rate: % Pass Rate: %
+
+[0;31mFailed API List:[0m
+  [0;31m✗[0m cms_articles_statistics - Admin - Expected: 200, Got: 500
+  [0;31m✗[0m cms_categories_create - Admin - Expected: 201, Got: 400

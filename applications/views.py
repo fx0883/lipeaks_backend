@@ -72,10 +72,10 @@ class ApplicationViewSet(TenantModelViewSet):
         from cms.serializers import ArticleListSerializer
         
         application = self.get_object()
-        tenant_id = self.get_tenant_id()  # 使用TenantModelViewSet提供的方法
         
+        # 使用application的租户ID进行过滤
         articles = Article.objects.filter(
-            tenant_id=tenant_id,
+            tenant_id=application.tenant_id,
             articleapplication__application=application
         ).select_related('user', 'member')
         

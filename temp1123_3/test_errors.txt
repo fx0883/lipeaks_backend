@@ -1,0 +1,85 @@
+======================================
+失败测试: POST 创建文章 (Admin)
+HTTP Code: 500
+响应: {"success":false,"code":5000,"message":"服务器内部错误","data":null,"error_code":"INTERNAL_SERVER_ERROR"}
+
+======================================
+失败测试: PUT 更新文章
+HTTP Code: 500
+响应: {"success":false,"code":5000,"message":"服务器内部错误","data":null,"error_code":"INTERNAL_SERVER_ERROR"}
+
+======================================
+失败测试: POST 记录文章浏览
+HTTP Code: 400
+响应: {"success":false,"code":4100,"message":"Tenant operation failed","data":null,"error_code":"TENANT_ERROR"}
+
+======================================
+失败测试: GET 分类详情
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Category matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: PUT 更新分类
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Category matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: PATCH 部分更新分类
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Category matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: GET 标签详情
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Tag matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: PUT 更新标签
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Tag matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: PATCH 部分更新标签
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Tag matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: GET 评论详情
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Comment matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: PUT 更新评论
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Comment matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: PATCH 部分更新评论
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Comment matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: POST 批准评论
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Comment matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: POST 拒绝评论
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Comment matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: POST 标记为垃圾评论
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Comment matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: GET 获取评论回复
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"No Comment matches the given query.","data":null,"error_code":"NOT_FOUND"}
+
+======================================
+失败测试: POST 批量处理评论
+HTTP Code: 404
+响应: {"success":false,"code":4004,"message":"未找到可操作的评论","data":{}}
+

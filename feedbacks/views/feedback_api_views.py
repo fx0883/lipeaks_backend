@@ -318,12 +318,12 @@ class FeedbackVerifyEmailView(APIView):
         if feedback.email_verified:
             return Response({'detail': 'Email already verified.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if feedback.verification_token != token:
+        if feedback.email_verification_token != token:
             return Response({'detail': 'Invalid verification token.'}, status=status.HTTP_400_BAD_REQUEST)
         
         feedback.email_verified = True
-        feedback.verification_token = ''
-        feedback.save(update_fields=['email_verified', 'verification_token'])
+        feedback.email_verification_token = ''
+        feedback.save(update_fields=['email_verified', 'email_verification_token'])
         
         return Response({'detail': 'Email verified successfully.'})
 
@@ -354,8 +354,8 @@ class FeedbackToggleNotificationsView(APIView):
         if feedback.user != request.user:
             return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         
-        feedback.notifications_enabled = not feedback.notifications_enabled
-        feedback.save(update_fields=['notifications_enabled'])
+        feedback.email_notification_enabled = not feedback.email_notification_enabled
+        feedback.save(update_fields=['email_notification_enabled'])
         
         serializer = FeedbackDetailSerializer(feedback, context={'request': request})
         return Response(serializer.data)

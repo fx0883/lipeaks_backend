@@ -143,6 +143,11 @@ class TenantPathChecker:
             self.logger.debug(f"系统级API路径，跳过租户验证: {path}")
             return False
         
+        # 许可证公开API不需要租户验证（健康检查、状态等）
+        if path in ['/api/v1/licenses/status/', '/api/v1/licenses/status']:
+            self.logger.debug(f"许可证公开API路径，跳过租户验证: {path}")
+            return False
+        
         # 只对真正的业务API路径进行租户验证
         business_api_prefixes = [
             '/api/v1/cms/', 

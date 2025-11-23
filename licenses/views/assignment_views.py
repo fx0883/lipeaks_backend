@@ -17,7 +17,7 @@ from licenses.models import LicenseAssignment, License
 from licenses.serializers import (
     LicenseAssignmentSerializer, LicenseAssignmentCreateSerializer
 )
-from points.api.permissions import LicenseAssignmentPermission
+from points.api.permissions import LicenseAssignmentPermission, get_user_tenant
 from points.services.license_service import TenantAwareLicenseAssignmentService
 
 
@@ -30,7 +30,7 @@ class LicenseAssignmentViewSet(TenantModelViewSet):
     """
     queryset = LicenseAssignment.objects.select_related(
         'member', 'license', 'tenant', 'assigned_by', 'revoked_by'
-    ).prefetch_related('license__product', 'license__plan')
+    ).prefetch_related('license__application', 'license__plan')
     permission_classes = [IsAuthenticated, LicenseAssignmentPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = [

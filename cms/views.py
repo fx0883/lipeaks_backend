@@ -1,7 +1,7 @@
 """
 CMS系统视图
 """
-from django.db.models import Q, Count, Avg
+from django.db.models import Q, Count, Avg, F
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from django.http import Http404
@@ -361,7 +361,7 @@ class ArticleViewSet(TenantModelViewSet):
         if sort:
             if sort == 'views_count':
                 # 特殊处理浏览量排序，因为它在关联表中
-                queryset = queryset.annotate(views=models.F('statistics__views_count'))
+                queryset = queryset.annotate(views=F('statistics__views_count'))
                 order_field = 'views'
             else:
                 order_field = sort
@@ -683,13 +683,15 @@ class ArticleViewSet(TenantModelViewSet):
         # 时间序列数据（按天统计）
         time_series_data = {}
         if logs_query.exists():
-            # 按天分组统计访问量
-            views_by_date = logs_query.values('check_date') \
+            # 按天分组统计访问量（使用TruncDate提取日期部分）
+            from django.db.models.functions import TruncDate
+            views_by_date = logs_query.annotate(date=TruncDate('created_at')) \
+                            .values('date') \
                             .annotate(count=Count('id')) \
-                            .order_by('check_date')
+                            .order_by('date')
             
             time_series_data['views'] = [
-                {'date': item['check_date'], 'count': item['count']} 
+                {'date': str(item['date']), 'count': item['count']} 
                 for item in views_by_date
             ]
             

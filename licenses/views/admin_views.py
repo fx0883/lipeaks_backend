@@ -88,7 +88,7 @@ class ApplicationViewSet(TenantModelViewSet):
     """
     authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
-    queryset = Application.objects.filter(is_deleted=False)
+    queryset = Application.objects.filter(is_deleted=False).prefetch_related('license_plans', 'licenses')
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status']
     search_fields = ['name', 'code', 'description']

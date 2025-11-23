@@ -68,7 +68,7 @@ def is_member(user):
 def can_create_content(user):
     """
     检查用户是否可以创建内容
-    Member 只有只读权限，不能创建内容
+    Member 可以创建自己的文章，Admin可以创建任何内容
     
     Args:
         user: User 或 Member 实例
@@ -76,7 +76,8 @@ def can_create_content(user):
     Returns:
         bool: 是否可以创建内容
     """
-    return is_admin(user)
+    # Member 和 Admin 都可以创建内容
+    return is_member(user) or is_admin(user)
 
 
 def can_edit_content(user, content_author=None):
@@ -90,17 +91,14 @@ def can_edit_content(user, content_author=None):
     Returns:
         bool: 是否可以编辑内容
     """
-    if is_member(user):
-        return False
-    
     if is_super_admin(user):
         return True
     
     if is_admin(user):
         return True
     
-    # 如果提供了作者信息，检查是否为作者本人
-    if content_author and hasattr(user, 'id'):
+    # Member可以编辑自己的内容
+    if is_member(user) and content_author and hasattr(user, 'id'):
         return user.id == getattr(content_author, 'id', content_author)
     
     return False
@@ -117,17 +115,14 @@ def can_delete_content(user, content_author=None):
     Returns:
         bool: 是否可以删除内容
     """
-    if is_member(user):
-        return False
-    
     if is_super_admin(user):
         return True
     
     if is_admin(user):
         return True
     
-    # 如果提供了作者信息，检查是否为作者本人
-    if content_author and hasattr(user, 'id'):
+    # Member可以删除自己的内容
+    if is_member(user) and content_author and hasattr(user, 'id'):
         return user.id == getattr(content_author, 'id', content_author)
     
     return False

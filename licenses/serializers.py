@@ -45,22 +45,36 @@ class SoftwareProductSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.IntegerField())
     def get_license_plans_count(self, obj):
         """获取许可方案数量"""
-        return obj.license_plans.filter(status='active').count()
+        try:
+            return obj.license_plans.filter(status='active', is_deleted=False).count()
+        except Exception:
+            return 0
     
     @extend_schema_field(serializers.IntegerField())
     def get_total_licenses(self, obj):
         """获取许可证总数"""
-        return obj.licenses.count()
+        try:
+            return obj.licenses.filter(is_deleted=False).count()
+        except Exception:
+            return 0
     
     @extend_schema_field(serializers.IntegerField())
     def get_max_activations(self, obj):
         """从metadata获取最大激活数"""
-        return obj.metadata.get('license_config', {}).get('max_activations', 5)
+        try:
+            metadata = obj.metadata if isinstance(obj.metadata, dict) else {}
+            return metadata.get('license_config', {}).get('max_activations', 5)
+        except Exception:
+            return 5
     
     @extend_schema_field(serializers.IntegerField())
     def get_offline_days(self, obj):
         """从metadata获取离线天数"""
-        return obj.metadata.get('license_config', {}).get('offline_days', 30)
+        try:
+            metadata = obj.metadata if isinstance(obj.metadata, dict) else {}
+            return metadata.get('license_config', {}).get('offline_days', 30)
+        except Exception:
+            return 30
     
     def validate_code(self, value):
         """验证应用代码唯一性（租户内）"""
