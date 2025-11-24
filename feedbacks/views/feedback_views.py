@@ -235,7 +235,7 @@ class FeedbackViewSet(TenantModelViewSet):
     queryset = Feedback.objects.filter(is_deleted=False)
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
-        'software', 'feedback_type', 
+        'software', 'application', 'feedback_type', 
         'status', 'priority', 'email_verified'
     ]
     search_fields = ['title', 'description', 'contact_email', 'contact_name']

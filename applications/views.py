@@ -23,9 +23,21 @@ class ApplicationViewSet(TenantModelViewSet):
     支持：列表、创建、详情、更新、删除、统计
     
     继承TenantModelViewSet自动处理租户过滤、设置和验证
+    
+    权限：
+    - GET请求：所有认证用户（包括member）
+    - POST/PUT/PATCH/DELETE：仅租户管理员
     """
-    permission_classes = [IsAuthenticated, IsTenantAdmin]
+    permission_classes = [IsAuthenticated]
     queryset = Application.objects.all()
+    
+    def get_permissions(self):
+        """根据操作类型设置权限"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # 写操作需要管理员权限
+            return [IsAuthenticated(), IsTenantAdmin()]
+        # 读操作只需要认证
+        return [IsAuthenticated()]
     
     def get_serializer_class(self):
         """根据action选择序列化器"""

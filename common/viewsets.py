@@ -27,8 +27,32 @@ class TenantModelViewSet(viewsets.ModelViewSet):
     - GET请求允许匿名访问，但需要租户ID
     - 非GET请求需要认证，并且用户必须关联租户
     - 超级管理员可以通过X-Tenant-ID请求头指定租户进行操作
-    - 只有URL路径中包含"cms"的API才需要进行租户ID验证
+    - 通过TENANT_ISOLATED_API_PATHS配置需要租户隔离的路径
     """
+    
+    @property
+    def tenant_isolated_paths(self):
+        """获取需要租户隔离的路径列表"""
+        return getattr(
+            settings,
+            'TENANT_ISOLATED_API_PATHS',
+            [
+                '/api/v1/cms/',
+                '/api/v1/applications/',
+                '/api/v1/licenses/',
+                '/api/v1/feedbacks/',
+            ]
+        )
+    
+    def _needs_tenant_isolation(self):
+        """
+        检查当前请求路径是否需要租户隔离
+        
+        Returns:
+            bool: 是否需要租户隔离
+        """
+        request_path = self.request.path
+        return any(request_path.startswith(path) for path in self.tenant_isolated_paths)
     
     def get_queryset(self):
         """
@@ -49,9 +73,9 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         request_path = getattr(self.request, 'path', 'unknown_path')
         logger.info(f"[TenantModelViewSet] {view_name} 处理请求: {request_path}")
         
-        # 检查请求路径是否包含"cms"，如果不包含，则跳过租户验证
-        if "/cms/" not in self.request.path:
-            logger.info(f"[TenantModelViewSet] {view_name} 非CMS路径，跳过租户过滤: {request_path}")
+        # 检查请求路径是否需要租户隔离
+        if not self._needs_tenant_isolation():
+            logger.info(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户过滤: {request_path}")
             return queryset
         
         # 如果模型没有tenant字段，则不需要过滤
@@ -83,9 +107,9 @@ class TenantModelViewSet(viewsets.ModelViewSet):
                     except (TypeError, ValueError):
                         raise TenantHeaderInvalidOrMissing()
                 else:
-                    # GET可以不指定 -> 返回全量；非GET在写操作里另行校验
-                    logger.info(f"[TenantModelViewSet] {view_name} 超管未提供tenant_id参数，GET场景返回全量")
-                    return queryset
+                    # 超管必须提供tenant_id参数
+                    logger.warning(f"[TenantModelViewSet] {view_name} 超管未提供tenant_id参数")
+                    raise TenantHeaderInvalidOrMissing("超级管理员必须通过tenant_id参数指定要查看的租户")
             elif is_tenant_admin:
                 q_tid = request.GET.get('tenant_id')
                 if q_tid is not None:
@@ -160,9 +184,9 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         """
         view_name = self.__class__.__name__
         
-        # 检查请求路径是否包含"cms"，如果不包含，则跳过租户验证
-        if "/cms/" not in self.request.path:
-            logger.info(f"[TenantModelViewSet] {view_name} 非CMS路径，跳过租户设置: {self.request.path}")
+        # 检查请求路径是否需要租户隔离
+        if not self._needs_tenant_isolation():
+            logger.info(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户设置: {self.request.path}")
             return serializer.save()
         
         # 计算有效租户ID（新规则下覆盖 request.tenant_id）
@@ -201,9 +225,9 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         """
         view_name = self.__class__.__name__
         
-        # 检查请求路径是否包含"cms"，如果不包含，则跳过租户验证
-        if "/cms/" not in self.request.path:
-            logger.info(f"[TenantModelViewSet] {view_name} 非CMS路径，跳过租户验证: {self.request.path}")
+        # 检查请求路径是否需要租户隔离
+        if not self._needs_tenant_isolation():
+            logger.info(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户验证: {self.request.path}")
             return serializer.save()
         
         # 获取current对象
@@ -220,21 +244,30 @@ class TenantModelViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         """
         删除对象前验证租户ID
+        使用软删除（如果模型支持）
         """
         view_name = self.__class__.__name__
         
-        # 检查请求路径是否包含"cms"，如果不包含，则跳过租户验证
-        if "/cms/" not in self.request.path:
-            logger.info(f"[TenantModelViewSet] {view_name} 非CMS路径，跳过租户验证: {self.request.path}")
+        # 检查请求路径是否需要租户隔离
+        if not self._needs_tenant_isolation():
+            logger.info(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户验证: {self.request.path}")
+            # 使用软删除（如果支持）
+            if hasattr(instance, 'soft_delete'):
+                return instance.soft_delete()
             return instance.delete()
         
         # 验证对象所属租户
         logger.info(f"[TenantModelViewSet] {view_name} 删除对象: {instance.__class__.__name__} ID={instance.pk}")
         self._verify_tenant_ownership(instance)
         
-        # 执行删除
+        # 执行删除（优先使用软删除）
         logger.info(f"[TenantModelViewSet] {view_name} 租户验证通过，执行删除操作")
-        instance.delete()
+        if hasattr(instance, 'soft_delete'):
+            logger.info(f"[TenantModelViewSet] {view_name} 使用软删除")
+            instance.soft_delete()
+        else:
+            logger.info(f"[TenantModelViewSet] {view_name} 使用硬删除")
+            instance.delete()
     
     def _verify_tenant_ownership(self, obj):
         """
@@ -248,9 +281,9 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         """
         view_name = self.__class__.__name__
         
-        # 检查请求路径是否包含"cms"，如果不包含，则跳过租户验证
-        if "/cms/" not in self.request.path:
-            logger.info(f"[TenantModelViewSet] {view_name} 非CMS路径，跳过租户验证: {self.request.path}")
+        # 检查请求路径是否需要租户隔离
+        if not self._needs_tenant_isolation():
+            logger.info(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户验证: {self.request.path}")
             return
         
         # 如果对象没有tenant字段，则跳过验证
@@ -276,8 +309,8 @@ class TenantModelViewSet(viewsets.ModelViewSet):
 
     # —— 辅助方法：按新规则计算有效租户 ——
     def _effective_tenant_id_for_read(self, default_none_ok: bool = False):
-        """为读取场景确定有效租户ID。仅在CMS路径使用。"""
-        if "/cms/" not in self.request.path:
+        """为读取场景确定有效租户ID。仅在需要租户隔离的路径使用。"""
+        if not self._needs_tenant_isolation():
             return None
         if not getattr(settings, 'FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER', True):
             return getattr(self.request, 'tenant_id', None)
@@ -321,7 +354,7 @@ class TenantModelViewSet(viewsets.ModelViewSet):
 
     def _effective_tenant_id_for_write(self):
         """为写操作确定有效租户ID，严格规则。"""
-        if "/cms/" not in self.request.path:
+        if not self._needs_tenant_isolation():
             return getattr(self.request, 'tenant_id', None)
         request = self.request
         if not getattr(settings, 'FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER', True):
@@ -374,7 +407,9 @@ class TenantModelViewSet(viewsets.ModelViewSet):
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
         try:
-            if request and request.method == 'GET' and '/cms/' in getattr(request, 'path', ''):
+            # 检查路径是否需要租户隔离
+            needs_isolation = any(request.path.startswith(path) for path in self.tenant_isolated_paths) if request else False
+            if request and request.method == 'GET' and needs_isolation:
                 user = getattr(request, 'user', None)
                 is_auth = bool(user and getattr(user, 'is_authenticated', False))
                 is_super_admin = bool(is_auth and getattr(request, 'auth_type', None) == 'jwt' and getattr(user, 'is_super_admin', False))

@@ -583,3 +583,17 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
 # 设置为 50MB，防止恶意请求
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000  # 表单字段数量限制
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB - 在内存中处理的最大文件大小
+
+# ============================================================================
+# 租户隔离配置 (Tenant Isolation Configuration)
+# ============================================================================
+# 需要租户隔离的API路径前缀
+# 这些路径会在中间件和ViewSet两个层面进行租户验证和过滤
+TENANT_ISOLATED_API_PATHS = [
+    '/api/v1/cms/',           # CMS内容管理
+    '/api/v1/applications/',  # 应用管理
+    '/api/v1/licenses/',      # 许可证管理
+    '/api/v1/feedbacks/',     # 反馈管理
+    '/api/v1/customers/',     # 客户管理
+    '/api/v1/orders/',        # 订单管理
+]

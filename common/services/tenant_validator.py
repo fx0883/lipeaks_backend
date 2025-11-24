@@ -4,6 +4,7 @@
 负责验证租户存在性和状态，设置租户上下文
 """
 import logging
+from django.conf import settings
 from common.utils.error_response_builder import TenantErrorResponseBuilder, TenantErrorTypes
 from common.utils.tenant_context import set_current_tenant
 
@@ -149,12 +150,17 @@ class TenantPathChecker:
             return False
         
         # 只对真正的业务API路径进行租户验证
-        business_api_prefixes = [
-            '/api/v1/cms/', 
-            '/api/v1/customers/', 
-            '/api/v1/orders/', 
-            '/api/v1/licenses/'
-        ]
+        # 从配置中获取需要租户隔离的路径，如果未配置则使用默认值
+        business_api_prefixes = getattr(
+            settings, 
+            'TENANT_ISOLATED_API_PATHS',
+            [
+                '/api/v1/cms/',
+                '/api/v1/customers/',
+                '/api/v1/orders/',
+                '/api/v1/licenses/'
+            ]
+        )
         
         requires_verification = any(path.startswith(prefix) for prefix in business_api_prefixes)
         
