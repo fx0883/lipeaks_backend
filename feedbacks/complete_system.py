@@ -83,8 +83,7 @@ class FeedbackReplyViewSet(TenantModelViewSet):
     def get_queryset(self):
         feedback_id = self.kwargs.get('feedback_pk')
         queryset = FeedbackReply.objects.filter(
-            feedback_id=feedback_id,
-            is_deleted=False
+            feedback_id=feedback_id
         )
         
         # Non-staff users don't see internal notes
@@ -261,7 +260,7 @@ class FeedbackStatisticsView(APIView):
         date_to = query_params.get('date_to')
         
         # Base queryset
-        queryset = Feedback.objects.filter(is_deleted=False)
+        queryset = Feedback.objects.all()
         
         if hasattr(request, 'tenant'):
             queryset = queryset.filter(tenant=request.tenant)
@@ -395,8 +394,7 @@ class FeedbackAttachmentViewSet(TenantModelViewSet):
         # 然后按feedback_id过滤
         feedback_id = self.kwargs.get('feedback_pk')
         return queryset.filter(
-            feedback_id=feedback_id,
-            is_deleted=False
+            feedback_id=feedback_id
         )
 
 
@@ -447,7 +445,7 @@ class EmailTemplateViewSet(TenantModelViewSet):
     
     继承TenantModelViewSet自动处理租户过滤、设置和验证
     """
-    queryset = EmailTemplate.objects.filter(is_deleted=False)
+    queryset = EmailTemplate.objects.all()
     serializer_class = EmailTemplateSerializer
     permission_classes = [EmailTemplatePermission]
     
@@ -492,7 +490,7 @@ class EmailTemplateViewSet(TenantModelViewSet):
 )
 class EmailLogViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for email logs (read-only)"""
-    queryset = FeedbackEmailLog.objects.filter(is_deleted=False)
+    queryset = FeedbackEmailLog.objects.all()
     serializer_class = FeedbackEmailLogSerializer
     
     def get_queryset(self):

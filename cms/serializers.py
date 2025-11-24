@@ -35,6 +35,24 @@ class CategorySerializer(ImageFieldNormalizerMixin, TranslatableModelSerializer)
             'translations',  # 包含所有语言的翻译
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant', 'application_name']
+        extra_kwargs = {
+            'slug': {'required': False}  # slug可选，系统自动生成
+        }
+    
+    def validate(self, data):
+        """验证并自动生成slug"""
+        # 如果没有提供slug，从translations中提取name并生成slug
+        if 'slug' not in data or not data['slug']:
+            translations = data.get('translations', {})
+            # 尝试从中文名称生成slug
+            if 'zh-hans' in translations and 'name' in translations['zh-hans']:
+                name = translations['zh-hans']['name']
+                data['slug'] = slugify(name) or f"category-{timezone.now().timestamp()}"
+            else:
+                # 如果没有中文名称，使用时间戳生成唯一slug
+                data['slug'] = f"category-{int(timezone.now().timestamp())}"
+        
+        return data
     
     def to_representation(self, instance):
         """
@@ -75,6 +93,19 @@ class TagGroupSerializer(serializers.ModelSerializer):
             'updated_at', 'is_active', 'tenant'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
+        extra_kwargs = {
+            'slug': {'required': False}  # slug可选，系统自动生成
+        }
+    
+    def validate(self, data):
+        """验证并自动生成slug"""
+        if 'slug' not in data or not data['slug']:
+            name = data.get('name', '')
+            if name:
+                data['slug'] = slugify(name) or f"tag-group-{int(timezone.now().timestamp())}"
+            else:
+                data['slug'] = f"tag-group-{int(timezone.now().timestamp())}"
+        return data
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -90,6 +121,19 @@ class TagSerializer(serializers.ModelSerializer):
             'is_active', 'tenant'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
+        extra_kwargs = {
+            'slug': {'required': False}  # slug可选，系统自动生成
+        }
+    
+    def validate(self, data):
+        """验证并自动生成slug"""
+        if 'slug' not in data or not data['slug']:
+            name = data.get('name', '')
+            if name:
+                data['slug'] = slugify(name) or f"tag-{int(timezone.now().timestamp())}"
+            else:
+                data['slug'] = f"tag-{int(timezone.now().timestamp())}"
+        return data
     
     def get_group_name(self, obj) -> str:
         return obj.group.name if obj.group else None

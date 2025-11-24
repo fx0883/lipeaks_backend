@@ -232,7 +232,7 @@ class FeedbackViewSet(TenantModelViewSet):
     
     继承TenantModelViewSet自动处理租户过滤、设置和验证
     """
-    queryset = Feedback.objects.filter(is_deleted=False)
+    queryset = Feedback.objects.all()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
         'software', 'application', 'feedback_type', 

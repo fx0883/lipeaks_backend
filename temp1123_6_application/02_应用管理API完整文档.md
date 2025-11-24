@@ -89,7 +89,7 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluX2N
 
 **接口**: `GET /api/v1/applications/`
 
-**描述**: 获取当前租户的所有应用列表，支持分页
+**描述**: 获取当前租户的所有应用列表，支持分页、过滤、搜索和排序
 
 **权限**: 所有认证用户
 
@@ -99,6 +99,10 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluX2N
 |------|------|------|--------|------|
 | page | integer | 否 | 1 | 页码 |
 | page_size | integer | 否 | 10 | 每页数量 |
+| status | string | 否 | - | 按状态过滤（development/testing/active/maintenance/deprecated/archived） |
+| is_active | boolean | 否 | - | 按是否启用过滤（true/false） |
+| search | string | 否 | - | 搜索关键词（在name、code、description中搜索） |
+| ordering | string | 否 | -created_at | 排序字段（created_at/updated_at/name/code，前缀-表示倒序） |
 
 **curl示例**:
 ```bash
@@ -147,10 +151,42 @@ curl -X GET "http://localhost:8000/api/v1/applications/" \
 - `description`: 应用描述
 - `logo`: 应用Logo URL
 - `current_version`: 当前版本号
-- `status`: 状态（development/testing/active/inactive/deprecated）
+- `status`: 状态（development/testing/active/maintenance/deprecated/archived）
 - `is_active`: 是否激活
 - `created_at`: 创建时间
 - `updated_at`: 更新时间
+
+**过滤示例**:
+
+1. 按状态过滤：
+```bash
+curl -X GET "http://localhost:8000/api/v1/applications/?status=active" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+2. 按启用状态过滤：
+```bash
+curl -X GET "http://localhost:8000/api/v1/applications/?is_active=true" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+3. 搜索应用：
+```bash
+curl -X GET "http://localhost:8000/api/v1/applications/?search=测试" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+4. 按名称排序：
+```bash
+curl -X GET "http://localhost:8000/api/v1/applications/?ordering=name" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+5. 组合过滤：
+```bash
+curl -X GET "http://localhost:8000/api/v1/applications/?status=development&search=测试&ordering=-created_at" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
 
 ---
 
@@ -591,6 +627,14 @@ A: 当前版本不支持批量创建、更新或删除。需要逐个操作。
 ---
 
 ## 更新日志
+
+### v1.1.0 (2025-11-24)
+- ✅ 添加列表过滤功能（status、is_active）
+- ✅ 添加搜索功能（name、code、description）
+- ✅ 添加排序功能（created_at、updated_at、name、code）
+- ✅ 支持组合过滤、搜索和排序
+- ✅ 优化TenantManager自动过滤is_deleted
+- ✅ 清理15处冗余的手动is_deleted过滤
 
 ### v1.0.0 (2025-11-24)
 - ✅ 实施租户隔离机制

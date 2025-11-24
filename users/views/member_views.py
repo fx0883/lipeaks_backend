@@ -421,6 +421,12 @@ class MemberRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
 class CurrentMemberView(APIView):
     """
     获取和更新current登录普通用户信息
+    
+    注意：此视图专门用于Member自己查看和更新个人信息。
+    与管理员端的AdminMemberRetrieveUpdateDeleteView不同，此视图：
+    1. Member只能操作自己的信息，无法查看其他Member
+    2. 不允许修改username和email等关键字段
+    3. 不需要租户过滤，因为只能操作自己
     """
     permission_classes = [permissions.IsAuthenticated]
     

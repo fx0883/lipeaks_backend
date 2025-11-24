@@ -1,10 +1,11 @@
 """
 应用管理视图
 """
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django_filters.rest_framework import DjangoFilterBackend
 from common.permissions import IsTenantAdmin
 from common.viewsets import TenantModelViewSet
 
@@ -30,6 +31,13 @@ class ApplicationViewSet(TenantModelViewSet):
     """
     permission_classes = [IsAuthenticated]
     queryset = Application.objects.all()
+    
+    # 过滤、搜索、排序配置
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'is_active']  # 支持精确匹配过滤
+    search_fields = ['name', 'code', 'description']  # 支持模糊搜索
+    ordering_fields = ['created_at', 'updated_at', 'name', 'code']  # 支持排序
+    ordering = ['-created_at']  # 默认按创建时间倒序
     
     def get_permissions(self):
         """根据操作类型设置权限"""

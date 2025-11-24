@@ -7,6 +7,7 @@ from tenants.models import Tenant
 from applications.models import Application
 from orders.models import Order
 from customers.models import Customer
+from users.models import Member
 
 User = get_user_model()
 
@@ -152,6 +153,67 @@ class TenantIsolationTestCase(TransactionTestCase):
             id=app1.id
         )
         self.assertEqual(tenant2_apps.count(), 0)
+    
+    def test_member_tenant_isolation(self):
+        """测试Member模型的租户隔离"""
+        # 创建属于不同租户的Member
+        member1 = Member.objects.create_user(
+            username="member1",
+            email="member1@test.com",
+            password="password123",
+            tenant=self.tenant1
+        )
+        member2 = Member.objects.create_user(
+            username="member2",
+            email="member2@test.com",
+            password="password123",
+            tenant=self.tenant2
+        )
+        
+        # 验证租户1只能看到自己的Member
+        tenant1_members = Member.objects.filter(tenant=self.tenant1)
+        self.assertEqual(tenant1_members.count(), 1)
+        self.assertEqual(tenant1_members.first().id, member1.id)
+        
+        # 验证租户2只能看到自己的Member
+        tenant2_members = Member.objects.filter(tenant=self.tenant2)
+        self.assertEqual(tenant2_members.count(), 1)
+        self.assertEqual(tenant2_members.first().id, member2.id)
+        
+        # 验证跨租户访问失败
+        cross_access = Member.objects.filter(
+            tenant=self.tenant1,
+            id=member2.id
+        ).exists()
+        self.assertFalse(cross_access)
+    
+    def test_member_admin_can_only_see_own_tenant_members(self):
+        """测试租户管理员只能看到自己租户的Member"""
+        # 创建Member
+        member1 = Member.objects.create_user(
+            username="member1_t1",
+            email="member1_t1@test.com",
+            password="password123",
+            tenant=self.tenant1
+        )
+        member2 = Member.objects.create_user(
+            username="member2_t2",
+            email="member2_t2@test.com",
+            password="password123",
+            tenant=self.tenant2
+        )
+        
+        # 租户1的管理员视角
+        admin1_members = Member.objects.filter(tenant=self.user1.tenant)
+        self.assertEqual(admin1_members.count(), 1)
+        self.assertIn(member1, admin1_members)
+        self.assertNotIn(member2, admin1_members)
+        
+        # 租户2的管理员视角
+        admin2_members = Member.objects.filter(tenant=self.user2.tenant)
+        self.assertEqual(admin2_members.count(), 1)
+        self.assertIn(member2, admin2_members)
+        self.assertNotIn(member1, admin2_members)
 
 
 class TenantModelViewSetTestCase(TestCase):

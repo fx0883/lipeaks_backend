@@ -34,6 +34,17 @@ logger = logging.getLogger(__name__)
 class AdminMemberListCreateView(generics.ListCreateAPIView):
     """
     管理员端：Member列表和创建视图
+    
+    注意：Member使用手动租户过滤而非TenantModelViewSet，原因：
+    1. Member具有特殊的权限逻辑（普通Member只能看到自己，不是整个租户）
+    2. 有复杂的过滤条件（子账号、父账号、搜索等）
+    3. Member是用户身份模型，不是标准的业务数据资源
+    4. 手动实现的租户隔离已经过测试验证，功能完整且安全
+    
+    租户隔离实现：
+    - 超级管理员：可查看所有租户的Member
+    - 租户管理员：只能查看自己租户的Member
+    - 普通Member：只能查看自己（在其他View中实现）
     """
     permission_classes = [permissions.IsAuthenticated, IsAdmin]
     serializer_class = MemberSerializer
@@ -269,6 +280,12 @@ class AdminMemberListCreateView(generics.ListCreateAPIView):
 class AdminMemberRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
     """
     管理员端：Member详情、更新和删除视图
+    
+    注意：使用手动租户过滤，与AdminMemberListCreateView保持一致。
+    租户隔离策略：
+    - 超级管理员：可操作所有租户的Member
+    - 租户管理员：只能操作自己租户的Member
+    - 删除保护：不允许删除当前登录的账号
     """
     serializer_class = MemberSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdmin]

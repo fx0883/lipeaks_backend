@@ -48,7 +48,7 @@ class EmailTemplateListView(APIView):
     )
     def get(self, request):
         # 获取当前租户的模板
-        queryset = EmailTemplate.objects.filter(is_deleted=False)
+        queryset = EmailTemplate.objects.all()
         
         # 过滤租户
         if hasattr(request, 'tenant') and request.tenant:
@@ -128,7 +128,7 @@ class EmailTemplateDetailView(APIView):
     def get_object(self, pk, request):
         """获取邮件模板对象"""
         try:
-            queryset = EmailTemplate.objects.filter(pk=pk, is_deleted=False)
+            queryset = EmailTemplate.objects.filter(pk=pk)
             if hasattr(request, 'tenant') and request.tenant:
                 queryset = queryset.filter(tenant=request.tenant)
             return queryset.get()
@@ -333,7 +333,7 @@ class EmailLogListView(APIView):
     )
     def get(self, request):
         # 获取当前租户的邮件日志
-        queryset = FeedbackEmailLog.objects.filter(is_deleted=False)
+        queryset = FeedbackEmailLog.objects.all()
         
         # 过滤租户
         if hasattr(request, 'tenant') and request.tenant:
@@ -376,7 +376,7 @@ class EmailLogDetailView(APIView):
     def get_object(self, pk, request):
         """获取邮件日志对象"""
         try:
-            queryset = FeedbackEmailLog.objects.filter(pk=pk, is_deleted=False)
+            queryset = FeedbackEmailLog.objects.filter(pk=pk)
             if hasattr(request, 'tenant') and request.tenant:
                 queryset = queryset.filter(tenant=request.tenant)
             return queryset.get()

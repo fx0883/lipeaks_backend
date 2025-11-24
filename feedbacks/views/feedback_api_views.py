@@ -64,8 +64,8 @@ class FeedbackListView(APIView):
         tenant = get_tenant_from_request(request)
         user = request.user
         
-        # 基础查询集
-        queryset = Feedback.objects.filter(is_deleted=False)
+        # 基础查询集（TenantManager已自动过滤is_deleted=False）
+        queryset = Feedback.objects.all()
         
         # 租户过滤
         if tenant:

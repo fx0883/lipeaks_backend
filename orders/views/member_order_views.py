@@ -196,7 +196,7 @@ class MemberOrderViewSet(viewsets.ReadOnlyModelViewSet):
             return Order.objects.none()
         
         # 获取与该成员关联的所有订单（作为客户联系人）
-        queryset = Order.objects.filter(customer_contact_id=member_id, is_deleted=False)
+        queryset = Order.objects.filter(customer_contact_id=member_id)
         
         # 检查权限：成员只能查看自己的订单，管理员可以查看所有订单
         user = self.request.user

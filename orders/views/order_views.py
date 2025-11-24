@@ -323,13 +323,14 @@ class OrderViewSet(TenantModelViewSet):
         先调用父类TenantModelViewSet的get_queryset获取租户过滤的基础queryset
         然后应用额外的筛选条件
         """
-        # 获取租户过滤后的基础queryset
+        # 获取租户过滤后的基础queryset（TenantManager已自动过滤is_deleted=False）
         queryset = super().get_queryset()
         
-        # 默认不显示已删除订单，除非明确要求
+        # 如果需要查看已删除订单，使用original_objects
         show_deleted = self.request.query_params.get('show_deleted', 'false').lower() == 'true'
-        if not show_deleted:
-            queryset = queryset.filter(is_deleted=False)
+        if show_deleted:
+            # 需要查看已删除数据时，使用original_objects重新查询
+            queryset = self.model.original_objects.filter(tenant_id=self.request.tenant_id)
         
         # 筛选参数处理
         payment_status = self.request.query_params.get('payment_status')
@@ -1187,8 +1188,8 @@ class OrderViewSet(TenantModelViewSet):
         today = datetime.now().date()
         end_date = today + timedelta(days=days)
         
-        # 初始化查询集，筛选未删除订单
-        queryset = Order.objects.filter(is_deleted=False)
+        # 初始化查询集（TenantManager已自动过滤is_deleted=False）
+        queryset = Order.objects.all()
         
         # 处理筛选逻辑
         if keyword:
@@ -1322,8 +1323,8 @@ class OrderViewSet(TenantModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # 获取订单列表
-        queryset = Order.objects.filter(id__in=order_ids, is_deleted=False)
+        # 获取订单列表（TenantManager已自动过滤is_deleted=False）
+        queryset = Order.objects.filter(id__in=order_ids)
         if not queryset.exists():
             return Response(
                 {"error": "未找到有效订单"},
