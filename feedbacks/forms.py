@@ -124,6 +124,21 @@ class FeedbackSubmitForm(forms.Form):
             self.fields['contact_email'].widget = forms.HiddenInput()
             self.fields['contact_name'].widget = forms.HiddenInput()
     
+    def clean_tenant_id(self):
+        """Validate tenant ID"""
+        from tenants.models import Tenant
+        
+        tenant_id = self.cleaned_data.get('tenant_id')
+        if not tenant_id:
+            raise ValidationError(_('Tenant ID is required'))
+        
+        try:
+            Tenant.objects.get(id=tenant_id, status='active', is_deleted=False)
+        except Tenant.DoesNotExist:
+            raise ValidationError(_('Invalid tenant or tenant is inactive'))
+        
+        return tenant_id
+    
     def clean_software_id(self):
         """Validate software ID"""
         software_id = self.cleaned_data.get('software_id')
@@ -136,3 +151,24 @@ class FeedbackSubmitForm(forms.Form):
             raise ValidationError(_('Invalid software'))
         
         return software_id
+    
+    def clean(self):
+        """Cross-field validation: ensure application belongs to the tenant"""
+        cleaned_data = super().clean()
+        tenant_id = cleaned_data.get('tenant_id')
+        software_id = cleaned_data.get('software_id')
+        
+        if tenant_id and software_id:
+            try:
+                app = Application.objects.get(
+                    id=software_id,
+                    tenant_id=tenant_id,
+                    is_active=True,
+                    is_deleted=False
+                )
+            except Application.DoesNotExist:
+                raise ValidationError(
+                    _('The specified application does not belong to this tenant.')
+                )
+        
+        return cleaned_data

@@ -31,9 +31,31 @@ from ..permissions import (
 def get_tenant_from_request(request):
     """
     从request中获取租户
-    中间件已经设置了request.tenant
+    
+    优先级：
+    1. request.tenant (中间件设置)
+    2. get_current_tenant() (线程本地存储)
+    3. request.user.tenant (用户关联的租户)
     """
-    return getattr(request, 'tenant', None)
+    # 1. 尝试从request属性获取
+    tenant = getattr(request, 'tenant', None)
+    if tenant:
+        return tenant
+    
+    # 2. 尝试从线程本地存储获取
+    from common.utils.tenant_context import get_current_tenant
+    tenant = get_current_tenant()
+    if tenant:
+        return tenant
+    
+    # 3. 尝试从用户关联的租户获取
+    user = getattr(request, 'user', None)
+    if user and user.is_authenticated:
+        tenant = getattr(user, 'tenant', None)
+        if tenant:
+            return tenant
+    
+    return None
 
 
 class FeedbackListView(APIView):
@@ -43,10 +65,12 @@ class FeedbackListView(APIView):
     @extend_schema(
         tags=['Feedback System'],
         summary='List feedback',
-        description='Get a list of feedback filtered by tenant. Super admins see all tenant feedback, '
+        description='Get a list of feedback filtered by tenant. '
+                   'Super admins see all tenant feedback, '
                    'tenant admins see all tenant feedback, regular users see only their own.',
         parameters=[
-            OpenApiParameter('software', OpenApiTypes.INT, OpenApiParameter.QUERY, description='Filter by software ID'),
+            OpenApiParameter('application', OpenApiTypes.INT, OpenApiParameter.QUERY, 
+                           description='Filter by application ID'),
             OpenApiParameter('feedback_type', OpenApiTypes.STR, OpenApiParameter.QUERY, 
                            enum=['bug', 'feature', 'improvement', 'question', 'other']),
             OpenApiParameter('status', OpenApiTypes.STR, OpenApiParameter.QUERY,
@@ -71,6 +95,11 @@ class FeedbackListView(APIView):
         if tenant:
             queryset = queryset.filter(tenant=tenant)
         
+        # 应用过滤 (可选)
+        application_id = request.query_params.get('application')
+        if application_id:
+            queryset = queryset.filter(application_id=application_id)
+        
         # 权限过滤
         if user.is_authenticated:
             if not user.is_superuser and not getattr(user, 'is_tenant_admin', False):
@@ -79,11 +108,6 @@ class FeedbackListView(APIView):
         else:
             # 未认证用户返回空
             queryset = queryset.none()
-        
-        # 筛选条件
-        software = request.query_params.get('software')
-        if software:
-            queryset = queryset.filter(software_id=software)
         
         feedback_type = request.query_params.get('feedback_type')
         if feedback_type:

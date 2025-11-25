@@ -150,7 +150,7 @@ class FeedbackSubmitPageView(FormView):
             # 创建反馈记录
             feedback = Feedback.objects.create(
                 tenant=self.tenant,
-                software=self.application,
+                application=self.application,
                 title=title,
                 description=description,
                 feedback_type=feedback_type,

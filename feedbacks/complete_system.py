@@ -144,17 +144,45 @@ class FeedbackVoteView(APIView):
         if vote_type not in [1, -1]:
             return Response({'error': 'Invalid vote type'}, status=400)
         
+        # 获取租户
+        tenant = self._get_tenant_from_request(request)
+        
         vote, created = FeedbackVote.objects.update_or_create(
             feedback=feedback,
             user=request.user,
-            defaults={'vote_type': vote_type}
+            defaults={'vote_type': vote_type, 'tenant': tenant}
         )
+        
+        # 刷新获取最新的vote_count
+        feedback.refresh_from_db()
         
         return Response({
             'message': 'Vote recorded',
             'vote_type': vote_type,
             'total_votes': feedback.vote_count
         })
+    
+    def _get_tenant_from_request(self, request):
+        """从request中获取租户"""
+        # 1. 尝试从request属性获取
+        tenant = getattr(request, 'tenant', None)
+        if tenant:
+            return tenant
+        
+        # 2. 尝试从线程本地存储获取
+        from common.utils.tenant_context import get_current_tenant
+        tenant = get_current_tenant()
+        if tenant:
+            return tenant
+        
+        # 3. 尝试从用户关联的租户获取
+        user = getattr(request, 'user', None)
+        if user and user.is_authenticated:
+            tenant = getattr(user, 'tenant', None)
+            if tenant:
+                return tenant
+        
+        return None
     
     @extend_schema(
         tags=['Feedback System'],
