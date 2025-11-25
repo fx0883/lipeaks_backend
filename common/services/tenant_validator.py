@@ -144,10 +144,30 @@ class TenantPathChecker:
             self.logger.debug(f"系统级API路径，跳过租户验证: {path}")
             return False
         
-        # 许可证公开API不需要租户验证（健康检查、状态等）
-        if path in ['/api/v1/licenses/status/', '/api/v1/licenses/status']:
-            self.logger.debug(f"许可证公开API路径，跳过租户验证: {path}")
-            return False
+        # 从配置中获取公开API路径（不需要租户验证）
+        public_api_paths = getattr(
+            settings,
+            'TENANT_PUBLIC_API_PATHS',
+            [
+                '/api/v1/licenses/status/',
+                '/api/v1/licenses/activate/',
+                '/api/v1/licenses/verify/',
+                '/api/v1/licenses/heartbeat/',
+                '/api/v1/licenses/unbind/',
+                '/api/v1/licenses/info/',
+            ]
+        )
+        
+        # 检查是否匹配公开API路径（支持前缀匹配）
+        for public_path in public_api_paths:
+            # 精确匹配（带或不带末尾斜杠）
+            if path == public_path or path == public_path.rstrip('/'):
+                self.logger.debug(f"公开API路径，跳过租户验证: {path}")
+                return False
+            # 前缀匹配（用于带参数的路径如 /api/v1/licenses/info/{key}/）
+            if path.startswith(public_path):
+                self.logger.debug(f"公开API路径（前缀匹配），跳过租户验证: {path}")
+                return False
         
         # 只对真正的业务API路径进行租户验证
         # 从配置中获取需要租户隔离的路径，如果未配置则使用默认值

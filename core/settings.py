@@ -597,3 +597,15 @@ TENANT_ISOLATED_API_PATHS = [
     '/api/v1/customers/',     # 客户管理
     '/api/v1/orders/',        # 订单管理
 ]
+
+# 公开API路径（不需要租户验证）
+# 即使在TENANT_ISOLATED_API_PATHS范围内，这些路径也会被排除
+# 主要用于客户端激活、验证、健康检查等公开接口
+TENANT_PUBLIC_API_PATHS = [
+    '/api/v1/licenses/status/',      # 服务器状态检查
+    '/api/v1/licenses/activate/',    # 许可证激活
+    '/api/v1/licenses/verify/',      # 激活验证
+    '/api/v1/licenses/heartbeat/',   # 心跳检测
+    '/api/v1/licenses/unbind/',      # 解绑许可证
+    '/api/v1/licenses/info/',        # 许可证信息查询（前缀匹配）
+]

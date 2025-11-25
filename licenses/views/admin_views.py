@@ -163,7 +163,7 @@ class ApplicationViewSet(TenantModelViewSet):
             
             # 激活统计
             activation_stats = LicenseActivation.objects.filter(
-                license__product=product
+                license__application=product
             ).aggregate(
                 total_attempts=Count('id'),
                 successful=Count('id', filter=Q(result='success')),
@@ -172,7 +172,7 @@ class ApplicationViewSet(TenantModelViewSet):
             
             # 机器绑定统计
             binding_stats = MachineBinding.objects.filter(
-                license__product=product
+                license__application=product
             ).aggregate(
                 total_machines=Count('id'),
                 active_machines=Count('id', filter=Q(status='active'))
@@ -258,7 +258,7 @@ class LicensePlanViewSet(TenantModelViewSet):
             new_code = f"{original_plan.code}_copy_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
             
             # 使用TenantModelViewSet提供的方法获取租户ID
-            tenant_id = self.get_tenant_id()
+            tenant_id = self._effective_tenant_id_for_write()
             
             new_plan = LicensePlan.objects.create(
                 application=original_plan.application,
@@ -711,7 +711,7 @@ class LicenseViewSet(TenantModelViewSet):
                 'application_info': {
                     'name': license_obj.application.name,
                     'code': license_obj.application.code,
-                    'version': license_obj.application.version,
+                    'version': license_obj.application.current_version,
                     'description': license_obj.application.description
                 },
                 'plan_info': {

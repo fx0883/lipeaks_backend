@@ -341,6 +341,7 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """创建许可证"""
         from licenses.services.license_service import LicenseManagementService
+        from tenants.models import Tenant
         
         customer_info = validated_data.pop('customer_info')
         validity_days = validated_data.pop('validity_days', None)
@@ -349,13 +350,33 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
         application = validated_data.get('application')
         plan = validated_data.get('plan')  
         tenant = validated_data.get('tenant')
+        tenant_id = validated_data.get('tenant_id')  # TenantModelViewSet通过save(tenant_id=...)传递
         
         # 验证必要字段是否存在
         if not application:
             raise serializers.ValidationError("application field is required")
         if not plan:
             raise serializers.ValidationError("plan field is required") 
-        if not tenant:
+        
+        # 获取tenant_id：优先从tenant对象获取，否则从tenant_id参数获取，最后从request.user获取
+        effective_tenant_id = None
+        if tenant:
+            effective_tenant_id = tenant.id
+        elif tenant_id:
+            effective_tenant_id = tenant_id
+        else:
+            # 尝试从context中的request获取tenant
+            request = self.context.get('request')
+            if request and hasattr(request, 'user') and request.user.is_authenticated:
+                user = request.user
+                # 租户管理员从user.tenant获取
+                if hasattr(user, 'tenant') and user.tenant:
+                    effective_tenant_id = user.tenant.id
+                # 也可能通过request.tenant_id获取（由中间件设置）
+                elif hasattr(request, 'tenant_id') and request.tenant_id:
+                    effective_tenant_id = request.tenant_id
+        
+        if not effective_tenant_id:
             raise serializers.ValidationError("tenant field is required")
         
         # 计算过期时间
@@ -368,7 +389,7 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
         license_obj = management_service.create_license(
             application_id=application.id,
             plan_id=plan.id,
-            tenant_id=tenant.id,
+            tenant_id=effective_tenant_id,
             customer_info=customer_info,
             expires_at=expires_at,
             max_activations=validated_data.get('max_activations')
@@ -568,6 +589,17 @@ class TenantLicenseQuotaSerializer(serializers.ModelSerializer):
     tenant_name = serializers.CharField(source='tenant.name', read_only=True)
     application_name = serializers.CharField(source='application.name', read_only=True)
     usage_percentage = serializers.SerializerMethodField()
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 显式定义tenant字段为可选，允许TenantModelViewSet自动设置
+        from tenants.models import Tenant
+        self.fields['tenant'] = serializers.PrimaryKeyRelatedField(
+            queryset=Tenant.objects.filter(is_deleted=False),
+            required=False,
+            allow_null=True,
+            help_text="租户ID，如果未提供将从当前用户自动获取"
+        )
     
     class Meta:
         model = TenantLicenseQuota
@@ -1060,7 +1092,7 @@ class MemberLicenseSerializer(serializers.ModelSerializer):
     
     application_name = serializers.CharField(source='license.application.name', read_only=True)
     application_code = serializers.CharField(source='license.application.code', read_only=True)
-    application_version = serializers.CharField(source='license.application.version', read_only=True)
+    application_version = serializers.CharField(source='license.application.current_version', read_only=True)
     plan_name = serializers.CharField(source='license.plan.name', read_only=True)
     plan_type = serializers.CharField(source='license.plan.plan_type', read_only=True)
     license_key_preview = serializers.SerializerMethodField()

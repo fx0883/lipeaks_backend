@@ -596,7 +596,7 @@ class LicenseManagementService:
     @transaction.atomic
     def create_license(
         self,
-        product_id: int,
+        application_id: int,
         plan_id: int,
         tenant_id: int,
         customer_info: Dict[str, Any],
@@ -607,7 +607,7 @@ class LicenseManagementService:
         创建新许可证
         
         Args:
-            product_id: 产品ID
+            application_id: 应用ID
             plan_id: 方案ID
             tenant_id: 租户ID
             customer_info: 客户信息
@@ -618,14 +618,14 @@ class LicenseManagementService:
             License: 许可证对象
         """
         try:
-            # 获取产品和方案
-            product = Application.objects.get(id=product_id)
-            plan = LicensePlan.objects.get(id=plan_id, product=product)
+            # 获取应用和方案
+            application = Application.objects.get(id=application_id)
+            plan = LicensePlan.objects.get(id=plan_id, application=application)
             
             # 生成许可证密钥
             generation_service = LicenseGenerationService()
             license_key = generation_service.generate_license_key(
-                product, plan, customer_info
+                application, plan, customer_info
             )
             
             # 计算过期时间
@@ -645,7 +645,7 @@ class LicenseManagementService:
             
             # 创建许可证记录
             license_obj = License.objects.create(
-                product=product,
+                application=application,
                 plan=plan,
                 tenant_id=tenant_id,
                 license_key=license_key,
@@ -665,7 +665,7 @@ class LicenseManagementService:
                 tenant_id=tenant_id,
                 details={
                     'license_id': license_obj.id,
-                    'product': product.code,
+                    'application': application.code,
                     'plan': plan.code,
                     'customer_name': customer_info.get('name', '')
                 }
