@@ -23,7 +23,8 @@
 | tag_id | integer | 否 | - | 标签ID过滤 |
 | author_id | integer | 否 | - | 作者ID过滤 |
 | author_type | string | 否 | - | 作者类型：member/admin |
-| search | string | 否 | - | 搜索关键词（标题、内容） |
+| search | string | 否 | - | 搜索关键词 |
+| application | integer | 否 | - | 应用ID过滤（可选） |
 | ordering | string | 否 | -created_at | 排序字段，可选值见下方说明 |
 | is_featured | boolean | 否 | - | 是否特色文章 |
 | is_pinned | boolean | 否 | - | 是否置顶文章 |
@@ -40,6 +41,11 @@
 ```bash
 curl -X GET "http://localhost:8000/api/v1/cms/articles/?page=1&status=published&ordering=-published_at" \
   -H "Authorization: Bearer <TOKEN>"
+
+# 获取特定应用的文章
+curl -X GET "http://localhost:8000/api/v1/cms/admin/articles/?application=6" \
+  -H "Authorization: Bearer <TenantAdminTOKEN>" \
+  -H "X-Tenant-ID: 3"
 ```
 
 **响应参数**:

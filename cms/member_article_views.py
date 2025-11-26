@@ -20,7 +20,7 @@ from .models import (
     ArticleStatistics, OperationLog
 )
 from .serializers import (
-    ArticleListSerializer, ArticleDetailSerializer, ArticleCreateUpdateSerializer
+    ArticleListSerializer, ArticleDetailSerializer, MemberArticleCreateUpdateSerializer
 )
 from .permissions import ArticlePermission
 
@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
             OpenApiParameter(name="sort", description="排序字段，默认created_at", required=False, type=str, 
                              enum=["created_at", "updated_at", "published_at", "title"]),
             OpenApiParameter(name="sort_direction", description="排序方向，默认desc", required=False, type=str, enum=["asc", "desc"]),
+            OpenApiParameter(name="application", description="应用ID过滤，可选", required=False, type=int),
             OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=True, type=str, location=OpenApiParameter.HEADER),
         ],
         examples=[
@@ -77,7 +78,7 @@ logger = logging.getLogger(__name__)
         summary="[Member] 创建文章",
         description="Member用户创建新文章",
         tags=["CMS-Member文章管理"],
-        request=ArticleCreateUpdateSerializer,
+        request=MemberArticleCreateUpdateSerializer,
         parameters=[
             OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=True, type=str, location=OpenApiParameter.HEADER),
         ],
@@ -97,6 +98,7 @@ logger = logging.getLogger(__name__)
                     'content_type': 'markdown',
                     'excerpt': '文章摘要',
                     'status': 'draft',
+                    'application': 6,
                     'category_ids': [2, 5],
                     'tag_ids': [3, 8],
                     'visibility': 'public',
@@ -110,7 +112,7 @@ logger = logging.getLogger(__name__)
         summary="[Member] 更新文章",
         description="Member用户更新自己的文章",
         tags=["CMS-Member文章管理"],
-        request=ArticleCreateUpdateSerializer,
+        request=MemberArticleCreateUpdateSerializer,
         parameters=[
             OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=True, type=str, location=OpenApiParameter.HEADER),
         ],
@@ -138,7 +140,7 @@ logger = logging.getLogger(__name__)
         summary="[Member] 部分更新文章",
         description="Member用户部分更新自己的文章",
         tags=["CMS-Member文章管理"],
-        request=ArticleCreateUpdateSerializer,
+        request=MemberArticleCreateUpdateSerializer,
         parameters=[
             OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=True, type=str, location=OpenApiParameter.HEADER),
         ],
@@ -203,6 +205,15 @@ class MemberArticleViewSet(TenantModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
         
+        # 处理应用过滤（可选）
+        application = self.request.query_params.get('application')
+        if application:
+            from .models import ArticleApplication
+            article_ids = ArticleApplication.objects.filter(
+                application_id=application
+            ).values_list('article_id', flat=True)
+            queryset = queryset.filter(id__in=article_ids)
+        
         # 处理排序
         sort = self.request.query_params.get('sort', 'created_at')
         sort_direction = self.request.query_params.get('sort_direction', 'desc')
@@ -219,7 +230,7 @@ class MemberArticleViewSet(TenantModelViewSet):
         if self.action == 'list':
             return ArticleListSerializer
         elif self.action in ['create', 'update', 'partial_update']:
-            return ArticleCreateUpdateSerializer
+            return MemberArticleCreateUpdateSerializer
         else:
             return ArticleDetailSerializer
     

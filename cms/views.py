@@ -66,6 +66,7 @@ logger = logging.getLogger(__name__)
             OpenApiParameter(name="visibility", description="可见性过滤", required=False, type=str, enum=["public", "private", "password"]),
             OpenApiParameter(name="date_from", description="发布日期起始，格式YYYY-MM-DD", required=False, type=str),
             OpenApiParameter(name="date_to", description="发布日期截止，格式YYYY-MM-DD", required=False, type=str),
+            OpenApiParameter(name="application", description="应用ID过滤（可选）", required=False, type=int),
             OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=False, type=str, location=OpenApiParameter.HEADER),
         ],
         examples=[
@@ -354,6 +355,15 @@ class ArticleViewSet(TenantModelViewSet):
         if date_to:
             queryset = queryset.filter(published_at__date__lte=date_to)
         
+        # 处理应用过滤（可选）
+        application = self.request.query_params.get('application')
+        if application:
+            from .models import ArticleApplication
+            article_ids = ArticleApplication.objects.filter(
+                application_id=application
+            ).values_list('article_id', flat=True)
+            queryset = queryset.filter(id__in=article_ids)
+
         # 处理排序
         sort = self.request.query_params.get('sort')
         sort_direction = self.request.query_params.get('sort_direction', 'desc')

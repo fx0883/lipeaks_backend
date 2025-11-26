@@ -544,6 +544,12 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
         required=False,
         write_only=True
     )
+    applications = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,  # 在validate中根据创建/更新区分
+        write_only=True,
+        help_text="关联的应用ID列表，创建时必填"
+    )
     meta = ArticleMetaSerializer(required=False)
     change_description = serializers.CharField(required=False, write_only=True)
     create_new_version = serializers.BooleanField(default=True, write_only=True)
@@ -556,7 +562,7 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
             'id', 'title', 'content', 'content_type', 'excerpt',
             'status', 'is_featured', 'is_pinned', 'allow_comment',
             'visibility', 'password', 'cover_image', 'cover_image_small', 'template',
-            'sort_order', 'parent', 'category_ids', 'tag_ids', 'meta',
+            'sort_order', 'parent', 'category_ids', 'tag_ids', 'applications', 'meta',
             'change_description', 'create_new_version', 'publish_now',
             'scheduled_publish_time'
         ]
@@ -564,10 +570,26 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
     
     def validate(self, data):
         """验证文章数据"""
-        # 验证分类和标签的存在性和权限
+        # 验证分类、标签和应用的存在性和权限
         category_ids = data.pop('category_ids', [])
         tag_ids = data.pop('tag_ids', [])
+        applications = data.pop('applications', None)
         tenant = self.context['request'].user.tenant
+        instance = getattr(self, 'instance', None)
+        
+        # 创建时 applications 必填
+        if instance is None:  # 创建操作
+            if not applications:
+                raise serializers.ValidationError({'applications': _('创建文章时必须指定至少一个应用')})
+        
+        # 验证应用存在性
+        from applications.models import Application
+        if applications:
+            for app_id in applications:
+                try:
+                    Application.objects.get(id=app_id, tenant=tenant, is_deleted=False)
+                except Application.DoesNotExist:
+                    raise serializers.ValidationError(_(f"应用ID {app_id} 不存在或无权限访问"))
         
         if category_ids:
             for category_id in category_ids:
@@ -621,6 +643,7 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
         # 为文章版本保存的数据
         self._category_ids = category_ids
         self._tag_ids = tag_ids
+        self._applications = applications
         self._change_description = data.pop('change_description', None)
         self._create_new_version = data.pop('create_new_version', True)
         
@@ -664,6 +687,16 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
                 tag_id=tag_id,
                 tenant=tenant
             )
+        
+        # 创建应用关联
+        if self._applications:
+            from .models import ArticleApplication
+            for app_id in self._applications:
+                ArticleApplication.objects.create(
+                    article=article,
+                    application_id=app_id,
+                    tenant=tenant
+                )
         
         # 创建初始版本（仅支持User类型作为editor）
         if isinstance(current_user, User):
@@ -737,6 +770,19 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
                     tenant=tenant
                 )
         
+        # 更新应用关联
+        if hasattr(self, '_applications') and self._applications is not None:
+            from .models import ArticleApplication
+            # 删除旧关联
+            ArticleApplication.objects.filter(article=article).delete()
+            # 创建新关联
+            for app_id in self._applications:
+                ArticleApplication.objects.create(
+                    article=article,
+                    application_id=app_id,
+                    tenant=tenant
+                )
+        
         # 创建新版本
         if hasattr(self, '_create_new_version') and self._create_new_version:
             # 检查是否有实质性变更
@@ -765,4 +811,43 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
                         tenant=tenant
                     )
         
-        return article 
+        return article
+
+
+class MemberArticleCreateUpdateSerializer(ArticleCreateUpdateSerializer):
+    """
+    Member用户文章创建和更新序列化器
+    
+    与管理员版本的区别：
+    - 使用单值 application 参数代替数组 applications
+    - 简化前端调用
+    """
+    
+    # 覆盖 applications 字段为单值 application
+    application = serializers.IntegerField(
+        required=False,  # 在validate中根据创建/更新区分
+        write_only=True,
+        help_text="关联的应用ID，创建时必填"
+    )
+    
+    class Meta(ArticleCreateUpdateSerializer.Meta):
+        fields = [
+            'id', 'title', 'content', 'content_type', 'excerpt',
+            'status', 'is_featured', 'is_pinned', 'allow_comment',
+            'visibility', 'password', 'cover_image', 'cover_image_small', 'template',
+            'sort_order', 'parent', 'category_ids', 'tag_ids', 'application', 'meta',
+            'change_description', 'create_new_version', 'publish_now',
+            'scheduled_publish_time'
+        ]
+    
+    def validate(self, data):
+        """验证文章数据 - Member版本使用单值application"""
+        # 提取 application 并转换为 applications 列表
+        application = data.pop('application', None)
+        
+        # 将单值转换为列表，供父类处理
+        if application is not None:
+            data['applications'] = [application]
+        
+        # 调用父类验证
+        return super().validate(data)

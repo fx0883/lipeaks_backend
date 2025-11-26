@@ -24,11 +24,18 @@ Member文章API专为Member用户设计，Member用户只能管理自己创建�
 | page_size | integer | 否 | 10 | 每页数量 |
 | status | string | 否 | - | 文章状态：draft/pending/published/archived |
 | search | string | 否 | - | 搜索关键词 |
+| application | integer | 否 | - | 应用ID过滤（可选） |
 | ordering | string | 否 | -created_at | 排序字段 |
 
 **请求示例**:
 ```bash
+# 获取所有已发布文章
 curl -X GET "http://localhost:8000/api/v1/cms/member/articles/?status=published" \
+  -H "Authorization: Bearer <MemberTOKEN>" \
+  -H "X-Tenant-ID: 3"
+
+# 按应用过滤文章
+curl -X GET "http://localhost:8000/api/v1/cms/member/articles/?application=6" \
   -H "Authorization: Bearer <MemberTOKEN>" \
   -H "X-Tenant-ID: 3"
 ```
@@ -58,6 +65,7 @@ curl -X GET "http://localhost:8000/api/v1/cms/member/articles/?status=published"
 | content_type | string | 否 | markdown | 内容类型：markdown/html/text |
 | excerpt | string | 否 | - | 摘要 |
 | status | string | 否 | draft | 状态：draft/pending/published |
+| **application** | **integer** | **是** | - | **关联的应用ID（必填）** |
 | cover_image | string | 否 | - | 封面图片URL |
 | category_ids | array | 否 | [] | 分类ID数组 |
 | tag_ids | array | 否 | [] | 标签ID数组 |
@@ -77,6 +85,7 @@ curl -X POST "http://localhost:8000/api/v1/cms/member/articles/" \
     "content_type": "markdown",
     "excerpt": "文章摘要",
     "status": "draft",
+    "application": 6,
     "category_ids": [1, 2],
     "tag_ids": [3, 4]
   }'
@@ -121,7 +130,16 @@ curl -X GET "http://localhost:8000/api/v1/cms/member/articles/123/" \
 |--------|------|------|------|
 | id | integer | 是 | 文章ID |
 
-**请求体参数**: 与创建文章相同，所有字段都是可选的
+**请求体参数**: 
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| title | string | 否 | 文章标题 |
+| content | string | 否 | 文章内容 |
+| application | integer | 否 | 关联的应用ID（如提供则覆盖原有关联） |
+| category_ids | array | 否 | 分类ID数组 |
+| tag_ids | array | 否 | 标签ID数组 |
+| ... | ... | 否 | 其他字段同创建 |
 
 **请求示例**:
 ```bash
@@ -131,7 +149,8 @@ curl -X PATCH "http://localhost:8000/api/v1/cms/member/articles/123/" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "更新后的标题",
-    "content": "更新后的内容"
+    "content": "更新后的内容",
+    "application_ids": [6]
   }'
 ```
 
