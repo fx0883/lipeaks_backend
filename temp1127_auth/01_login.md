@@ -34,7 +34,7 @@
 | `user.username` | string | 用户名 |
 | `user.email` | string | 邮箱 |
 | `user.nick_name` | string | 昵称 |
-| `user.avatar` | string | 头像路径 |
+| `user.avatar` | string | 头像完整 URL（包含 domain） |
 | `user.is_admin` | boolean | 是否为管理员 |
 | `user.is_super_admin` | boolean | 是否为超级管理员 |
 | `user.is_member` | boolean | 是否为 Member 用户 |
@@ -69,7 +69,7 @@ curl -X POST "http://192.168.1.14:8000/api/v1/auth/login/" \
             "username": "test02@qq.com",
             "email": "test02@qq.com",
             "nick_name": "Nihao",
-            "avatar": "/media/avatars/c7e4e047-62d5-4002-b9b8-0f5e480ace78.jpg",
+            "avatar": "http://192.168.1.14:8000/media/avatars/c7e4e047-62d5-4002-b9b8-0f5e480ace78.jpg",
             "is_admin": false,
             "is_super_admin": false,
             "is_member": true,

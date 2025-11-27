@@ -16,6 +16,7 @@ from django.core.exceptions import PermissionDenied
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample, OpenApiParameter
 
 from common.authentication.jwt_auth import generate_jwt_token
+from common.utils.image_url import add_domain_to_image_url
 from users.serializers import (
     LoginSerializer, TokenRefreshSerializer, RegisterSerializer,
     ChangePasswordSerializer, PasswordResetRequestSerializer, PasswordResetVerifySerializer,
@@ -66,6 +67,7 @@ class RegisterView(APIView):
             user.save(update_fields=['last_login_ip', 'last_login'])
             
             # 构建用户信息
+            avatar_url = add_domain_to_image_url(request, user.avatar) if user.avatar else ''
             user_data = {
                 'id': user.id,
                 'username': user.username,
@@ -73,7 +75,7 @@ class RegisterView(APIView):
                 'nick_name': user.nick_name or '',
                 'is_admin': is_admin(user),
                 'is_member': user.is_member,
-                'avatar': user.avatar or '',
+                'avatar': avatar_url,
             }
             
             # 添加租户信息
@@ -148,12 +150,13 @@ class MemberRegisterView(APIView):
             member.save(update_fields=['last_login_ip', 'last_login'])
 
             # 构建成员信息
+            avatar_url = add_domain_to_image_url(request, member.avatar) if member.avatar else ''
             user_data = {
                 'id': member.id,
                 'username': member.username,
                 'email': member.email,
                 'nick_name': member.nick_name or '',
-                'avatar': member.avatar or '',
+                'avatar': avatar_url,
                 'is_admin': False,
                 'is_super_admin': False,
                 'is_member': True,
@@ -239,12 +242,13 @@ class LoginView(APIView):
             user.save(update_fields=['last_login_ip', 'last_login'])
             
             # 构建用户信息，区分User和Member模型
+            avatar_url = add_domain_to_image_url(request, user.avatar) if user.avatar else ''
             user_data = {
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
                 'nick_name': user.nick_name or '',
-                'avatar': user.avatar or '',
+                'avatar': avatar_url,
             }
             
             # 根据用户类型添加对应字段
@@ -436,12 +440,13 @@ class TokenVerifyView(APIView):
         user = request.user
         
         # 构建用户信息，区分User和Member模型
+        avatar_url = add_domain_to_image_url(request, user.avatar) if user.avatar else ''
         user_data = {
             'id': user.id,
             'username': user.username,
             'email': user.email,
             'nick_name': user.nick_name or '',
-            'avatar': user.avatar or '',
+            'avatar': avatar_url,
         }
         
         # 根据用户类型添加对应字段

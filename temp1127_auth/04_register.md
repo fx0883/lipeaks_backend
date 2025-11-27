@@ -36,7 +36,7 @@
 | `user.username` | string | 用户名 |
 | `user.email` | string | 邮箱 |
 | `user.nick_name` | string | 昵称 |
-| `user.avatar` | string | 头像路径 |
+| `user.avatar` | string | 头像完整 URL（包含 domain，新注册用户为空） |
 | `user.is_admin` | boolean | 是否为管理员 |
 | `user.is_super_admin` | boolean | 是否为超级管理员 |
 | `user.is_member` | boolean | 是否为 Member 用户 |

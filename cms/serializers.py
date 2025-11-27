@@ -205,10 +205,10 @@ class CommentSerializer(serializers.ModelSerializer):
         """获取评论者信息（支持User、Member和游客）"""
         if obj.member_id:
             # Member评论者
-            return MemberSerializer(obj.member).data
+            return MemberSerializer(obj.member, context=self.context).data
         elif obj.user_id:
             # User评论者
-            return UserSerializer(obj.user).data
+            return UserSerializer(obj.user, context=self.context).data
         elif obj.guest_name:
             # 游客评论
             return {
@@ -298,10 +298,10 @@ class ArticleListSerializer(serializers.ModelSerializer):
         """获取作者信息（支持User和Member）"""
         if obj.member_id:
             # Member作者
-            return MemberSerializer(obj.member).data
+            return MemberSerializer(obj.member, context=self.context).data
         elif obj.user_id:
             # User作者
-            return UserSerializer(obj.user).data
+            return UserSerializer(obj.user, context=self.context).data
         return None
     
     def get_author_type(self, obj) -> str:
@@ -420,10 +420,10 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
         """获取作者信息（支持User和Member）"""
         if obj.member_id:
             # Member作者
-            return MemberSerializer(obj.member).data
+            return MemberSerializer(obj.member, context=self.context).data
         elif obj.user_id:
             # User作者
-            return UserSerializer(obj.user).data
+            return UserSerializer(obj.user, context=self.context).data
         return None
     
     def get_author_type(self, obj) -> str:
@@ -455,7 +455,7 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
             if latest_version:
                 return {
                     'current_version': latest_version.version_number,
-                    'last_updated_by': UserSerializer(latest_version.editor).data,
+                    'last_updated_by': UserSerializer(latest_version.editor, context=self.context).data,
                     'last_updated_at': latest_version.created_at
                 }
         except:
