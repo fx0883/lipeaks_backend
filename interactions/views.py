@@ -215,12 +215,12 @@ class ArticleFavoriteViewSet(TenantModelViewSet):
         """
         执行收藏创建操作
         
-        - TenantModelViewSet自动设置租户
         - 设置当前用户
+        - 设置租户
         - 记录收藏时间
         """
         user = self.request.user
-        serializer.save(user=user)
+        serializer.save(user=user, tenant=user.tenant)
         logger.info(f"User {user.username} favorited article {serializer.instance.article_id}")
     
     @extend_schema(
@@ -548,12 +548,12 @@ class MemberLikeViewSet(TenantModelViewSet):
         """
         执行点赞创建操作
         
-        - TenantModelViewSet自动设置租户
         - 设置当前用户
+        - 设置租户
         - 记录点赞时间
         """
         member = self.request.user
-        serializer.save(from_member=member)
+        serializer.save(from_member=member, tenant=member.tenant)
         logger.info(f"Member {member.username} liked member {serializer.instance.to_member_id}")
     
     @extend_schema(
@@ -964,12 +964,12 @@ class MemberFollowViewSet(TenantModelViewSet):
         """
         执行关注创建操作
         
-        - TenantModelViewSet自动设置租户
         - 设置当前用户
+        - 设置租户
         - 记录关注时间
         """
         member = self.request.user
-        serializer.save(follower=member)
+        serializer.save(follower=member, tenant=member.tenant)
         logger.info(f"Member {member.username} followed member {serializer.instance.following_id}")
     
     @extend_schema(
