@@ -1,5 +1,12 @@
 import os
 import sys
+
+# 修复 cPanel 环境的 Unicode 编码问题
+# 必须在导入其他模块之前设置，否则 load_dotenv() 会因环境变量中的非 ASCII 字符报错
+os.environ['LANG'] = 'en_US.UTF-8'
+os.environ['LC_ALL'] = 'en_US.UTF-8'
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+
 import pymysql
 
 # 限制 OpenBLAS 线程数，避免在 cPanel 共享主机环境中耗尽资源
