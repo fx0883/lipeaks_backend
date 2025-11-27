@@ -8,6 +8,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from drf_spectacular.utils import extend_schema
+from rest_framework.renderers import JSONRenderer
 
 # 导入admin模块，确保所有模型被注册
 import core.admin
@@ -23,6 +24,9 @@ logger = logging.getLogger(__name__)
     responses={200: {}}
 )
 class LoggingSpectacularAPIView(SpectacularAPIView):
+    # 使用DRF默认的JSONRenderer，避免自定义renderer包装OpenAPI schema
+    renderer_classes = [JSONRenderer]
+    
     def get(self, request, *args, **kwargs):
         logger.info("访问 SpectacularAPIView schema endpoint")
         try:
@@ -105,6 +109,9 @@ urlpatterns = [
         # 订单管理系统路由
         path('orders/', include('orders.urls', namespace='orders')),
         
+        # 应用管理系统路由
+        path('', include('applications.urls')),
+        
         # 许可证系统路由
         path('licenses/', include('licenses.urls', namespace='licenses')),
         
@@ -113,6 +120,9 @@ urlpatterns = [
         
         # User Feedback System
         path('feedbacks/', include('feedbacks.urls', namespace='feedbacks')),
+        
+        # Member 密码重置（公开HTML页面）
+        path('members/password-reset/', include('users.urls.member_password_reset_urls', namespace='member_password_reset')),
         
         # 用户互动系统路由（收藏、点赞等）
         path('interactions/', include('interactions.urls', namespace='interactions')),

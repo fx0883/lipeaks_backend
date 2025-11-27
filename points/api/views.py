@@ -8,9 +8,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema
 from django.utils import timezone
 from django.db import transaction, models
 from django.shortcuts import get_object_or_404
+from common.viewsets import TenantModelViewSet
 
 from points.models import (
     TenantUserProfile, TenantUserPoints, UserLevel, 
@@ -25,7 +27,7 @@ from points.api.serializers import (
 from points.api.permissions import (
     TenantUserProfilePermission, PointsManagementPermission,
     VipManagementPermission, ReadOnlyOrAdminPermission,
-    PointsOperationPermission, ensure_tenant_isolation, get_user_tenant
+    PointsOperationPermission, get_user_tenant, ensure_tenant_isolation
 )
 from points.services.points_engine import PointsEngineService
 from points.services.permission_service import TenantAwarePermissionService
@@ -64,12 +66,16 @@ class UserTypeTagViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-tag_level', 'tag_name']
 
 
-class TenantUserProfileViewSet(viewsets.ModelViewSet):
+class TenantUserProfileViewSet(TenantModelViewSet):
     """
     租户用户档案视图集
     提供用户档案的CRUD操作和积分管理功能
-    """
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
+    queryset = TenantUserProfile.objects.select_related(
+        'member', 'tenant', 'current_level'
+    ).prefetch_related('user_tags__tag')
     serializer_class = TenantUserProfileSerializer
     permission_classes = [IsAuthenticated, TenantUserProfilePermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -77,14 +83,6 @@ class TenantUserProfileViewSet(viewsets.ModelViewSet):
     search_fields = ['member__username', 'member__email']
     ordering_fields = ['total_points', 'created_at', 'last_points_update']
     ordering = ['-total_points']
-    
-    def get_queryset(self):
-        """获取查询集，确保租户隔离"""
-        queryset = TenantUserProfile.objects.select_related(
-            'member', 'tenant', 'current_level'
-        ).prefetch_related('user_tags__tag')
-        
-        return ensure_tenant_isolation(self.request, queryset)
     
     @action(detail=True, methods=['get'])
     def summary(self, request, pk=None):
@@ -245,6 +243,10 @@ class TenantUserPointsViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         """获取查询集，确保租户隔离"""
+        # Swagger文档生成时返回空queryset
+        if getattr(self, 'swagger_fake_view', False):
+            return TenantUserPoints.objects.none()
+        
         queryset = TenantUserPoints.objects.select_related(
             'tenant_user_profile', 'member', 'tenant'
         )
@@ -286,12 +288,16 @@ class TenantUserPointsViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(summary)
 
 
-class TenantUserTypeTagViewSet(viewsets.ModelViewSet):
+class TenantUserTypeTagViewSet(TenantModelViewSet):
     """
     租户用户标签关联视图集
     提供VIP标签的管理功能
-    """
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
+    queryset = TenantUserTypeTag.objects.select_related(
+        'tenant_user_profile', 'tag', 'member', 'tenant'
+    )
     serializer_class = TenantUserTypeTagSerializer
     permission_classes = [IsAuthenticated, VipManagementPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -302,14 +308,6 @@ class TenantUserTypeTagViewSet(viewsets.ModelViewSet):
     search_fields = ['grant_reason', 'notes']
     ordering_fields = ['granted_at', 'expires_at', 'usage_count']
     ordering = ['-granted_at']
-    
-    def get_queryset(self):
-        """获取查询集，确保租户隔离"""
-        queryset = TenantUserTypeTag.objects.select_related(
-            'tenant_user_profile', 'tag', 'member', 'tenant'
-        )
-        
-        return ensure_tenant_isolation(self.request, queryset)
     
     @action(detail=False, methods=['post'])
     def grant_vip_tag(self, request):
@@ -468,7 +466,23 @@ class PointsStatisticsViewSet(viewsets.ViewSet):
     """
     
     permission_classes = [IsAuthenticated]
+    serializer_class = None  # ViewSet返回动态数据，使用extend_schema定义响应
     
+    @extend_schema(
+        tags=['Points System'],
+        summary='Get points statistics overview',
+        responses={200: {
+            'type': 'object',
+            'properties': {
+                'total_users': {'type': 'integer'},
+                'active_users': {'type': 'integer'},
+                'total_points_distributed': {'type': 'number'},
+                'average_points_per_user': {'type': 'number'},
+                'level_distribution': {'type': 'object'},
+                'vip_distribution': {'type': 'object'},
+            }
+        }}
+    )
     def list(self, request):
         """获取积分统计概览"""
         user_tenant = get_user_tenant(request.user)

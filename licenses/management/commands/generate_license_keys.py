@@ -5,7 +5,9 @@
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from datetime import timedelta
-from licenses.models import SoftwareProduct, LicensePlan, License
+# 此命令已废弃 - SoftwareProduct已删除
+from applications.models import Application
+from licenses.models import LicensePlan, License
 from licenses.services.license_service import LicenseGenerationService
 from tenants.models import Tenant
 import json
@@ -75,18 +77,23 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        try:
+        raise CommandError(
+            '此命令已废弃。SoftwareProduct已删除，请使用License API端点生成许可证。'
+            '\n建议使用 POST /api/v1/licenses/licenses/ API进行许可证创建。'
+        )
+        # 以下代码已废弃
+        if False:
             # 查找软件产品
             try:
                 if options['tenant']:
                     tenant = Tenant.objects.get(name=options['tenant'])
-                    product = SoftwareProduct.objects.get(
+                    product = Application.objects.get(
                         name=options['product'],
                         tenant=tenant
                     )
                 else:
-                    product = SoftwareProduct.objects.get(name=options['product'])
-            except SoftwareProduct.DoesNotExist:
+                    product = Application.objects.get(name=options['product'])
+            except Application.DoesNotExist:
                 raise CommandError(f"软件产品 '{options['product']}' 不存在")
             except Tenant.DoesNotExist:
                 raise CommandError(f"租户 '{options['tenant']}' 不存在")

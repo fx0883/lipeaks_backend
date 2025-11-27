@@ -11,23 +11,26 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from common.viewsets import TenantModelViewSet
 
 from licenses.models import LicenseAssignment, License
 from licenses.serializers import (
     LicenseAssignmentSerializer, LicenseAssignmentCreateSerializer
 )
-from points.api.permissions import (
-    LicenseAssignmentPermission, ensure_tenant_isolation, get_user_tenant
-)
+from points.api.permissions import LicenseAssignmentPermission, get_user_tenant
 from points.services.license_service import TenantAwareLicenseAssignmentService
 
 
-class LicenseAssignmentViewSet(viewsets.ModelViewSet):
+class LicenseAssignmentViewSet(TenantModelViewSet):
     """
     许可证分配视图集
     提供许可证分配的CRUD操作和管理功能
-    """
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
+    queryset = LicenseAssignment.objects.select_related(
+        'member', 'license', 'tenant', 'assigned_by', 'revoked_by'
+    ).prefetch_related('license__application', 'license__plan')
     permission_classes = [IsAuthenticated, LicenseAssignmentPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = [
@@ -37,14 +40,6 @@ class LicenseAssignmentViewSet(viewsets.ModelViewSet):
     search_fields = ['assignment_reason', 'revoke_reason']
     ordering_fields = ['assigned_at', 'expires_at', 'usage_count', 'last_used_at']
     ordering = ['-assigned_at']
-    
-    def get_queryset(self):
-        """获取查询集，确保租户隔离"""
-        queryset = LicenseAssignment.objects.select_related(
-            'member', 'license', 'tenant', 'assigned_by', 'revoked_by'
-        ).prefetch_related('license__product', 'license__plan')
-        
-        return ensure_tenant_isolation(self.request, queryset)
     
     def get_serializer_class(self):
         """根据动作返回不同的序列化器"""

@@ -18,4 +18,6 @@ urlpatterns = [
     
     # Member头像上传
     path('avatar/upload/', member_views.MemberAvatarUploadView.as_view(), name='member-avatar-upload'),
+    
+    # Member密码重置已移至 /api/v1/members/password-reset/
 ] 

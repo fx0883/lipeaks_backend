@@ -31,9 +31,31 @@ from ..permissions import (
 def get_tenant_from_request(request):
     """
     从request中获取租户
-    中间件已经设置了request.tenant
+    
+    优先级：
+    1. request.tenant (中间件设置)
+    2. get_current_tenant() (线程本地存储)
+    3. request.user.tenant (用户关联的租户)
     """
-    return getattr(request, 'tenant', None)
+    # 1. 尝试从request属性获取
+    tenant = getattr(request, 'tenant', None)
+    if tenant:
+        return tenant
+    
+    # 2. 尝试从线程本地存储获取
+    from common.utils.tenant_context import get_current_tenant
+    tenant = get_current_tenant()
+    if tenant:
+        return tenant
+    
+    # 3. 尝试从用户关联的租户获取
+    user = getattr(request, 'user', None)
+    if user and user.is_authenticated:
+        tenant = getattr(user, 'tenant', None)
+        if tenant:
+            return tenant
+    
+    return None
 
 
 class FeedbackListView(APIView):
@@ -43,11 +65,12 @@ class FeedbackListView(APIView):
     @extend_schema(
         tags=['Feedback System'],
         summary='List feedback',
-        description='Get a list of feedback filtered by tenant. Super admins see all tenant feedback, '
+        description='Get a list of feedback filtered by tenant. '
+                   'Super admins see all tenant feedback, '
                    'tenant admins see all tenant feedback, regular users see only their own.',
         parameters=[
-            OpenApiParameter('software', OpenApiTypes.INT, OpenApiParameter.QUERY, description='Filter by software ID'),
-            OpenApiParameter('software_version', OpenApiTypes.INT, OpenApiParameter.QUERY, description='Filter by version ID'),
+            OpenApiParameter('application', OpenApiTypes.INT, OpenApiParameter.QUERY, 
+                           description='Filter by application ID'),
             OpenApiParameter('feedback_type', OpenApiTypes.STR, OpenApiParameter.QUERY, 
                            enum=['bug', 'feature', 'improvement', 'question', 'other']),
             OpenApiParameter('status', OpenApiTypes.STR, OpenApiParameter.QUERY,
@@ -65,12 +88,17 @@ class FeedbackListView(APIView):
         tenant = get_tenant_from_request(request)
         user = request.user
         
-        # 基础查询集
-        queryset = Feedback.objects.filter(is_deleted=False)
+        # 基础查询集（TenantManager已自动过滤is_deleted=False）
+        queryset = Feedback.objects.all()
         
         # 租户过滤
         if tenant:
             queryset = queryset.filter(tenant=tenant)
+        
+        # 应用过滤 (可选)
+        application_id = request.query_params.get('application')
+        if application_id:
+            queryset = queryset.filter(application_id=application_id)
         
         # 权限过滤
         if user.is_authenticated:
@@ -80,15 +108,6 @@ class FeedbackListView(APIView):
         else:
             # 未认证用户返回空
             queryset = queryset.none()
-        
-        # 筛选条件
-        software = request.query_params.get('software')
-        if software:
-            queryset = queryset.filter(software_id=software)
-        
-        software_version = request.query_params.get('software_version')
-        if software_version:
-            queryset = queryset.filter(software_version_id=software_version)
         
         feedback_type = request.query_params.get('feedback_type')
         if feedback_type:
@@ -323,12 +342,12 @@ class FeedbackVerifyEmailView(APIView):
         if feedback.email_verified:
             return Response({'detail': 'Email already verified.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if feedback.verification_token != token:
+        if feedback.email_verification_token != token:
             return Response({'detail': 'Invalid verification token.'}, status=status.HTTP_400_BAD_REQUEST)
         
         feedback.email_verified = True
-        feedback.verification_token = ''
-        feedback.save(update_fields=['email_verified', 'verification_token'])
+        feedback.email_verification_token = ''
+        feedback.save(update_fields=['email_verified', 'email_verification_token'])
         
         return Response({'detail': 'Email verified successfully.'})
 
@@ -336,10 +355,12 @@ class FeedbackVerifyEmailView(APIView):
 class FeedbackToggleNotificationsView(APIView):
     """切换反馈通知API"""
     permission_classes = [IsAuthenticated]
+    serializer_class = FeedbackDetailSerializer  # For schema generation
     
     @extend_schema(
         tags=['Feedback System'],
         summary='Toggle feedback notifications',
+        request=None,  # No request body
         responses={200: FeedbackDetailSerializer}
     )
     def patch(self, request, pk):
@@ -357,8 +378,8 @@ class FeedbackToggleNotificationsView(APIView):
         if feedback.user != request.user:
             return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         
-        feedback.notifications_enabled = not feedback.notifications_enabled
-        feedback.save(update_fields=['notifications_enabled'])
+        feedback.email_notification_enabled = not feedback.email_notification_enabled
+        feedback.save(update_fields=['email_notification_enabled'])
         
         serializer = FeedbackDetailSerializer(feedback, context={'request': request})
         return Response(serializer.data)

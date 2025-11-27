@@ -187,7 +187,7 @@ class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
         获取特定客户的订单
         """
         customer_id = self.kwargs.get('customer_id')
-        queryset = Order.objects.filter(customer_id=customer_id, is_deleted=False)
+        queryset = Order.objects.filter(customer_id=customer_id)
         
         # 按订单日期范围筛选
         order_date_from = self.request.query_params.get('order_date_from')

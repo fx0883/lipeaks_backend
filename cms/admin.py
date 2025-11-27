@@ -114,17 +114,17 @@ class ArticleAdmin(CMSAdminMixin, admin.ModelAdmin):
 @admin.register(Category)
 class CategoryAdmin(CMSAdminMixin, TranslatableAdmin, admin.ModelAdmin):
     """分类管理（支持多语言）"""
-    list_display = ['name', 'slug', 'parent', 'is_active', 'translation_status', 'article_count', 'created_at']
-    list_filter = ['is_active', 'parent', 'tenant']
+    list_display = ['name', 'slug', 'parent', 'application', 'is_active', 'translation_status', 'article_count', 'created_at']
+    list_filter = ['is_active', 'parent', 'tenant', 'application']
     search_fields = ['translations__name', 'translations__description', 'slug']  # 搜索翻译字段
-    autocomplete_fields = ['parent', 'tenant']
+    autocomplete_fields = ['parent', 'tenant', 'application']
     readonly_fields = ['created_at', 'updated_at', 'show_all_translations']
     list_per_page = 30
     
     # parler配置 - 明确定义翻译字段在fieldsets中的位置
     fieldsets = (
         (_('基本信息'), {
-            'fields': ('slug', 'parent', 'cover_image', 'tenant'),
+            'fields': ('slug', 'parent', 'cover_image', 'tenant', 'application'),
             'description': '这些字段对所有语言共享，只需填写一次'
         }),
         (_('多语言内容'), {
@@ -321,7 +321,7 @@ class ArticleStatisticsAdmin(admin.ModelAdmin):
     search_fields = ['article__title']
     raw_id_fields = ['article']
     autocomplete_fields = ['tenant']
-    readonly_fields = ['last_updated_at']
+    readonly_fields = ['updated_at']
     list_per_page = 20
     
     def get_queryset(self, request):

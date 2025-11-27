@@ -2,9 +2,11 @@
 用户互动序列化器
 """
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import ArticleFavorite, MemberLike, MemberFollow, ArticleLike
 from cms.serializers import ArticleListSerializer
 from users.models import Member
+from common.utils.image_url import add_domain_to_image_url
 
 
 class ArticleFavoriteSerializer(serializers.ModelSerializer):
@@ -21,6 +23,7 @@ class ArticleFavoriteSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'tenant', 'created_at']
     
+    @extend_schema_field(serializers.DictField())
     def get_user_info(self, obj):
         """获取用户信息"""
         return {
@@ -65,22 +68,28 @@ class MemberLikeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'from_member', 'tenant', 'created_at']
     
+    @extend_schema_field(serializers.DictField())
     def get_from_member_info(self, obj):
         """获取点赞发起者信息"""
+        request = self.context.get('request')
+        avatar_url = add_domain_to_image_url(request, obj.from_member.avatar) if obj.from_member.avatar and request else (obj.from_member.avatar or '')
         return {
             'id': obj.from_member.id,
             'username': obj.from_member.username,
             'nick_name': obj.from_member.nick_name,
-            'avatar': obj.from_member.avatar
+            'avatar': avatar_url
         }
     
+    @extend_schema_field(serializers.DictField())
     def get_to_member_info(self, obj):
         """获取被点赞用户信息"""
+        request = self.context.get('request')
+        avatar_url = add_domain_to_image_url(request, obj.to_member.avatar) if obj.to_member.avatar and request else (obj.to_member.avatar or '')
         return {
             'id': obj.to_member.id,
             'username': obj.to_member.username,
             'nick_name': obj.to_member.nick_name,
-            'avatar': obj.to_member.avatar
+            'avatar': avatar_url
         }
 
 
@@ -130,24 +139,31 @@ class MemberFollowSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'follower', 'tenant', 'created_at']
     
+    @extend_schema_field(serializers.DictField())
     def get_follower_info(self, obj):
         """获取关注者信息"""
+        request = self.context.get('request')
+        avatar_url = add_domain_to_image_url(request, obj.follower.avatar) if obj.follower.avatar and request else (obj.follower.avatar or '')
         return {
             'id': obj.follower.id,
             'username': obj.follower.username,
             'nick_name': obj.follower.nick_name,
-            'avatar': obj.follower.avatar
+            'avatar': avatar_url
         }
     
+    @extend_schema_field(serializers.DictField())
     def get_following_info(self, obj):
         """获取被关注者信息"""
+        request = self.context.get('request')
+        avatar_url = add_domain_to_image_url(request, obj.following.avatar) if obj.following.avatar and request else (obj.following.avatar or '')
         return {
             'id': obj.following.id,
             'username': obj.following.username,
             'nick_name': obj.following.nick_name,
-            'avatar': obj.following.avatar
+            'avatar': avatar_url
         }
     
+    @extend_schema_field(serializers.BooleanField())
     def get_is_mutual(self, obj):
         """检查是否互相关注"""
         return obj.is_mutual()
@@ -199,13 +215,16 @@ class ArticleLikeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'from_member', 'tenant', 'created_at', 'ip_address', 'user_agent']
     
+    @extend_schema_field(serializers.DictField())
     def get_from_member_info(self, obj):
         """获取点赞发起者信息"""
+        request = self.context.get('request')
+        avatar_url = add_domain_to_image_url(request, obj.from_member.avatar) if obj.from_member.avatar and request else (obj.from_member.avatar or '')
         return {
             'id': obj.from_member.id,
             'username': obj.from_member.username,
             'nick_name': obj.from_member.nick_name,
-            'avatar': obj.from_member.avatar
+            'avatar': avatar_url
         }
 
 

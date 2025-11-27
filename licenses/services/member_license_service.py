@@ -17,8 +17,9 @@ from common.exceptions import (
     UserInactiveException,
     TenantInactiveException,
 )
+from applications.models import Application
 from licenses.models import (
-    SoftwareProduct, LicensePlan, License, LicenseAssignment,
+    LicensePlan, License, LicenseAssignment,
     TenantLicenseQuota, SecurityAuditLog
 )
 from licenses.services.license_service import LicenseGenerationService, LicenseManagementService
@@ -118,7 +119,7 @@ class MemberLicenseApplicationService:
                 'code': 'INTERNAL_ERROR'
             }
     
-    def get_available_products(self, member: Member) -> List[SoftwareProduct]:
+    def get_available_products(self, member: Member) -> List[Application]:
         """
         获取可申请的试用产品列表
         
@@ -126,7 +127,7 @@ class MemberLicenseApplicationService:
             member: Member用户实例
             
         Returns:
-            List[SoftwareProduct]: 可申请的产品列表
+            List[Application]: 可申请的产品列表
         """
         try:
             from django.db.models import Exists, OuterRef
@@ -140,7 +141,7 @@ class MemberLicenseApplicationService:
             )
             
             # 获取有活跃试用方案的产品
-            available_products = SoftwareProduct.objects.filter(
+            available_products = Application.objects.filter(
                 status='active',
                 is_deleted=False
             ).filter(
@@ -214,7 +215,7 @@ class MemberLicenseApplicationService:
                 'licenses': []
             }
     
-    def _validate_product_and_plan(self, product_id: int, plan_id: int = None) -> Tuple[SoftwareProduct, LicensePlan]:
+    def _validate_product_and_plan(self, product_id: int, plan_id: int = None) -> Tuple[Application, LicensePlan]:
         """
         验证产品和试用方案
         
@@ -223,15 +224,15 @@ class MemberLicenseApplicationService:
             plan_id: 方案ID（可选）
             
         Returns:
-            Tuple[SoftwareProduct, LicensePlan]: 产品和试用方案
+            Tuple[Application, LicensePlan]: 产品和试用方案
         """
         try:
-            product = SoftwareProduct.objects.get(
+            product = Application.objects.get(
                 id=product_id,
                 status='active',
                 is_deleted=False
             )
-        except SoftwareProduct.DoesNotExist:
+        except Application.DoesNotExist:
             raise LicenseException(
                 error_code='PRODUCT_NOT_FOUND',
                 detail=f'产品ID {product_id} 不存在或不可用',
@@ -273,7 +274,7 @@ class MemberLicenseApplicationService:
         
         return product, trial_plan
     
-    def _check_application_eligibility(self, member: Member, product: SoftwareProduct):
+    def _check_application_eligibility(self, member: Member, product: Application):
         """
         检查申请资格
         
@@ -330,7 +331,7 @@ class MemberLicenseApplicationService:
                 banned=True
             )
     
-    def _check_quota_limits(self, member: Member, product: SoftwareProduct):
+    def _check_quota_limits(self, member: Member, product: Application):
         """
         检查配额限制
         
@@ -402,7 +403,7 @@ class MemberLicenseApplicationService:
     
     def _create_trial_license(
         self, 
-        product: SoftwareProduct, 
+        product: Application, 
         plan: LicensePlan, 
         member: Member, 
         user_info: Dict[str, Any] = None,

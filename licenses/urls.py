@@ -5,7 +5,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from licenses.views.admin_views import (
-    SoftwareProductViewSet, LicensePlanViewSet, LicenseViewSet,
+    ApplicationViewSet, LicensePlanViewSet, LicenseViewSet,
     MachineBindingViewSet, LicenseActivationViewSet, SecurityAuditLogViewSet,
     TenantLicenseQuotaViewSet
 )
@@ -16,7 +16,7 @@ from licenses.views import activation_views, report_views, member_views
 router = DefaultRouter()
 
 # 注册管理端ViewSet
-router.register(r'products', SoftwareProductViewSet, basename='softwareproduct')
+router.register(r'products', ApplicationViewSet, basename='application')
 router.register(r'plans', LicensePlanViewSet, basename='licenseplan')
 router.register(r'licenses', LicenseViewSet, basename='license')
 router.register(r'assignments', LicenseAssignmentViewSet, basename='licenseassignment')

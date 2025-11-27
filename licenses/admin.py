@@ -8,54 +8,26 @@ from django.urls import reverse
 from django.utils import timezone
 from django.db.models import Count
 from licenses.models import (
-    SoftwareProduct, LicensePlan, License, MachineBinding,
+    LicensePlan, License, MachineBinding,
     LicenseActivation, LicenseUsageLog, TenantLicenseQuota, SecurityAuditLog
 )
+from applications.models import Application
 
 
-@admin.register(SoftwareProduct)
-class SoftwareProductAdmin(admin.ModelAdmin):
-    """软件产品管理"""
-    list_display = ['name', 'code', 'version', 'status', 'max_activations', 'created_at']
-    list_filter = ['status', 'created_at']
-    search_fields = ['name', 'code']
-    readonly_fields = ['created_at', 'updated_at', 'private_key_hash']
-    fieldsets = [
-        ('基本信息', {
-            'fields': ['name', 'code', 'description', 'version']
-        }),
-        ('安全配置', {
-            'fields': ['public_key', 'private_key_hash', 'max_activations', 'offline_days']
-        }),
-        ('状态管理', {
-            'fields': ['status']
-        }),
-        ('时间信息', {
-            'fields': ['created_at', 'updated_at'],
-            'classes': ['collapse']
-        })
-    ]
-    
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        if request.user.is_super_admin:
-            return qs
-        elif hasattr(request.user, 'tenant'):
-            return qs.filter(tenant=request.user.tenant)
-        return qs.none()
+# SoftwareProductAdmin已删除，应用管理请使用applications模块的ApplicationAdmin
 
 
 @admin.register(LicensePlan)
 class LicensePlanAdmin(admin.ModelAdmin):
     """许可证方案管理"""
-    list_display = ['name', 'plan_type', 'default_max_activations', 'default_validity_days', 'price', 'status', 'product']
-    list_filter = ['plan_type', 'status', 'product', 'created_at']
+    list_display = ['name', 'plan_type', 'default_max_activations', 'default_validity_days', 'price', 'status', 'application']
+    list_filter = ['plan_type', 'status', 'application', 'created_at']
     search_fields = ['name', 'description']
     readonly_fields = ['created_at', 'updated_at']
     
     fieldsets = (
         ('基本信息', {
-            'fields': ('name', 'code', 'product', 'plan_type', 'status')
+            'fields': ('name', 'code', 'application', 'plan_type', 'status')
         }),
         ('模板配置', {
             'fields': ('default_max_activations', 'default_validity_days')
@@ -77,22 +49,22 @@ class LicensePlanAdmin(admin.ModelAdmin):
         if request.user.is_super_admin:
             return qs
         elif hasattr(request.user, 'tenant'):
-            return qs.filter(product__tenant=request.user.tenant)
+            return qs.filter(application__tenant=request.user.tenant)
         return qs.none()
 
 
 @admin.register(License)
 class LicenseAdmin(admin.ModelAdmin):
     """许可证管理"""
-    list_display = ['license_key_display', 'product', 'plan', 'status', 'customer_name', 'expires_at', 'activation_count']
-    list_filter = ['status', 'product', 'plan', 'issued_at', 'expires_at']
+    list_display = ['license_key_display', 'application', 'plan', 'status', 'customer_name', 'expires_at', 'activation_count']
+    list_filter = ['status', 'application', 'plan', 'issued_at', 'expires_at']
     search_fields = ['license_key', 'customer_name', 'customer_email', 'notes']
     readonly_fields = ['license_key', 'license_hash', 'created_at', 'updated_at', 'last_verified_at']
     date_hierarchy = 'issued_at'
     
     fieldsets = (
         ('许可证信息', {
-            'fields': ('license_key', 'license_hash', 'product', 'plan', 'status')
+            'fields': ('license_key', 'license_hash', 'application', 'plan', 'status')
         }),
         ('客户信息', {
             'fields': ('customer_name', 'customer_email', 'encrypted_customer_info')
@@ -269,14 +241,14 @@ class LicenseUsageLogAdmin(admin.ModelAdmin):
 @admin.register(TenantLicenseQuota)
 class TenantLicenseQuotaAdmin(admin.ModelAdmin):
     """租户许可证配额管理"""
-    list_display = ['tenant', 'product', 'max_licenses', 'current_licenses', 'usage_percentage', 'is_active']
-    list_filter = ['product', 'is_active', 'created_at']
-    search_fields = ['tenant__name', 'product__name']
+    list_display = ['tenant', 'application', 'max_licenses', 'current_licenses', 'usage_percentage', 'is_active']
+    list_filter = ['application', 'is_active', 'created_at']
+    search_fields = ['tenant__name', 'application__name']
     readonly_fields = ['created_at', 'updated_at']
     
     fieldsets = (
         ('配额信息', {
-            'fields': ('tenant', 'product', 'max_licenses', 'current_licenses', 'quota_start_date', 'quota_end_date', 'is_active')
+            'fields': ('tenant', 'application', 'max_licenses', 'current_licenses', 'quota_start_date', 'quota_end_date', 'is_active')
         }),
         ('时间信息', {
             'fields': ('created_at', 'updated_at'),

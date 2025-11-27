@@ -24,15 +24,35 @@ class CategorySerializer(ImageFieldNormalizerMixin, TranslatableModelSerializer)
     """分类序列化器（支持多语言）"""
     translations = TranslatedFieldsField(shared_model=Category)
     image_fields = ['cover_image']  # 需要标准化的图片字段
+    application_name = serializers.CharField(source='application.name', read_only=True, allow_null=True)
     
     class Meta:
         model = Category
         fields = [
             'id', 'slug', 'parent', 'cover_image', 'created_at', 'updated_at', 
-            'sort_order', 'tenant', 'is_active', 'is_pinned',
+            'sort_order', 'tenant', 'application', 'application_name', 
+            'is_active', 'is_pinned',
             'translations',  # 包含所有语言的翻译
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'tenant', 'application_name']
+        extra_kwargs = {
+            'slug': {'required': False}  # slug可选，系统自动生成
+        }
+    
+    def validate(self, data):
+        """验证并自动生成slug"""
+        # 如果没有提供slug，从translations中提取name并生成slug
+        if 'slug' not in data or not data['slug']:
+            translations = data.get('translations', {})
+            # 尝试从中文名称生成slug
+            if 'zh-hans' in translations and 'name' in translations['zh-hans']:
+                name = translations['zh-hans']['name']
+                data['slug'] = slugify(name) or f"category-{timezone.now().timestamp()}"
+            else:
+                # 如果没有中文名称，使用时间戳生成唯一slug
+                data['slug'] = f"category-{int(timezone.now().timestamp())}"
+        
+        return data
     
     def to_representation(self, instance):
         """
@@ -73,6 +93,19 @@ class TagGroupSerializer(serializers.ModelSerializer):
             'updated_at', 'is_active', 'tenant'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
+        extra_kwargs = {
+            'slug': {'required': False}  # slug可选，系统自动生成
+        }
+    
+    def validate(self, data):
+        """验证并自动生成slug"""
+        if 'slug' not in data or not data['slug']:
+            name = data.get('name', '')
+            if name:
+                data['slug'] = slugify(name) or f"tag-group-{int(timezone.now().timestamp())}"
+            else:
+                data['slug'] = f"tag-group-{int(timezone.now().timestamp())}"
+        return data
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -88,6 +121,19 @@ class TagSerializer(serializers.ModelSerializer):
             'is_active', 'tenant'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant']
+        extra_kwargs = {
+            'slug': {'required': False}  # slug可选，系统自动生成
+        }
+    
+    def validate(self, data):
+        """验证并自动生成slug"""
+        if 'slug' not in data or not data['slug']:
+            name = data.get('name', '')
+            if name:
+                data['slug'] = slugify(name) or f"tag-{int(timezone.now().timestamp())}"
+            else:
+                data['slug'] = f"tag-{int(timezone.now().timestamp())}"
+        return data
     
     def get_group_name(self, obj) -> str:
         return obj.group.name if obj.group else None
@@ -115,9 +161,9 @@ class ArticleStatisticsSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'article', 'views_count', 'unique_views_count', 'likes_count',
             'dislikes_count', 'comments_count', 'shares_count', 'bookmarks_count',
-            'avg_reading_time', 'bounce_rate', 'last_updated_at', 'tenant'
+            'avg_reading_time', 'bounce_rate', 'updated_at', 'tenant'
         ]
-        read_only_fields = ['id', 'last_updated_at', 'tenant']
+        read_only_fields = ['id', 'updated_at', 'tenant']
 
 
 class ArticleVersionSerializer(serializers.ModelSerializer):
@@ -159,10 +205,10 @@ class CommentSerializer(serializers.ModelSerializer):
         """获取评论者信息（支持User、Member和游客）"""
         if obj.member_id:
             # Member评论者
-            return MemberSerializer(obj.member).data
+            return MemberSerializer(obj.member, context=self.context).data
         elif obj.user_id:
             # User评论者
-            return UserSerializer(obj.user).data
+            return UserSerializer(obj.user, context=self.context).data
         elif obj.guest_name:
             # 游客评论
             return {
@@ -252,10 +298,10 @@ class ArticleListSerializer(serializers.ModelSerializer):
         """获取作者信息（支持User和Member）"""
         if obj.member_id:
             # Member作者
-            return MemberSerializer(obj.member).data
+            return MemberSerializer(obj.member, context=self.context).data
         elif obj.user_id:
             # User作者
-            return UserSerializer(obj.user).data
+            return UserSerializer(obj.user, context=self.context).data
         return None
     
     def get_author_type(self, obj) -> str:
@@ -374,10 +420,10 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
         """获取作者信息（支持User和Member）"""
         if obj.member_id:
             # Member作者
-            return MemberSerializer(obj.member).data
+            return MemberSerializer(obj.member, context=self.context).data
         elif obj.user_id:
             # User作者
-            return UserSerializer(obj.user).data
+            return UserSerializer(obj.user, context=self.context).data
         return None
     
     def get_author_type(self, obj) -> str:
@@ -409,7 +455,7 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
             if latest_version:
                 return {
                     'current_version': latest_version.version_number,
-                    'last_updated_by': UserSerializer(latest_version.editor).data,
+                    'last_updated_by': UserSerializer(latest_version.editor, context=self.context).data,
                     'last_updated_at': latest_version.created_at
                 }
         except:
@@ -498,6 +544,12 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
         required=False,
         write_only=True
     )
+    applications = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,  # 在validate中根据创建/更新区分
+        write_only=True,
+        help_text="关联的应用ID列表，创建时必填"
+    )
     meta = ArticleMetaSerializer(required=False)
     change_description = serializers.CharField(required=False, write_only=True)
     create_new_version = serializers.BooleanField(default=True, write_only=True)
@@ -510,7 +562,7 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
             'id', 'title', 'content', 'content_type', 'excerpt',
             'status', 'is_featured', 'is_pinned', 'allow_comment',
             'visibility', 'password', 'cover_image', 'cover_image_small', 'template',
-            'sort_order', 'parent', 'category_ids', 'tag_ids', 'meta',
+            'sort_order', 'parent', 'category_ids', 'tag_ids', 'applications', 'meta',
             'change_description', 'create_new_version', 'publish_now',
             'scheduled_publish_time'
         ]
@@ -518,10 +570,26 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
     
     def validate(self, data):
         """验证文章数据"""
-        # 验证分类和标签的存在性和权限
+        # 验证分类、标签和应用的存在性和权限
         category_ids = data.pop('category_ids', [])
         tag_ids = data.pop('tag_ids', [])
+        applications = data.pop('applications', None)
         tenant = self.context['request'].user.tenant
+        instance = getattr(self, 'instance', None)
+        
+        # 创建时 applications 必填
+        if instance is None:  # 创建操作
+            if not applications:
+                raise serializers.ValidationError({'applications': _('创建文章时必须指定至少一个应用')})
+        
+        # 验证应用存在性
+        from applications.models import Application
+        if applications:
+            for app_id in applications:
+                try:
+                    Application.objects.get(id=app_id, tenant=tenant, is_deleted=False)
+                except Application.DoesNotExist:
+                    raise serializers.ValidationError(_(f"应用ID {app_id} 不存在或无权限访问"))
         
         if category_ids:
             for category_id in category_ids:
@@ -575,6 +643,7 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
         # 为文章版本保存的数据
         self._category_ids = category_ids
         self._tag_ids = tag_ids
+        self._applications = applications
         self._change_description = data.pop('change_description', None)
         self._create_new_version = data.pop('create_new_version', True)
         
@@ -618,6 +687,16 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
                 tag_id=tag_id,
                 tenant=tenant
             )
+        
+        # 创建应用关联
+        if self._applications:
+            from .models import ArticleApplication
+            for app_id in self._applications:
+                ArticleApplication.objects.create(
+                    article=article,
+                    application_id=app_id,
+                    tenant=tenant
+                )
         
         # 创建初始版本（仅支持User类型作为editor）
         if isinstance(current_user, User):
@@ -691,6 +770,19 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
                     tenant=tenant
                 )
         
+        # 更新应用关联
+        if hasattr(self, '_applications') and self._applications is not None:
+            from .models import ArticleApplication
+            # 删除旧关联
+            ArticleApplication.objects.filter(article=article).delete()
+            # 创建新关联
+            for app_id in self._applications:
+                ArticleApplication.objects.create(
+                    article=article,
+                    application_id=app_id,
+                    tenant=tenant
+                )
+        
         # 创建新版本
         if hasattr(self, '_create_new_version') and self._create_new_version:
             # 检查是否有实质性变更
@@ -719,4 +811,43 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
                         tenant=tenant
                     )
         
-        return article 
+        return article
+
+
+class MemberArticleCreateUpdateSerializer(ArticleCreateUpdateSerializer):
+    """
+    Member用户文章创建和更新序列化器
+    
+    与管理员版本的区别：
+    - 使用单值 application 参数代替数组 applications
+    - 简化前端调用
+    """
+    
+    # 覆盖 applications 字段为单值 application
+    application = serializers.IntegerField(
+        required=False,  # 在validate中根据创建/更新区分
+        write_only=True,
+        help_text="关联的应用ID，创建时必填"
+    )
+    
+    class Meta(ArticleCreateUpdateSerializer.Meta):
+        fields = [
+            'id', 'title', 'content', 'content_type', 'excerpt',
+            'status', 'is_featured', 'is_pinned', 'allow_comment',
+            'visibility', 'password', 'cover_image', 'cover_image_small', 'template',
+            'sort_order', 'parent', 'category_ids', 'tag_ids', 'application', 'meta',
+            'change_description', 'create_new_version', 'publish_now',
+            'scheduled_publish_time'
+        ]
+    
+    def validate(self, data):
+        """验证文章数据 - Member版本使用单值application"""
+        # 提取 application 并转换为 applications 列表
+        application = data.pop('application', None)
+        
+        # 将单值转换为列表，供父类处理
+        if application is not None:
+            data['applications'] = [application]
+        
+        # 调用父类验证
+        return super().validate(data)

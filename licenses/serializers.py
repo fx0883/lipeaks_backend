@@ -4,68 +4,118 @@
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import datetime, timedelta
 from licenses.models import (
-    SoftwareProduct, LicensePlan, License, MachineBinding, 
+    LicensePlan, License, MachineBinding, 
     LicenseActivation, LicenseUsageLog, TenantLicenseQuota, 
     SecurityAuditLog, LicenseAssignment
 )
+from applications.models import Application
 import json
 
 User = get_user_model()
 
 
+# SoftwareProduct相关序列化器已废弃，现在使用Application
+# 为了向后兼容，这些序列化器现在指向Application模型
+
 class SoftwareProductSerializer(serializers.ModelSerializer):
-    """软件产品序列化器"""
+    """应用序列化器（向后兼容，实际使用Application）"""
     
     license_plans_count = serializers.SerializerMethodField()
     total_licenses = serializers.SerializerMethodField()
     
+    # 许可证配置字段（从metadata中读取）
+    max_activations = serializers.SerializerMethodField()
+    offline_days = serializers.SerializerMethodField()
+    
     class Meta:
-        model = SoftwareProduct
+        model = Application
         fields = [
-            'id', 'name', 'code', 'description', 'version',
+            'id', 'name', 'code', 'description', 'current_version',
             'max_activations', 'offline_days', 'status',
             'license_plans_count', 'total_licenses',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
+    @extend_schema_field(serializers.IntegerField())
     def get_license_plans_count(self, obj):
         """获取许可方案数量"""
-        return obj.license_plans.filter(status='active').count()
+        try:
+            return obj.license_plans.filter(status='active', is_deleted=False).count()
+        except Exception:
+            return 0
     
+    @extend_schema_field(serializers.IntegerField())
     def get_total_licenses(self, obj):
         """获取许可证总数"""
-        return obj.licenses.count()
+        try:
+            return obj.licenses.filter(is_deleted=False).count()
+        except Exception:
+            return 0
+    
+    @extend_schema_field(serializers.IntegerField())
+    def get_max_activations(self, obj):
+        """从metadata获取最大激活数"""
+        try:
+            metadata = obj.metadata if isinstance(obj.metadata, dict) else {}
+            return metadata.get('license_config', {}).get('max_activations', 5)
+        except Exception:
+            return 5
+    
+    @extend_schema_field(serializers.IntegerField())
+    def get_offline_days(self, obj):
+        """从metadata获取离线天数"""
+        try:
+            metadata = obj.metadata if isinstance(obj.metadata, dict) else {}
+            return metadata.get('license_config', {}).get('offline_days', 30)
+        except Exception:
+            return 30
     
     def validate_code(self, value):
-        """验证产品代码唯一性"""
+        """验证应用代码唯一性（租户内）"""
         if self.instance and self.instance.code == value:
             return value
         
-        if SoftwareProduct.objects.filter(code=value, is_deleted=False).exists():
-            raise serializers.ValidationError("Product code already exists")
+        request = self.context.get('request')
+        if request and hasattr(request, 'tenant'):
+            if Application.objects.filter(
+                tenant=request.tenant,
+                code=value,
+                is_deleted=False
+            ).exists():
+                raise serializers.ValidationError("Application code already exists")
         return value
 
 
 class SoftwareProductCreateSerializer(serializers.ModelSerializer):
-    """软件产品创建序列化器"""
+    """应用创建序列化器（向后兼容，实际使用Application）"""
     
     generate_keypair = serializers.BooleanField(default=True, write_only=True)
+    max_activations = serializers.IntegerField(default=5, write_only=True)
+    offline_days = serializers.IntegerField(default=30, write_only=True)
     
     class Meta:
-        model = SoftwareProduct
+        model = Application
         fields = [
-            'name', 'code', 'description', 'version',
-            'max_activations', 'offline_days', 'generate_keypair'
+            'name', 'code', 'description', 'current_version',
+            'max_activations', 'offline_days', 'generate_keypair', 'status'
         ]
     
     def create(self, validated_data):
-        """创建产品时自动生成密钥对"""
+        """创建应用时自动生成密钥对并存储在metadata中"""
         generate_keypair = validated_data.pop('generate_keypair', True)
+        max_activations = validated_data.pop('max_activations', 5)
+        offline_days = validated_data.pop('offline_days', 30)
+        
+        license_config = {
+            'max_activations': max_activations,
+            'offline_days': offline_days
+        }
         
         if generate_keypair:
             from licenses.services.security_service import SecurityService
@@ -79,8 +129,13 @@ class SoftwareProductCreateSerializer(serializers.ModelSerializer):
                 private_key_pem.decode()
             )
             
-            validated_data['public_key'] = public_key_pem.decode()
-            validated_data['private_key_hash'] = private_key_hash
+            license_config['public_key'] = public_key_pem.decode()
+            license_config['private_key_hash'] = private_key_hash
+        
+        # 存储许可证配置到metadata
+        if 'metadata' not in validated_data:
+            validated_data['metadata'] = {}
+        validated_data['metadata']['license_config'] = license_config
         
         return super().create(validated_data)
 
@@ -88,45 +143,46 @@ class SoftwareProductCreateSerializer(serializers.ModelSerializer):
 class LicensePlanSerializer(serializers.ModelSerializer):
     """许可证方案序列化器"""
     
-    product_name = serializers.CharField(source='product.name', read_only=True)
+    application_name = serializers.CharField(source='application.name', read_only=True)
     licenses_count = serializers.SerializerMethodField()
     
     class Meta:
         model = LicensePlan
         fields = [
-            'id', 'product', 'product_name', 'name', 'code', 'plan_type',
+            'id', 'application', 'application_name', 'name', 'code', 'plan_type',
             'default_max_activations', 'default_validity_days', 'features', 'price', 'currency',
             'status', 'licenses_count', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
+    @extend_schema_field(serializers.IntegerField())
     def get_licenses_count(self, obj):
         """获取该方案的许可证数量"""
         return obj.licenses.count()
     
     def validate(self, data):
-        """验证方案代码在产品内唯一"""
+        """验证方案代码在应用内唯一"""
         if self.instance:
-            product = data.get('product', self.instance.product)
+            application = data.get('application', self.instance.application)
             code = data.get('code', self.instance.code)
             
             existing = LicensePlan.objects.filter(
-                product=product, 
+                application=application, 
                 code=code,
                 is_deleted=False
             ).exclude(id=self.instance.id)
         else:
-            product = data.get('product')
+            application = data.get('application')
             code = data.get('code')
             
             existing = LicensePlan.objects.filter(
-                product=product,
+                application=application,
                 code=code, 
                 is_deleted=False
             )
         
         if existing.exists():
-            raise serializers.ValidationError("Plan code already exists for this product")
+            raise serializers.ValidationError("Plan code already exists for this application")
         
         return data
 
@@ -134,7 +190,7 @@ class LicensePlanSerializer(serializers.ModelSerializer):
 class LicenseSerializer(serializers.ModelSerializer):
     """许可证序列化器（列表显示）"""
     
-    product_name = serializers.CharField(source='product.name', read_only=True)
+    application_name = serializers.CharField(source='application.name', read_only=True)
     plan_name = serializers.CharField(source='plan.name', read_only=True)
     tenant_name = serializers.CharField(source='tenant.name', read_only=True)
     machine_bindings_count = serializers.SerializerMethodField()
@@ -143,7 +199,7 @@ class LicenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = License
         fields = [
-            'id', 'product', 'product_name', 'plan', 'plan_name',
+            'id', 'application', 'application_name', 'plan', 'plan_name',
             'tenant', 'tenant_name', 'license_key', 'customer_name',
             'customer_email', 'max_activations', 'current_activations',
             'issued_at', 'expires_at', 'last_verified_at', 'status',
@@ -154,10 +210,12 @@ class LicenseSerializer(serializers.ModelSerializer):
             'last_verified_at'
         ]
     
+    @extend_schema_field(serializers.IntegerField())
     def get_machine_bindings_count(self, obj):
         """获取活跃机器绑定数量"""
         return obj.machine_bindings.filter(status='active').count()
     
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_days_until_expiry(self, obj):
         """获取距离过期的天数"""
         if obj.expires_at:
@@ -166,26 +224,26 @@ class LicenseSerializer(serializers.ModelSerializer):
         return None
     
     def validate(self, data):
-        """验证product和plan的一致性"""
-        product = data.get('product')
+        """验证application和plan的一致性"""
+        application = data.get('application')
         plan = data.get('plan')
         
         # 对于更新操作，如果没有提供某个字段，使用实例的现有值
         if self.instance:
-            if not product:
-                product = self.instance.product
+            if not application:
+                application = self.instance.application
             if not plan:
                 plan = self.instance.plan
         
-        if product and plan:
-            if plan.product != product:
+        if application and plan:
+            if plan.application != application:
                 raise serializers.ValidationError({
-                    'plan': f'所选方案({plan.name})属于产品({plan.product.name})，与所选产品({product.name})不一致，请重新选择正确的方案。'
+                    'plan': f'所选方案({plan.name})属于产品({plan.application.name})，与所选产品({application.name})不一致，请重新选择正确的方案。'
                 })
         
-        # 如果只有plan没有product，自动设置product
-        if plan and not product:
-            data['product'] = plan.product
+        # 如果只有plan没有application，自动设置application
+        if plan and not application:
+            data['application'] = plan.application
         
         return data
 
@@ -202,16 +260,19 @@ class LicenseDetailSerializer(LicenseSerializer):
             'machine_bindings', 'recent_activations', 'usage_stats', 'metadata'
         ]
     
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_machine_bindings(self, obj):
         """获取机器绑定信息"""
         bindings = obj.machine_bindings.all()[:5]  # 最多显示5个
         return MachineBindingSerializer(bindings, many=True).data
     
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_recent_activations(self, obj):
         """获取最近激活记录"""
         activations = obj.activations.order_by('-activated_at')[:5]
         return LicenseActivationSerializer(activations, many=True).data
     
+    @extend_schema_field(serializers.DictField())
     def get_usage_stats(self, obj):
         """获取使用统计"""
         thirty_days_ago = timezone.now() - timedelta(days=30)
@@ -228,10 +289,10 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
     
     customer_info = serializers.JSONField(write_only=True)
     validity_days = serializers.IntegerField(required=False, write_only=True)
-    product = serializers.PrimaryKeyRelatedField(
-        queryset=SoftwareProduct.objects.filter(is_deleted=False),
+    application = serializers.PrimaryKeyRelatedField(
+        queryset=Application.objects.filter(is_deleted=False),
         required=False,
-        help_text="产品ID，如果未提供将从plan字段自动获取"
+        help_text="应用ID，如果未提供将从plan字段自动获取"
     )
     
     def __init__(self, *args, **kwargs):
@@ -248,7 +309,7 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = License
         fields = [
-            'product', 'plan', 'tenant', 'customer_info',
+            'application', 'plan', 'tenant', 'customer_info',
             'max_activations', 'validity_days', 'notes'
         ]
     
@@ -261,40 +322,61 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
         return value
     
     def validate(self, data):
-        """验证product和plan的一致性"""
-        product = data.get('product')
+        """验证application和plan的一致性"""
+        application = data.get('application')
         plan = data.get('plan')
         
-        if product and plan:
-            if plan.product != product:
+        if application and plan:
+            if plan.application != application:
                 raise serializers.ValidationError({
-                    'plan': f'所选方案({plan.name})属于产品({plan.product.name})，与所选产品({product.name})不一致，请重新选择正确的方案。'
+                    'plan': f'所选方案({plan.name})属于产品({plan.application.name})，与所选产品({application.name})不一致，请重新选择正确的方案。'
                 })
         
-        # 如果只有plan没有product，自动设置product
-        if plan and not product:
-            data['product'] = plan.product
+        # 如果只有plan没有application，自动设置application
+        if plan and not application:
+            data['application'] = plan.application
         
         return data
     
     def create(self, validated_data):
         """创建许可证"""
         from licenses.services.license_service import LicenseManagementService
+        from tenants.models import Tenant
         
         customer_info = validated_data.pop('customer_info')
         validity_days = validated_data.pop('validity_days', None)
         
         # 从validated_data中获取必要字段（这些字段可能通过perform_create自动填充）
-        product = validated_data.get('product')
+        application = validated_data.get('application')
         plan = validated_data.get('plan')  
         tenant = validated_data.get('tenant')
+        tenant_id = validated_data.get('tenant_id')  # TenantModelViewSet通过save(tenant_id=...)传递
         
         # 验证必要字段是否存在
-        if not product:
-            raise serializers.ValidationError("product field is required")
+        if not application:
+            raise serializers.ValidationError("application field is required")
         if not plan:
             raise serializers.ValidationError("plan field is required") 
-        if not tenant:
+        
+        # 获取tenant_id：优先从tenant对象获取，否则从tenant_id参数获取，最后从request.user获取
+        effective_tenant_id = None
+        if tenant:
+            effective_tenant_id = tenant.id
+        elif tenant_id:
+            effective_tenant_id = tenant_id
+        else:
+            # 尝试从context中的request获取tenant
+            request = self.context.get('request')
+            if request and hasattr(request, 'user') and request.user.is_authenticated:
+                user = request.user
+                # 租户管理员从user.tenant获取
+                if hasattr(user, 'tenant') and user.tenant:
+                    effective_tenant_id = user.tenant.id
+                # 也可能通过request.tenant_id获取（由中间件设置）
+                elif hasattr(request, 'tenant_id') and request.tenant_id:
+                    effective_tenant_id = request.tenant_id
+        
+        if not effective_tenant_id:
             raise serializers.ValidationError("tenant field is required")
         
         # 计算过期时间
@@ -305,9 +387,9 @@ class LicenseCreateSerializer(serializers.ModelSerializer):
         # 使用服务创建许可证
         management_service = LicenseManagementService()
         license_obj = management_service.create_license(
-            product_id=product.id,
+            application_id=application.id,
             plan_id=plan.id,
-            tenant_id=tenant.id,
+            tenant_id=effective_tenant_id,
             customer_info=customer_info,
             expires_at=expires_at,
             max_activations=validated_data.get('max_activations')
@@ -334,6 +416,7 @@ class MachineBindingSerializer(serializers.ModelSerializer):
             'id', 'machine_id', 'first_seen_at', 'last_seen_at'
         ]
     
+    @extend_schema_field(serializers.CharField())
     def get_license_key_preview(self, obj):
         """获取许可证密钥预览"""
         key = obj.license.license_key
@@ -341,6 +424,7 @@ class MachineBindingSerializer(serializers.ModelSerializer):
             return f"{key[:5]}...{key[-5:]}"
         return key
     
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_days_since_last_seen(self, obj):
         """获取距离最后活跃的天数"""
         if obj.last_seen_at:
@@ -367,6 +451,7 @@ class LicenseActivationSerializer(serializers.ModelSerializer):
             'id', 'activation_code', 'activated_at'
         ]
     
+    @extend_schema_field(serializers.CharField())
     def get_license_key_preview(self, obj):
         """获取许可证密钥预览"""
         key = obj.license.license_key
@@ -426,6 +511,7 @@ class LicenseUsageLogSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'timestamp']
     
+    @extend_schema_field(serializers.CharField())
     def get_license_key_preview(self, obj):
         """获取许可证密钥预览"""
         key = obj.license.license_key
@@ -501,18 +587,30 @@ class TenantLicenseQuotaSerializer(serializers.ModelSerializer):
     """租户许可证配额序列化器"""
     
     tenant_name = serializers.CharField(source='tenant.name', read_only=True)
-    product_name = serializers.CharField(source='product.name', read_only=True)
+    application_name = serializers.CharField(source='application.name', read_only=True)
     usage_percentage = serializers.SerializerMethodField()
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 显式定义tenant字段为可选，允许TenantModelViewSet自动设置
+        from tenants.models import Tenant
+        self.fields['tenant'] = serializers.PrimaryKeyRelatedField(
+            queryset=Tenant.objects.filter(is_deleted=False),
+            required=False,
+            allow_null=True,
+            help_text="租户ID，如果未提供将从当前用户自动获取"
+        )
     
     class Meta:
         model = TenantLicenseQuota
         fields = [
-            'id', 'tenant', 'tenant_name', 'product', 'product_name',
+            'id', 'tenant', 'tenant_name', 'application', 'application_name',
             'max_licenses', 'current_licenses', 'quota_start_date',
             'quota_end_date', 'is_active', 'usage_percentage'
         ]
         read_only_fields = ['id', 'current_licenses']
     
+    @extend_schema_field(serializers.FloatField())
     def get_usage_percentage(self, obj):
         """获取配额使用百分比"""
         if obj.max_licenses > 0:
@@ -541,7 +639,7 @@ class LicenseReportSerializer(serializers.Serializer):
     
     start_date = serializers.DateField(required=False)
     end_date = serializers.DateField(required=False)
-    product_id = serializers.IntegerField(required=False)
+    application_id = serializers.IntegerField(required=False)
     tenant_id = serializers.IntegerField(required=False)
     report_type = serializers.ChoiceField(
         choices=['usage', 'activation', 'security', 'summary'],
@@ -632,6 +730,7 @@ class LicenseAssignmentSerializer(serializers.ModelSerializer):
             'effective_permissions', 'usage_summary'
         ]
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_member_info(self, obj):
         """获取成员基本信息"""
         if obj.member:
@@ -643,13 +742,14 @@ class LicenseAssignmentSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_license_info(self, obj):
         """获取许可证基本信息"""
         if obj.license:
             return {
                 'id': obj.license.id,
                 'license_key': obj.license.license_key[-8:] if obj.license.license_key else None,  # 只显示后8位
-                'product_name': obj.license.product.name if obj.license.product else None,
+                'application_name': obj.license.application.name if obj.license.application else None,
                 'plan_name': obj.license.plan.name if obj.license.plan else None,
                 'status': obj.license.status,
                 'max_activations': obj.license.max_activations,
@@ -658,6 +758,7 @@ class LicenseAssignmentSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_tenant_info(self, obj):
         """获取租户基本信息"""
         if obj.tenant:
@@ -668,6 +769,7 @@ class LicenseAssignmentSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_assigned_by_info(self, obj):
         """获取分配操作员信息"""
         if obj.assigned_by:
@@ -677,6 +779,7 @@ class LicenseAssignmentSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_revoked_by_info(self, obj):
         """获取撤销操作员信息"""
         if obj.revoked_by:
@@ -686,10 +789,12 @@ class LicenseAssignmentSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.BooleanField())
     def get_is_expired(self, obj):
         """检查分配是否已过期"""
         return obj.is_expired()
     
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_days_until_expiry(self, obj):
         """计算距离过期的天数"""
         if obj.expires_at and obj.status == 'active':
@@ -697,10 +802,12 @@ class LicenseAssignmentSerializer(serializers.ModelSerializer):
             return max(0, days)
         return None
     
+    @extend_schema_field(serializers.DictField())
     def get_effective_permissions(self, obj):
         """获取分配的有效权限"""
         return obj.get_effective_permissions()
     
+    @extend_schema_field(serializers.DictField())
     def get_usage_summary(self, obj):
         """获取使用情况摘要"""
         return {
@@ -792,19 +899,20 @@ class LicenseAssignmentCreateSerializer(serializers.ModelSerializer):
 # =============================================================================
 
 class AvailableProductSerializer(serializers.ModelSerializer):
-    """可申请产品序列化器"""
+    """可申请应用序列化器（向后兼容）"""
     
     trial_plans = serializers.SerializerMethodField()  # 改为复数，返回所有方案
     already_applied = serializers.SerializerMethodField()
     
     class Meta:
-        model = SoftwareProduct
+        model = Application
         fields = [
-            'id', 'name', 'code', 'description', 'version', 
+            'id', 'name', 'code', 'description', 'current_version', 
             'trial_plans',  # 改为复数
             'already_applied'
         ]
     
+    @extend_schema_field(serializers.ListField(child=serializers.DictField(), allow_null=True))
     def get_trial_plans(self, obj):
         """获取所有试用方案（按有效期从长到短排序）"""
         trial_plans = obj.license_plans.filter(
@@ -830,6 +938,7 @@ class AvailableProductSerializer(serializers.ModelSerializer):
         
         return plans_data if plans_data else None
     
+    @extend_schema_field(serializers.BooleanField())
     def get_already_applied(self, obj):
         """检查是否已经申请过（只包含有效和待激活状态）"""
         request = self.context.get('request')
@@ -841,7 +950,7 @@ class AvailableProductSerializer(serializers.ModelSerializer):
         # 排除 revoked（已撤销）、expired（已过期）、suspended（已挂起）等状态
         assignments = LicenseAssignment.objects.filter(
             member=request.user,
-            license__product=obj,
+            license__application=obj,
             license__is_deleted=False,  # 排除已删除的许可证
             status__in=['active', 'pending']  # 只包含有效和待激活状态
         )
@@ -862,7 +971,7 @@ class AvailableProductSerializer(serializers.ModelSerializer):
 class LicenseApplicationSerializer(serializers.Serializer):
     """许可证申请序列化器"""
     
-    product_id = serializers.IntegerField(
+    application_id = serializers.IntegerField(
         help_text="产品ID"
     )
     plan_id = serializers.IntegerField(
@@ -880,28 +989,28 @@ class LicenseApplicationSerializer(serializers.Serializer):
         help_text="用户补充信息，如：{'company': '公司名称', 'job_title': '职位', 'phone': '手机号', 'intended_use': '使用用途'}"
     )
     
-    def validate_product_id(self, value):
-        """验证产品ID"""
+    def validate_application_id(self, value):
+        """验证应用ID"""
         try:
-            product = SoftwareProduct.objects.get(
+            application = Application.objects.get(
                 id=value, 
                 status='active',
                 is_deleted=False
             )
             
             # 检查是否有试用方案
-            trial_plan = product.license_plans.filter(
+            trial_plan = application.license_plans.filter(
                 plan_type='trial',
                 status='active'
             ).first()
             
             if not trial_plan:
-                raise serializers.ValidationError("No trial plan available for this product")
+                raise serializers.ValidationError("No trial plan available for this application")
             
             return value
             
-        except SoftwareProduct.DoesNotExist:
-            raise serializers.ValidationError("Product does not exist or is unavailable")
+        except Application.DoesNotExist:
+            raise serializers.ValidationError("Application does not exist or is unavailable")
     
     def validate_user_info(self, value):
         """验证用户补充信息"""
@@ -931,18 +1040,18 @@ class LicenseApplicationSerializer(serializers.Serializer):
             raise serializers.ValidationError("User is not authenticated")
         
         user = request.user
-        product_id = data['product_id']
+        application_id = data['application_id']
         
         # 检查重复申请（排除已删除的许可证）
         existing_application = LicenseAssignment.objects.filter(
             member=user,
-            license__product_id=product_id,
+            license__application_id=application_id,
             license__is_deleted=False,  # 排除已删除的许可证
             status__in=['active', 'pending']
         ).exists()
         
         if existing_application:
-            raise serializers.ValidationError("You have already applied for a license for this product")
+            raise serializers.ValidationError("You have already applied for a license for this application")
         
         # 检查申请频率（从配置文件获取限制）
         from datetime import timedelta
@@ -981,9 +1090,9 @@ class LicenseApplicationSerializer(serializers.Serializer):
 class MemberLicenseSerializer(serializers.ModelSerializer):
     """Member用户许可证序列化器"""
     
-    product_name = serializers.CharField(source='license.product.name', read_only=True)
-    product_code = serializers.CharField(source='license.product.code', read_only=True)
-    product_version = serializers.CharField(source='license.product.version', read_only=True)
+    application_name = serializers.CharField(source='license.application.name', read_only=True)
+    application_code = serializers.CharField(source='license.application.code', read_only=True)
+    application_version = serializers.CharField(source='license.application.current_version', read_only=True)
     plan_name = serializers.CharField(source='license.plan.name', read_only=True)
     plan_type = serializers.CharField(source='license.plan.plan_type', read_only=True)
     license_key_preview = serializers.SerializerMethodField()
@@ -995,7 +1104,7 @@ class MemberLicenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = LicenseAssignment
         fields = [
-            'id', 'product_name', 'product_code', 'product_version',
+            'id', 'application_name', 'application_code', 'application_version',
             'plan_name', 'plan_type', 'license_key_preview', 
             'status', 'status_display', 'assignment_type',
             'assigned_at', 'activated_at', 'expires_at', 'days_until_expiry',
@@ -1008,6 +1117,7 @@ class MemberLicenseSerializer(serializers.ModelSerializer):
             'last_used_at', 'last_heartbeat'
         ]
     
+    @extend_schema_field(serializers.CharField())
     def get_license_key_preview(self, obj):
         """许可证密钥预览（只显示部分）"""
         if obj.license and obj.license.license_key:
@@ -1018,6 +1128,7 @@ class MemberLicenseSerializer(serializers.ModelSerializer):
                 return f"{key[:3]}...{key[-2:]}"
         return None
     
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_days_until_expiry(self, obj):
         """距离过期的天数"""
         if obj.expires_at:
@@ -1026,6 +1137,7 @@ class MemberLicenseSerializer(serializers.ModelSerializer):
             return max(0, delta.days) if delta.total_seconds() > 0 else 0
         return None
     
+    @extend_schema_field(serializers.BooleanField())
     def get_can_activate_license(self, obj):
         """检查是否可以激活许可证"""
         if obj.status != 'active':
@@ -1046,6 +1158,7 @@ class MemberLicenseSerializer(serializers.ModelSerializer):
         
         return obj.can_activate
     
+    @extend_schema_field(serializers.DictField())
     def get_activation_info(self, obj):
         """获取激活信息"""
         if obj.license:
@@ -1103,6 +1216,7 @@ class MemberMachineBindingSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'machine_id', 'machine_fingerprint', 'first_seen_at', 'last_seen_at']
     
+    @extend_schema_field(serializers.CharField())
     def get_os_name(self, obj):
         """获取操作系统名称"""
         os_info = obj.os_info or {}
@@ -1112,6 +1226,7 @@ class MemberMachineBindingSerializer(serializers.ModelSerializer):
             return f"{os_name} {os_version}"
         return os_name
     
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_days_since_last_seen(self, obj):
         """获取距离最后活跃的天数"""
         if obj.last_seen_at:

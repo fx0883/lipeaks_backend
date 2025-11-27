@@ -10,6 +10,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 
 from common.permissions import IsAdmin, IsSuperAdmin
+from common.viewsets import TenantModelViewSet
 from customers.models import Customer
 from customers.serializers import (
     CustomerSerializer, CustomerListSerializer, CustomerStatisticsSerializer,
@@ -172,12 +173,15 @@ logger = logging.getLogger(__name__)
         tags=["客户管理"]
     ),
 )
-class CustomerViewSet(viewsets.ModelViewSet):
+class CustomerViewSet(TenantModelViewSet):
     """
     客户管理视图集
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    
     提供客户的增删改查、搜索、筛选、统计等功能
     """
+    queryset = Customer.objects.all()
     permission_classes = [IsAdmin]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'type', 'value_level', 'company_size', 'is_deleted']
@@ -201,9 +205,10 @@ class CustomerViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """
-        获取客户查询集，默认不返回已删除的客户，并且根据current租户进行过滤
+        获取客户查询集，TenantModelViewSet已经处理租户过滤
+        默认不返回已删除的客户
         """
-        queryset = Customer.objects.all()  # 使用BaseModel的TenantManager自动过滤租户
+        queryset = super().get_queryset()  # 租户过滤已处理
         
         # 默认不显示已删除客户，除非明确要求
         show_deleted = self.request.query_params.get('show_deleted', 'false').lower() == 'true'
@@ -214,11 +219,10 @@ class CustomerViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """
-        创建客户时记录创建者和设置租户
+        创建客户时记录创建者
+        TenantModelViewSet自动设置租户
         """
-        # 从请求上下文获取current租户
-        tenant = self.request.user.tenant
-        serializer.save(created_by=self.request.user.username, tenant=tenant)
+        serializer.save(created_by=self.request.user.username)
     
     def perform_update(self, serializer):
         """

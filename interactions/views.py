@@ -9,8 +9,9 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse, OpenApiTypes
 import logging
 
-from common.authentication.jwt_auth import JWTAuthentication
+from common.authentication.api_auth import APIJWTAuthentication
 from common.pagination import StandardResultsSetPagination
+from common.viewsets import TenantModelViewSet
 from cms.models import Article, ArticleStatistics
 from users.models import Member
 from .models import ArticleFavorite, MemberLike, MemberFollow, ArticleLike
@@ -182,24 +183,27 @@ logger = logging.getLogger(__name__)
         }
     )
 )
-class ArticleFavoriteViewSet(viewsets.ModelViewSet):
+class ArticleFavoriteViewSet(TenantModelViewSet):
     """
     文章收藏视图集
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    
     提供文章收藏的增删查功能
     """
+    queryset = ArticleFavorite.objects.all().select_related('user', 'article', 'tenant')
     serializer_class = ArticleFavoriteSerializer
     permission_classes = [ArticleFavoritePermission]
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     pagination_class = StandardResultsSetPagination
-    queryset = ArticleFavorite.objects.all().select_related('user', 'article', 'tenant')
     
     def get_queryset(self):
         """
-        获取当前用户的收藏列表
+        获取当前用户的收藏列表，先调用父类获取租户过滤的queryset
         """
+        queryset = super().get_queryset()
         user = self.request.user
-        return self.queryset.filter(user=user, tenant=user.tenant)
+        return queryset.filter(user=user)
     
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -211,11 +215,12 @@ class ArticleFavoriteViewSet(viewsets.ModelViewSet):
         """
         执行收藏创建操作
         
-        - 自动设置当前用户和租户
+        - TenantModelViewSet自动设置租户
+        - 设置当前用户
         - 记录收藏时间
         """
         user = self.request.user
-        serializer.save(user=user, tenant=user.tenant)
+        serializer.save(user=user)
         logger.info(f"User {user.username} favorited article {serializer.instance.article_id}")
     
     @extend_schema(
@@ -511,24 +516,27 @@ class ArticleFavoriteViewSet(viewsets.ModelViewSet):
         }
     )
 )
-class MemberLikeViewSet(viewsets.ModelViewSet):
+class MemberLikeViewSet(TenantModelViewSet):
     """
     用户点赞视图集
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    
     提供Member用户之间点赞的增删查功能
     """
+    queryset = MemberLike.objects.all().select_related('from_member', 'to_member', 'tenant')
     serializer_class = MemberLikeSerializer
     permission_classes = [MemberLikePermission]
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     pagination_class = StandardResultsSetPagination
-    queryset = MemberLike.objects.all().select_related('from_member', 'to_member', 'tenant')
     
     def get_queryset(self):
         """
         获取当前用户发起的点赞列表
         """
+        queryset = super().get_queryset()
         member = self.request.user
-        return self.queryset.filter(from_member=member, tenant=member.tenant)
+        return queryset.filter(from_member=member)
     
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -540,11 +548,12 @@ class MemberLikeViewSet(viewsets.ModelViewSet):
         """
         执行点赞创建操作
         
-        - 自动设置当前用户和租户
+        - TenantModelViewSet自动设置租户
+        - 设置当前用户
         - 记录点赞时间
         """
         member = self.request.user
-        serializer.save(from_member=member, tenant=member.tenant)
+        serializer.save(from_member=member)
         logger.info(f"Member {member.username} liked member {serializer.instance.to_member_id}")
     
     @extend_schema(
@@ -923,24 +932,27 @@ class MemberLikeViewSet(viewsets.ModelViewSet):
         }
     )
 )
-class MemberFollowViewSet(viewsets.ModelViewSet):
+class MemberFollowViewSet(TenantModelViewSet):
     """
     用户关注视图集
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    
     提供Member用户之间关注的增删查功能
     """
+    queryset = MemberFollow.objects.all().select_related('follower', 'following', 'tenant')
     serializer_class = MemberFollowSerializer
     permission_classes = [MemberFollowPermission]
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     pagination_class = StandardResultsSetPagination
-    queryset = MemberFollow.objects.all().select_related('follower', 'following', 'tenant')
     
     def get_queryset(self):
         """
         获取当前用户发起的关注列表
         """
+        queryset = super().get_queryset()
         member = self.request.user
-        return self.queryset.filter(follower=member, tenant=member.tenant)
+        return queryset.filter(follower=member)
     
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -952,11 +964,12 @@ class MemberFollowViewSet(viewsets.ModelViewSet):
         """
         执行关注创建操作
         
-        - 自动设置当前用户和租户
+        - TenantModelViewSet自动设置租户
+        - 设置当前用户
         - 记录关注时间
         """
         member = self.request.user
-        serializer.save(follower=member, tenant=member.tenant)
+        serializer.save(follower=member)
         logger.info(f"Member {member.username} followed member {serializer.instance.following_id}")
     
     @extend_schema(
@@ -1373,10 +1386,11 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse, OpenApiTypes
 import logging
 
-from common.authentication.jwt_auth import JWTAuthentication
-from common.pagination import StandardResultsSetPagination
-from cms.models import Article, ArticleStatistics
-from users.models import Member
+# 已在文件开头导入，此处删除重复导入
+# from common.authentication.api_auth import APIJWTAuthentication
+# from common.pagination import StandardResultsSetPagination
+# from cms.models import Article, ArticleStatistics
+# from users.models import Member
 from .models import ArticleLike
 from .serializers import ArticleLikeSerializer, ArticleLikeCreateSerializer
 from .permissions import ArticleLikePermission
@@ -1550,24 +1564,27 @@ logger = logging.getLogger(__name__)
         }
     )
 )
-class ArticleLikeViewSet(viewsets.ModelViewSet):
+class ArticleLikeViewSet(TenantModelViewSet):
     """
     文章点赞视图集
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    
     提供文章点赞的增删查功能
     """
+    queryset = ArticleLike.objects.all().select_related('from_member', 'article', 'tenant')
     serializer_class = ArticleLikeSerializer
     permission_classes = [ArticleLikePermission]
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     pagination_class = StandardResultsSetPagination
-    queryset = ArticleLike.objects.all().select_related('from_member', 'article', 'tenant')
     
     def get_queryset(self):
         """
         获取当前Member用户的点赞列表
         """
+        queryset = super().get_queryset()
         member = self.request.user
-        return self.queryset.filter(from_member=member, tenant=member.tenant)
+        return queryset.filter(from_member=member)
     
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -1579,17 +1596,18 @@ class ArticleLikeViewSet(viewsets.ModelViewSet):
         """
         执行点赞创建操作
         
-        - 自动设置当前用户和租户
+        - TenantModelViewSet自动设置租户
+        - 设置当前用户
         - 记录IP和User-Agent
         - 更新文章统计的likes_count
         """
         member = self.request.user
         article = serializer.validated_data['article']
         
-        # 保存点赞记录
+        # 保存点赞记录（需要手动设置 tenant_id，因为 interactions 路径不在租户隔离列表中）
         like = serializer.save(
             from_member=member,
-            tenant=member.tenant,
+            tenant_id=member.tenant_id,
             ip_address=self.request.META.get('REMOTE_ADDR'),
             user_agent=self.request.META.get('HTTP_USER_AGENT', '')
         )

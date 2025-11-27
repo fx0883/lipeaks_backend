@@ -380,7 +380,15 @@ class RoleViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="从角色移除权限",
         description="从角色中移除指定权限",
-        tags=["RBAC系统"]
+        tags=["RBAC系统"],
+        parameters=[
+            OpenApiParameter(
+                name='permission_id',
+                type=int,
+                location=OpenApiParameter.PATH,
+                description='权限ID'
+            )
+        ]
     )
     @action(detail=True, methods=['delete'], url_path='permissions/(?P<permission_id>[^/.]+)')
     def remove_permission(self, request, pk=None, permission_id=None):

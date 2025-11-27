@@ -53,7 +53,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = get_required_env('SECRET_KEY', 'django-insecure-w7&3bzjc1s*bty@)%c3w&#fro!wu5@(9jxac46lqm^klo9^1df')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = get_env_with_validation('DEBUG', lambda x: x.lower() == 'true', 'True')
+DEBUG = get_env_with_validation('INFO', lambda x: x.lower() == 'true', 'True')
 
 # 从环境变量读取日志输出方式，默认跟随DEBUG设置
 LOG_TO_CONSOLE = os.getenv('LOG_TO_CONSOLE', str(DEBUG)).lower() == 'true'
@@ -100,6 +100,7 @@ INSTALLED_APPS = [
     'orders',  # 订单管理应用
     'licenses',  # 许可证管理应用
     'points',  # 多租户积分系统
+    'applications',  # 应用管理（整合licenses和feedbacks的软件实体）
     'feedbacks',  # User Feedback System
     'interactions',  # 用户互动应用（收藏、点赞等）
 ]
@@ -109,6 +110,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # CORS中间件提前
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',  # 多语言支持（墖理 Accept-Language）
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',  # 保持CSRF中间件位置
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -194,6 +196,21 @@ USE_I18N = True
 
 USE_TZ = True
 
+# 支持的语言列表
+LANGUAGES = [
+    ('zh-hans', '简体中文'),
+    ('zh-hant', '繁體中文'),
+    ('en', 'English'),
+    ('ja', '日本語'),
+    ('ko', '한국어'),
+    ('fr', 'Français'),
+]
+
+# 翻译文件路径
+LOCALE_PATHS = [
+    os.path.join(BASE_DIR, 'locale'),
+]
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -250,7 +267,8 @@ REST_FRAMEWORK = {
 JWT_AUTH = {
     'JWT_SECRET_KEY': SECRET_KEY,
     'JWT_ALGORITHM': 'HS256',
-    'JWT_EXPIRATION_DELTA': 7 * 24 * 3600,  # 24小时有效期
+    # 'JWT_EXPIRATION_DELTA': 7 * 24 * 3600,  # 24小时有效期
+    'JWT_EXPIRATION_DELTA': 60,
     'JWT_REFRESH_EXPIRATION_DELTA': 28 * 24 * 3600,  # 7天刷新期
 }
 
@@ -388,6 +406,10 @@ SPECTACULAR_SETTINGS = {
             'description': '请输入 "Bearer {token}" 格式的JWT令牌'
         }
     },
+    # 只使用APIJWTAuthentication，避免重复的Bearer组件
+    'AUTHENTICATION_WHITELIST': [
+        'common.authentication.api_auth.APIJWTAuthentication',
+    ],
     # 添加JWT认证映射
     'COMPONENT_SPLIT_REQUEST': True,
     'COMPONENT_NO_READ_ONLY_REQUIRED': False,
@@ -445,14 +467,14 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',  # 使用轮转日志
-            'filename': get_log_filename('debug'),  # 使用带日期的文件名
+            'filename': get_log_filename('INFO'),  # 使用带日期的文件名
             'maxBytes': 10 * 1024 * 1024,  # 10MB
             'backupCount': 5,  # 保留5个备份文件
             'formatter': 'verbose',
@@ -478,20 +500,32 @@ LOGGING = {
         'drf_spectacular': {
             # 根据LOG_TO_CONSOLE环境变量决定日志输出方式
             'handlers': ['console'] if LOG_TO_CONSOLE else ['file'],
-            'level': 'DEBUG',
+            'level': 'INFO',
             'propagate': True,
+        },
+        'users': {
+            'handlers': ['console'] if LOG_TO_CONSOLE else ['file', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
         },
     },
 }
 
 # 邮件设置（QQ邮箱SMTP）
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# 支持通过环境变量控制：EMAIL_USE_CONSOLE=true 使用控制台模式（仅调试）
+USE_CONSOLE_EMAIL = os.getenv('EMAIL_USE_CONSOLE', 'false').lower() == 'true'
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' if USE_CONSOLE_EMAIL else 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.qq.com'
 EMAIL_PORT = 465
 EMAIL_USE_SSL = True
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')  # QQ邮箱地址
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')  # QQ邮箱授权码
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')  # 发件人邮箱
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER if EMAIL_HOST_USER else 'noreply@example.com')  # 发件人邮箱
+EMAIL_TIMEOUT = 30  # SMTP 连接超时（秒）
+
+# 网站基础 URL（用于生成邮件中的链接）
+# 生产环境应设置为实际域名，如 https://api.example.com
+SITE_URL = os.getenv('SITE_URL', '')
 
 # 前端URL（用于构建密码重置链接）
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
@@ -570,3 +604,32 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
 # 设置为 50MB，防止恶意请求
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000  # 表单字段数量限制
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB - 在内存中处理的最大文件大小
+
+# ============================================================================
+# 租户隔离配置 (Tenant Isolation Configuration)
+# ============================================================================
+# 需要租户隔离的API路径前缀
+# 这些路径会在中间件和ViewSet两个层面进行租户验证和过滤
+TENANT_ISOLATED_API_PATHS = [
+    '/api/v1/cms/',           # CMS内容管理
+    '/api/v1/applications/',  # 应用管理
+    '/api/v1/licenses/',      # 许可证管理
+    '/api/v1/feedbacks/',     # 反馈管理
+    '/api/v1/customers/',     # 客户管理
+    '/api/v1/orders/',        # 订单管理
+]
+
+# 公开API路径（不需要租户验证）
+# 即使在TENANT_ISOLATED_API_PATHS范围内，这些路径也会被排除
+# 主要用于客户端激活、验证、健康检查等公开接口
+TENANT_PUBLIC_API_PATHS = [
+    '/api/v1/licenses/status/',      # 服务器状态检查
+    '/api/v1/licenses/activate/',    # 许可证激活
+    '/api/v1/licenses/verify/',      # 激活验证
+    '/api/v1/licenses/heartbeat/',   # 心跳检测
+    '/api/v1/licenses/unbind/',      # 解绑许可证
+    '/api/v1/licenses/info/',        # 许可证信息查询（前缀匹配）
+    '/api/v1/feedbacks/submit/',     # 反馈提交页面（公开HTML表单）
+    '/api/v1/feedbacks/health/',     # 健康检查
+    '/api/v1/members/password-reset/',  # Member密码重置页面（公开HTML表单）
+]

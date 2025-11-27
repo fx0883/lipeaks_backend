@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 
 from common.permissions import IsAdmin, IsSuperAdmin
+from common.viewsets import TenantModelViewSet
 from customers.models import Customer, CustomerMemberRelation
 from customers.serializers import CustomerMemberRelationSerializer, CustomerMemberRelationDetailSerializer
 from users.models import Member
@@ -52,12 +53,15 @@ logger = logging.getLogger(__name__)
         tags=["客户-联系人关系"]
     ),
 )
-class CustomerMemberRelationViewSet(viewsets.ModelViewSet):
+class CustomerMemberRelationViewSet(TenantModelViewSet):
     """
     客户-联系人关系视图集
     
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    
     提供客户与联系人关系的管理功能
     """
+    queryset = CustomerMemberRelation.objects.all()
     permission_classes = [IsAdmin]
     
     def get_serializer_class(self):
@@ -70,9 +74,10 @@ class CustomerMemberRelationViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """
-        获取查询集，可以按客户ID过滤，并且根据current租户进行过滤
+        获取查询集，TenantModelViewSet已经处理租户过滤
+        可以按客户ID过滤
         """
-        queryset = CustomerMemberRelation.objects.all()  # 使用BaseModel的TenantManager自动过滤租户
+        queryset = super().get_queryset()  # 租户过滤已处理
         
         # 如果提供了customer_id参数，则按客户ID过滤
         customer_id = self.request.query_params.get('customer_id')

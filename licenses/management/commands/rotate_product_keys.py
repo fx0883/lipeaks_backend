@@ -4,7 +4,8 @@
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
-from licenses.models import SoftwareProduct
+# 此命令已废弃 - SoftwareProduct已删除，密钥管理已移至Application.metadata
+from applications.models import Application
 from licenses.services.security_service import SecurityService
 from tenants.models import Tenant
 import logging
@@ -38,7 +39,12 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        try:
+        raise CommandError(
+            '此命令已废弃。SoftwareProduct已删除，密钥管理已移至Application.metadata。'
+            '\n请直接修改Application的metadata字段来管理密钥。'
+        )
+        # 以下代码已废弃
+        if False:
             security_service = SecurityService()
             
             # 获取要轮换的产品列表

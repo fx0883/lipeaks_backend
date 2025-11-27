@@ -16,6 +16,7 @@ from django.utils.translation import gettext_lazy as _
 from django.db.models import Q, Count, Avg, Sum
 from django.utils import timezone
 from datetime import timedelta
+from common.viewsets import TenantModelViewSet
 from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
@@ -70,16 +71,19 @@ from .permissions import (
         }
     )
 )
-class FeedbackReplyViewSet(viewsets.ModelViewSet):
-    """ViewSet for feedback replies"""
+class FeedbackReplyViewSet(TenantModelViewSet):
+    """
+    ViewSet for feedback replies
+    
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
     serializer_class = FeedbackReplySerializer
     permission_classes = [FeedbackReplyPermission]
     
     def get_queryset(self):
         feedback_id = self.kwargs.get('feedback_pk')
         queryset = FeedbackReply.objects.filter(
-            feedback_id=feedback_id,
-            is_deleted=False
+            feedback_id=feedback_id
         )
         
         # Non-staff users don't see internal notes
@@ -140,17 +144,45 @@ class FeedbackVoteView(APIView):
         if vote_type not in [1, -1]:
             return Response({'error': 'Invalid vote type'}, status=400)
         
+        # 获取租户
+        tenant = self._get_tenant_from_request(request)
+        
         vote, created = FeedbackVote.objects.update_or_create(
             feedback=feedback,
             user=request.user,
-            defaults={'vote_type': vote_type}
+            defaults={'vote_type': vote_type, 'tenant': tenant}
         )
+        
+        # 刷新获取最新的vote_count
+        feedback.refresh_from_db()
         
         return Response({
             'message': 'Vote recorded',
             'vote_type': vote_type,
             'total_votes': feedback.vote_count
         })
+    
+    def _get_tenant_from_request(self, request):
+        """从request中获取租户"""
+        # 1. 尝试从request属性获取
+        tenant = getattr(request, 'tenant', None)
+        if tenant:
+            return tenant
+        
+        # 2. 尝试从线程本地存储获取
+        from common.utils.tenant_context import get_current_tenant
+        tenant = get_current_tenant()
+        if tenant:
+            return tenant
+        
+        # 3. 尝试从用户关联的租户获取
+        user = getattr(request, 'user', None)
+        if user and user.is_authenticated:
+            tenant = getattr(user, 'tenant', None)
+            if tenant:
+                return tenant
+        
+        return None
     
     @extend_schema(
         tags=['Feedback System'],
@@ -256,7 +288,7 @@ class FeedbackStatisticsView(APIView):
         date_to = query_params.get('date_to')
         
         # Base queryset
-        queryset = Feedback.objects.filter(is_deleted=False)
+        queryset = Feedback.objects.all()
         
         if hasattr(request, 'tenant'):
             queryset = queryset.filter(tenant=request.tenant)
@@ -374,16 +406,23 @@ class FeedbackStatisticsView(APIView):
         }
     )
 )
-class FeedbackAttachmentViewSet(viewsets.ModelViewSet):
-    """ViewSet for feedback attachments"""
+class FeedbackAttachmentViewSet(TenantModelViewSet):
+    """
+    ViewSet for feedback attachments
+    
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
     serializer_class = FeedbackAttachmentSerializer
     parser_classes = (MultiPartParser, FormParser)
     
     def get_queryset(self):
+        # 先获取租户过滤的queryset
+        queryset = super().get_queryset()
+        
+        # 然后按feedback_id过滤
         feedback_id = self.kwargs.get('feedback_pk')
-        return FeedbackAttachment.objects.filter(
-            feedback_id=feedback_id,
-            is_deleted=False
+        return queryset.filter(
+            feedback_id=feedback_id
         )
 
 
@@ -428,16 +467,19 @@ class FeedbackAttachmentViewSet(viewsets.ModelViewSet):
         }
     )
 )
-class EmailTemplateViewSet(viewsets.ModelViewSet):
-    """ViewSet for email templates"""
-    queryset = EmailTemplate.objects.filter(is_deleted=False)
+class EmailTemplateViewSet(TenantModelViewSet):
+    """
+    ViewSet for email templates
+    
+    继承TenantModelViewSet自动处理租户过滤、设置和验证
+    """
+    queryset = EmailTemplate.objects.all()
     serializer_class = EmailTemplateSerializer
     permission_classes = [EmailTemplatePermission]
     
     def get_queryset(self):
+        # TenantModelViewSet已经处理租户过滤
         queryset = super().get_queryset()
-        if hasattr(self.request, 'tenant'):
-            queryset = queryset.filter(tenant=self.request.tenant)
         return queryset
 
 
@@ -476,7 +518,7 @@ class EmailTemplateViewSet(viewsets.ModelViewSet):
 )
 class EmailLogViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for email logs (read-only)"""
-    queryset = FeedbackEmailLog.objects.filter(is_deleted=False)
+    queryset = FeedbackEmailLog.objects.all()
     serializer_class = FeedbackEmailLogSerializer
     
     def get_queryset(self):

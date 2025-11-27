@@ -14,9 +14,10 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParamet
 from drf_spectacular.types import OpenApiTypes
 from common.permissions import IsSuperAdminOrTenantAdmin
 from common.authentication.jwt_auth import JWTAuthentication
+from applications.models import Application
 from licenses.models import (
     License, LicenseActivation, LicenseUsageLog, MachineBinding, 
-    SecurityAuditLog, SoftwareProduct
+    SecurityAuditLog
 )
 from licenses.serializers import LicenseReportSerializer
 import logging
@@ -635,7 +636,7 @@ def license_statistics(request):
         activation_rate = (active / total * 100) if total > 0 else 0
         
         # 产品统计
-        product_stats = SoftwareProduct.objects.aggregate(
+        product_stats = Application.objects.aggregate(
             total_products=Count('id'),
             active_products=Count('id', filter=Q(status='active')),
             inactive_products=Count('id', filter=Q(status='inactive'))

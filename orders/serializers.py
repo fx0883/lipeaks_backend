@@ -3,6 +3,7 @@
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from django.utils.translation import gettext_lazy as _
 from .models import Order, OrderHistory
 from customers.serializers import CustomerListSerializer
@@ -43,24 +44,28 @@ class OrderSerializer(serializers.ModelSerializer):
         # 调用父类方法继续处理
         return super().to_internal_value(data)
     
+    @extend_schema_field(serializers.FloatField)
     def get_profit(self, obj):
         """
         获取订单毛利
         """
         return obj.calculate_profit()
     
+    @extend_schema_field(serializers.CharField)
     def get_formatted_profit(self, obj):
         """
         获取格式化的订单毛利（带货币符号）
         """
         return f"¥{obj.calculate_profit():.2f}"
     
+    @extend_schema_field(serializers.FloatField)
     def get_profit_rate(self, obj):
         """
         获取订单毛利率
         """
         return obj.calculate_profit_rate()
     
+    @extend_schema_field(serializers.CharField)
     def get_formatted_profit_rate(self, obj):
         """
         获取格式化的订单毛利率（百分比形式）
@@ -193,6 +198,7 @@ class OrderHistorySerializer(serializers.ModelSerializer):
                  'change_details', 'change_details_data', 'snapshot', 'snapshot_data']
         read_only_fields = ('order', 'version', 'modified_by', 'modified_at', 'change_details', 'snapshot')
     
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_modified_by_name(self, obj):
         """
         获取修改人姓名
@@ -201,6 +207,7 @@ class OrderHistorySerializer(serializers.ModelSerializer):
             return obj.modified_by.username
         return None
     
+    @extend_schema_field(serializers.DictField)
     def get_change_details_data(self, obj):
         """
         将变更详情JSON字符串转换为Python对象
@@ -213,6 +220,7 @@ class OrderHistorySerializer(serializers.ModelSerializer):
             pass
         return {}
     
+    @extend_schema_field(serializers.DictField)
     def get_snapshot_data(self, obj):
         """
         将快照JSON字符串转换为Python对象
@@ -300,30 +308,35 @@ class OrderListSerializer(serializers.ModelSerializer):
         fields = '__all__'  # 修改为包含所有字段
         read_only_fields = ('created_at', 'updated_at', 'is_deleted', 'order_number', 'tenant')
     
+    @extend_schema_field(serializers.FloatField)
     def get_profit(self, obj):
         """
         获取订单毛利
         """
         return obj.calculate_profit()
     
+    @extend_schema_field(serializers.FloatField)
     def get_profit_rate(self, obj):
         """
         获取订单毛利率
         """
         return obj.calculate_profit_rate()
     
+    @extend_schema_field(serializers.CharField)
     def get_formatted_profit(self, obj):
         """
         获取格式化的订单毛利（带货币符号）
         """
         return f"¥{obj.calculate_profit():.2f}"
     
+    @extend_schema_field(serializers.CharField)
     def get_formatted_profit_rate(self, obj):
         """
         获取格式化的订单毛利率（百分比形式）
         """
         return f"{obj.calculate_profit_rate():.2%}"
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_created_by_info(self, obj):
         """
         获取创建人信息
@@ -343,6 +356,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             }
         return None
     
+    @extend_schema_field(serializers.DictField(allow_null=True))
     def get_customer_contact_info(self, obj):
         """
         获取客户联系人信息
@@ -379,6 +393,7 @@ class OrderDetailSerializer(OrderSerializer):
         fields = '__all__'
         read_only_fields = ('created_at', 'updated_at', 'is_deleted', 'order_number', 'tenant')
     
+    @extend_schema_field(serializers.IntegerField)
     def get_history_count(self, obj):
         """
         获取历史记录数量

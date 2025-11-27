@@ -14,6 +14,13 @@ class APIJWTAuthentication(JWTAuthentication):
     对于非API路径（如后台管理界面），直接返回None，交由其他认证类处理
     """
     
+    # 重写认证scheme名称，避免与JWTAuthentication冲突
+    def authenticate_header(self, request):
+        """
+        返回认证头字符串，使用API-Bearer避免与基础Bearer冲突
+        """
+        return 'Bearer'
+    
     def authenticate(self, request):
         """
         重写authenticate方法，只对API路径下的请求进行JWT认证

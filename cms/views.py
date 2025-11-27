@@ -1,7 +1,7 @@
 """
 CMS系统视图
 """
-from django.db.models import Q, Count, Avg
+from django.db.models import Q, Count, Avg, F
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from django.http import Http404
@@ -16,7 +16,7 @@ from rest_framework.exceptions import ValidationError
 
 from common.permissions import IsSuperAdmin, IsAdmin
 from common.pagination import StandardResultsSetPagination
-from common.authentication.jwt_auth import JWTAuthentication
+from common.authentication.api_auth import APIJWTAuthentication
 from common.viewsets import TenantModelViewSet
 from common.exceptions import CMSException, TenantException
 from common.utils.user_permissions import (
@@ -66,6 +66,7 @@ logger = logging.getLogger(__name__)
             OpenApiParameter(name="visibility", description="可见性过滤", required=False, type=str, enum=["public", "private", "password"]),
             OpenApiParameter(name="date_from", description="发布日期起始，格式YYYY-MM-DD", required=False, type=str),
             OpenApiParameter(name="date_to", description="发布日期截止，格式YYYY-MM-DD", required=False, type=str),
+            OpenApiParameter(name="application", description="应用ID过滤（可选）", required=False, type=int),
             OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=False, type=str, location=OpenApiParameter.HEADER),
         ],
         examples=[
@@ -261,7 +262,7 @@ class ArticleViewSet(TenantModelViewSet):
     继承自TenantModelViewSet，自动处理租户隔离
     支持按作者类型过滤：author_type=member（Member作者）或author_type=admin（管理员作者）
     """
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [APIJWTAuthentication]
     permission_classes = [ArticlePermission]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -298,6 +299,11 @@ class ArticleViewSet(TenantModelViewSet):
         category_id = self.request.query_params.get('category_id')
         if category_id:
             queryset = queryset.filter(article_categories__category_id=category_id)
+        
+        # 处理分类应用过滤（通过分类关联的应用过滤文章）
+        category_application_id = self.request.query_params.get('category_application_id')
+        if category_application_id:
+            queryset = queryset.filter(article_categories__category__application_id=category_application_id)
         
         # 处理标签过滤
         tag_id = self.request.query_params.get('tag_id')
@@ -349,6 +355,15 @@ class ArticleViewSet(TenantModelViewSet):
         if date_to:
             queryset = queryset.filter(published_at__date__lte=date_to)
         
+        # 处理应用过滤（可选）
+        application = self.request.query_params.get('application')
+        if application:
+            from .models import ArticleApplication
+            article_ids = ArticleApplication.objects.filter(
+                application_id=application
+            ).values_list('article_id', flat=True)
+            queryset = queryset.filter(id__in=article_ids)
+
         # 处理排序
         sort = self.request.query_params.get('sort')
         sort_direction = self.request.query_params.get('sort_direction', 'desc')
@@ -356,7 +371,7 @@ class ArticleViewSet(TenantModelViewSet):
         if sort:
             if sort == 'views_count':
                 # 特殊处理浏览量排序，因为它在关联表中
-                queryset = queryset.annotate(views=models.F('statistics__views_count'))
+                queryset = queryset.annotate(views=F('statistics__views_count'))
                 order_field = 'views'
             else:
                 order_field = sort
@@ -678,13 +693,15 @@ class ArticleViewSet(TenantModelViewSet):
         # 时间序列数据（按天统计）
         time_series_data = {}
         if logs_query.exists():
-            # 按天分组统计访问量
-            views_by_date = logs_query.values('check_date') \
+            # 按天分组统计访问量（使用TruncDate提取日期部分）
+            from django.db.models.functions import TruncDate
+            views_by_date = logs_query.annotate(date=TruncDate('created_at')) \
+                            .values('date') \
                             .annotate(count=Count('id')) \
-                            .order_by('check_date')
+                            .order_by('date')
             
             time_series_data['views'] = [
-                {'date': item['check_date'], 'count': item['count']} 
+                {'date': str(item['date']), 'count': item['count']} 
                 for item in views_by_date
             ]
             
@@ -1350,12 +1367,12 @@ class CategoryViewSet(TenantModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [CategoryPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['parent', 'is_active', 'is_pinned']
+    filterset_fields = ['parent', 'is_active', 'is_pinned', 'application']
     search_fields = ['translations__name', 'slug', 'translations__description']  # 搜索翻译字段
     ordering_fields = ['sort_order', 'created_at', 'is_pinned']  # 移除name（翻译字段不能直接排序）
     ordering = ['-is_pinned', 'sort_order', 'id']  # 使用id替代name
     pagination_class = None  # 禁用分页
-    queryset = Category.objects.all().select_related('parent', 'tenant')  # 添加select_related优化查询
+    queryset = Category.objects.all().select_related('parent', 'tenant', 'application')  # 添加select_related优化查询
     
     def get_queryset(self):
         """

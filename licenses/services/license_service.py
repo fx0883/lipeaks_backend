@@ -14,8 +14,9 @@ from typing import Dict, Any, Optional, Tuple
 from django.utils import timezone
 from django.db import transaction
 from django.core.exceptions import ValidationError
+from applications.models import Application
 from licenses.models import (
-    SoftwareProduct, LicensePlan, License, MachineBinding, 
+    LicensePlan, License, MachineBinding, 
     LicenseActivation, SecurityAuditLog
 )
 from licenses.services.security_service import SecurityService
@@ -33,7 +34,7 @@ class LicenseGenerationService:
     
     def generate_license_key(
         self, 
-        product: SoftwareProduct, 
+        product: Application, 
         plan: LicensePlan, 
         customer_info: Dict[str, Any] = None
     ) -> str:
@@ -66,7 +67,7 @@ class LicenseGenerationService:
             logger.error(f"许可证密钥生成失败: {str(e)}")
             raise Exception(f"许可证生成失败: {str(e)}")
     
-    def verify_license_key(self, license_key: str, product: SoftwareProduct) -> Dict[str, Any]:
+    def verify_license_key(self, license_key: str, product: Application) -> Dict[str, Any]:
         """
         验证许可证密钥有效性
         
@@ -133,7 +134,7 @@ class LicenseGenerationService:
             logger.error(f"许可证验证失败: {str(e)}")
             return {'valid': False, 'error': f'Verification error: {str(e)}'}
     
-    def _get_product_private_key(self, product: SoftwareProduct) -> bytes:
+    def _get_product_private_key(self, product: Application) -> bytes:
         """
         获取产品私钥（实际实现中应从安全存储获取）
         
@@ -595,7 +596,7 @@ class LicenseManagementService:
     @transaction.atomic
     def create_license(
         self,
-        product_id: int,
+        application_id: int,
         plan_id: int,
         tenant_id: int,
         customer_info: Dict[str, Any],
@@ -606,7 +607,7 @@ class LicenseManagementService:
         创建新许可证
         
         Args:
-            product_id: 产品ID
+            application_id: 应用ID
             plan_id: 方案ID
             tenant_id: 租户ID
             customer_info: 客户信息
@@ -617,14 +618,14 @@ class LicenseManagementService:
             License: 许可证对象
         """
         try:
-            # 获取产品和方案
-            product = SoftwareProduct.objects.get(id=product_id)
-            plan = LicensePlan.objects.get(id=plan_id, product=product)
+            # 获取应用和方案
+            application = Application.objects.get(id=application_id)
+            plan = LicensePlan.objects.get(id=plan_id, application=application)
             
             # 生成许可证密钥
             generation_service = LicenseGenerationService()
             license_key = generation_service.generate_license_key(
-                product, plan, customer_info
+                application, plan, customer_info
             )
             
             # 计算过期时间
@@ -644,7 +645,7 @@ class LicenseManagementService:
             
             # 创建许可证记录
             license_obj = License.objects.create(
-                product=product,
+                application=application,
                 plan=plan,
                 tenant_id=tenant_id,
                 license_key=license_key,
@@ -664,7 +665,7 @@ class LicenseManagementService:
                 tenant_id=tenant_id,
                 details={
                     'license_id': license_obj.id,
-                    'product': product.code,
+                    'application': application.code,
                     'plan': plan.code,
                     'customer_name': customer_info.get('name', '')
                 }

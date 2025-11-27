@@ -297,9 +297,9 @@ class UserRoleUpdateSerializer(serializers.Serializer):
         return instance
 
 
-class UserRoleSerializer(serializers.ModelSerializer):
+class UserRoleUpdateSerializer(serializers.ModelSerializer):
     """
-    用户角色序列化器，用于更新用户角色
+    用户角色更新序列化器，用于更新用户角色
     """
     is_member = serializers.BooleanField(required=False)
     

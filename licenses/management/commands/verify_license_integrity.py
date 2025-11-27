@@ -4,7 +4,9 @@
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
-from licenses.models import SoftwareProduct, License
+# 此命令已废弃 - License模型不再有product字段
+# 请使用新的验证方法
+from licenses.models import License
 from licenses.services.license_service import LicenseGenerationService
 from tenants.models import Tenant
 import logging
@@ -44,7 +46,12 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        try:
+        raise CommandError(
+            '此命令已废弃。License模型已重构，不再有product字段。'
+            '\n请使用新的许可证验证API端点进行验证。'
+        )
+        # 以下代码已废弃
+        if False:
             generation_service = LicenseGenerationService()
             
             # 获取要验证的许可证列表
