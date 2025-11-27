@@ -14,6 +14,36 @@ from ..serializers import EmailTemplateSerializer, FeedbackEmailLogSerializer
 from ..permissions import EmailTemplatePermission, is_tenant_admin
 
 
+def get_tenant_from_request(request):
+    """
+    从request中获取租户
+    
+    优先级：
+    1. request.tenant (中间件设置)
+    2. get_current_tenant() (线程本地存储)
+    3. request.user.tenant (用户关联的租户)
+    """
+    # 1. 尝试从request属性获取
+    tenant = getattr(request, 'tenant', None)
+    if tenant:
+        return tenant
+    
+    # 2. 尝试从线程本地存储获取
+    from common.utils.tenant_context import get_current_tenant
+    tenant = get_current_tenant()
+    if tenant:
+        return tenant
+    
+    # 3. 尝试从用户关联的租户获取
+    user = getattr(request, 'user', None)
+    if user and user.is_authenticated:
+        tenant = getattr(user, 'tenant', None)
+        if tenant:
+            return tenant
+    
+    return None
+
+
 class EmailTemplateListView(APIView):
     """
     邮件模板列表视图
@@ -51,8 +81,9 @@ class EmailTemplateListView(APIView):
         queryset = EmailTemplate.objects.all()
         
         # 过滤租户
-        if hasattr(request, 'tenant') and request.tenant:
-            queryset = queryset.filter(tenant=request.tenant)
+        tenant = get_tenant_from_request(request)
+        if tenant:
+            queryset = queryset.filter(tenant=tenant)
         
         # 筛选条件
         template_type = request.query_params.get('template_type')
@@ -99,7 +130,7 @@ class EmailTemplateListView(APIView):
         serializer = EmailTemplateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             # 自动设置租户
-            tenant = getattr(request, 'tenant', None)
+            tenant = get_tenant_from_request(request)
             template = serializer.save(tenant=tenant)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
@@ -129,8 +160,9 @@ class EmailTemplateDetailView(APIView):
         """获取邮件模板对象"""
         try:
             queryset = EmailTemplate.objects.filter(pk=pk)
-            if hasattr(request, 'tenant') and request.tenant:
-                queryset = queryset.filter(tenant=request.tenant)
+            tenant = get_tenant_from_request(request)
+            if tenant:
+                queryset = queryset.filter(tenant=tenant)
             return queryset.get()
         except EmailTemplate.DoesNotExist:
             return None
@@ -336,8 +368,9 @@ class EmailLogListView(APIView):
         queryset = FeedbackEmailLog.objects.all()
         
         # 过滤租户
-        if hasattr(request, 'tenant') and request.tenant:
-            queryset = queryset.filter(tenant=request.tenant)
+        tenant = get_tenant_from_request(request)
+        if tenant:
+            queryset = queryset.filter(tenant=tenant)
         
         # 筛选条件
         feedback_id = request.query_params.get('feedback')
@@ -377,8 +410,9 @@ class EmailLogDetailView(APIView):
         """获取邮件日志对象"""
         try:
             queryset = FeedbackEmailLog.objects.filter(pk=pk)
-            if hasattr(request, 'tenant') and request.tenant:
-                queryset = queryset.filter(tenant=request.tenant)
+            tenant = get_tenant_from_request(request)
+            if tenant:
+                queryset = queryset.filter(tenant=tenant)
             return queryset.get()
         except FeedbackEmailLog.DoesNotExist:
             return None

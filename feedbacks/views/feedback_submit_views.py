@@ -24,7 +24,7 @@ class FeedbackSubmitPageView(FormView):
     Member 反馈提交页面视图
     GET: 显示反馈提交表单
     POST: 处理反馈提交
-    支持URL参数: ?tenant_id=1&software_id=2&member_token=xxx
+    支持URL参数: ?tenant_id=1&application_id=2&member_token=xxx
     """
     template_name = 'feedbacks/feedback_submit.html'
     form_class = FeedbackSubmitForm
@@ -34,7 +34,7 @@ class FeedbackSubmitPageView(FormView):
         """验证必需的URL参数"""
         # 初始化所有属性，避免 AttributeError
         self.tenant_id = request.GET.get('tenant_id')
-        self.application_id = request.GET.get('software_id')
+        self.application_id = request.GET.get('application_id')
         self.member_token = request.GET.get('member_token')
         self.tenant = None
         self.application = None
@@ -42,9 +42,9 @@ class FeedbackSubmitPageView(FormView):
         self.member_email = None
         self.member_name = None
         
-        # 验证 tenant_id 和 software_id
+        # 验证 tenant_id 和 application_id
         if not self.tenant_id or not self.application_id:
-            messages.error(request, _('Missing required parameters: tenant_id and software_id'))
+            messages.error(request, _('Missing required parameters: tenant_id and application_id'))
             return self.render_to_response(self.get_context_data(
                 form=None,
                 error_message=_('Invalid access. Please use the correct link.')
@@ -106,7 +106,7 @@ class FeedbackSubmitPageView(FormView):
         """传递参数给表单"""
         kwargs = super().get_form_kwargs()
         kwargs['initial_tenant_id'] = self.tenant_id
-        kwargs['initial_software_id'] = self.application_id
+        kwargs['initial_application_id'] = self.application_id
         kwargs['has_member_info'] = bool(self.member)
         
         # 如果有 member 信息，预填充表单
@@ -169,6 +169,15 @@ class FeedbackSubmitPageView(FormView):
                 f"Type={feedback_type}, "
                 f"Member={self.member.email if self.member else 'Anonymous'}"
             )
+            
+            # 触发新反馈通知邮件（异步处理，不影响用户体验）
+            try:
+                from feedbacks.services import EmailService
+                notification_result = EmailService.send_new_feedback_notification(feedback)
+                logger.info(f"New feedback notification triggered: {notification_result}")
+            except Exception as notify_error:
+                # 通知失败不影响反馈提交成功
+                logger.warning(f"Failed to trigger notification for feedback {feedback.id}: {notify_error}")
             
             messages.success(
                 self.request,

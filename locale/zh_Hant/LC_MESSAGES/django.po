@@ -1,0 +1,389 @@
+# Traditional Chinese translations for Feedback System
+msgid ""
+msgstr ""
+"Language: zh-hant\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Bug Report"
+msgstr "Bug 報告"
+
+msgid "Feature Request"
+msgstr "功能請求"
+
+msgid "Improvement"
+msgstr "改進建議"
+
+msgid "Question"
+msgstr "問題諮詢"
+
+msgid "Other"
+msgstr "其他"
+
+msgid "Critical"
+msgstr "緊急"
+
+msgid "High"
+msgstr "高"
+
+msgid "Medium"
+msgstr "中"
+
+msgid "Low"
+msgstr "低"
+
+msgid "Title"
+msgstr "標題"
+
+msgid "Description"
+msgstr "描述"
+
+msgid "Feedback Type"
+msgstr "反饋類型"
+
+msgid "Priority"
+msgstr "優先級"
+
+msgid "Contact Email"
+msgstr "聯繫郵箱"
+
+msgid "Contact Name"
+msgstr "聯繫人姓名"
+
+msgid "Brief description of the issue"
+msgstr "請簡要描述問題"
+
+msgid "Please describe the issue in detail"
+msgstr "請詳細描述問題"
+
+msgid "Your email address for updates"
+msgstr "用於接收更新的郵箱地址"
+
+msgid "Your name"
+msgstr "您的姓名"
+
+msgid "Tenant ID is required"
+msgstr "租戶ID是必需的"
+
+msgid "Invalid tenant or tenant is inactive"
+msgstr "無效的租戶或租戶已停用"
+
+msgid "Application ID is required"
+msgstr "應用ID是必需的"
+
+msgid "Invalid application"
+msgstr "無效的應用"
+
+msgid "The specified application does not belong to this tenant."
+msgstr "指定的應用不屬於此租戶。"
+
+msgid "Missing required parameters: tenant_id and application_id"
+msgstr "缺少必需參數：tenant_id 和 application_id"
+
+msgid "Invalid access. Please use the correct link."
+msgstr "無效訪問，請使用正確的連結。"
+
+msgid "Invalid tenant"
+msgstr "無效的租戶"
+
+msgid "Tenant not found or inactive."
+msgstr "租戶不存在或已停用。"
+
+msgid "Invalid software"
+msgstr "無效的軟體"
+
+msgid "Application not found or inactive."
+msgstr "應用不存在或已停用。"
+
+msgid "Thank you for your feedback! We will review it shortly."
+msgstr "感謝您的反饋！我們會盡快審核。"
+
+msgid "Failed to submit feedback. Please try again."
+msgstr "提交反饋失敗，請重試。"
+
+msgid "Submit Feedback"
+msgstr "提交反饋"
+
+msgid "Multi-Tenant Management System"
+msgstr "多租戶管理系統"
+
+msgid "Software:"
+msgstr "軟體："
+
+msgid "Submitted as:"
+msgstr "提交者："
+
+msgid "Please provide detailed information about your feedback. We appreciate your input!"
+msgstr "請提供詳細的反饋資訊，我們非常感謝您的意見！"
+
+msgid "Optional: Provide your email to receive updates on your feedback"
+msgstr "可選：提供郵箱以接收反饋更新通知"
+
+msgid "Feedback Submitted"
+msgstr "反饋已提交"
+
+msgid "Feedback Submitted Successfully"
+msgstr "反饋提交成功"
+
+msgid "Thank you for your feedback!"
+msgstr "感謝您的反饋！"
+
+msgid "We have received your feedback and our team will review it shortly."
+msgstr "我們已收到您的反饋，團隊會盡快審核。"
+
+msgid "What's next?"
+msgstr "接下來？"
+
+msgid "Our team will review your feedback within 1-2 business days"
+msgstr "我們的團隊將在1-2個工作日內審核您的反饋"
+
+msgid "You will be notified via email if you provided contact information"
+msgstr "如果您提供了聯繫方式，我們會透過郵件通知您"
+
+msgid "High priority issues will be addressed first"
+msgstr "高優先級問題將優先處理"
+
+# ============================================
+# Password Reset System
+# ============================================
+
+#: users/forms.py
+msgid "Email Address"
+msgstr "電子郵件地址"
+
+#: users/forms.py
+msgid "Enter your email address"
+msgstr "請輸入您的電子郵件地址"
+
+#: users/forms.py
+msgid "New Password"
+msgstr "新密碼"
+
+#: users/forms.py
+msgid "Confirm New Password"
+msgstr "確認新密碼"
+
+#: users/forms.py
+msgid "Enter new password"
+msgstr "請輸入新密碼"
+
+#: users/forms.py
+msgid "Confirm new password"
+msgstr "請再次輸入新密碼"
+
+#: users/forms.py
+msgid "Passwords do not match"
+msgstr "兩次輸入的密碼不一致"
+
+#: users/views/member_password_reset_views.py
+msgid "Missing required parameter: tenant_id"
+msgstr "缺少必需參數: tenant_id"
+
+#: users/views/member_password_reset_views.py
+msgid "Invalid access. Please use the correct link with tenant_id parameter."
+msgstr "無效訪問。請使用包含 tenant_id 參數的正確連結。"
+
+#: users/views/member_password_reset_views.py
+msgid "Too many requests. Please try again later."
+msgstr "請求過於頻繁，請稍後再試。"
+
+#: users/views/member_password_reset_views.py
+msgid "Password Reset"
+msgstr "密碼重置"
+
+#: users/views/member_password_reset_views.py
+msgid "Failed to send email. Please try again later."
+msgstr "發送郵件失敗，請稍後再試。"
+
+#: users/views/member_password_reset_views.py
+msgid "This reset link does not exist or has already been used."
+msgstr "該重置連結不存在或已被使用。"
+
+#: users/views/member_password_reset_views.py
+msgid "This reset link has expired. Please request a new password reset."
+msgstr "該重置連結已過期，請重新申請密碼重置。"
+
+#: users/views/member_password_reset_views.py
+msgid "Password reset successful. Please login with your new password."
+msgstr "密碼重置成功，請使用新密碼登入。"
+
+#: users/views/member_password_reset_views.py
+msgid "Password reset failed. Please try again."
+msgstr "密碼重置失敗，請重試。"
+
+#: templates/members/password_reset_request.html
+msgid "Please enter your email address, we will send you a password reset link."
+msgstr "請輸入您的電子郵件地址，我們將向您發送密碼重置連結。"
+
+#: templates/members/password_reset_request.html
+msgid "Please enter the email address used during registration"
+msgstr "請輸入註冊時使用的電子郵件地址"
+
+#: templates/members/password_reset_request.html
+msgid "Send Reset Link"
+msgstr "發送重置連結"
+
+#: templates/members/password_reset_request_sent.html
+msgid "Password Reset Link Sent"
+msgstr "密碼重置連結已發送"
+
+#: templates/members/password_reset_request_sent.html
+msgid "Email sent successfully!"
+msgstr "郵件發送成功！"
+
+#: templates/members/password_reset_request_sent.html
+msgid "If this email address is registered, we have sent a password reset link to it."
+msgstr "如果該郵箱已註冊，我們已向其發送密碼重置連結。"
+
+#: templates/members/password_reset_request_sent.html
+msgid "Please check your inbox and click the link in the email to complete the password reset."
+msgstr "請查看您的收件箱，點擊郵件中的連結完成密碼重置。"
+
+#: templates/members/password_reset_request_sent.html
+msgid "Tips:"
+msgstr "提示："
+
+#: templates/members/password_reset_request_sent.html
+msgid "The reset link is valid for 1 hour"
+msgstr "重置連結有效期為1小時"
+
+#: templates/members/password_reset_request_sent.html
+msgid "If you don't receive the email, please check your spam folder"
+msgstr "如果未收到郵件，請檢查垃圾郵件資料夾"
+
+#: templates/members/password_reset_request_sent.html
+msgid "Each link can only be used once"
+msgstr "每個連結只能使用一次"
+
+#: templates/members/password_reset_form.html
+msgid "Set New Password"
+msgstr "設置新密碼"
+
+#: templates/members/password_reset_form.html
+msgid "Reset Account:"
+msgstr "重置帳戶："
+
+#: templates/members/password_reset_form.html
+msgid "Tenant:"
+msgstr "租戶："
+
+#: templates/members/password_reset_form.html
+msgid "Please set your new password. Password must meet security requirements."
+msgstr "請設置您的新密碼。密碼必須符合安全要求。"
+
+#: templates/members/password_reset_form.html
+msgid "Password Requirements:"
+msgstr "密碼要求："
+
+#: templates/members/password_reset_form.html
+msgid "At least 8 characters"
+msgstr "至少8個字符"
+
+#: templates/members/password_reset_form.html
+msgid "Cannot be a commonly used password"
+msgstr "不能是常用密碼"
+
+#: templates/members/password_reset_form.html
+msgid "Cannot be entirely numeric"
+msgstr "不能全為數字"
+
+#: templates/members/password_reset_form.html
+msgid "Confirm Reset Password"
+msgstr "確認重置密碼"
+
+#: templates/members/password_reset_complete.html
+msgid "Password Reset Successful"
+msgstr "密碼重置成功"
+
+#: templates/members/password_reset_complete.html
+msgid "Your password has been successfully reset!"
+msgstr "您的密碼已成功重置！"
+
+#: templates/members/password_reset_complete.html
+msgid "You can now login to the system with your new password."
+msgstr "您現在可以使用新密碼登入系統。"
+
+#: templates/members/password_reset_complete.html
+msgid "Security Tips:"
+msgstr "安全提示："
+
+#: templates/members/password_reset_complete.html
+msgid "To protect your account security, please keep your password safe and do not share it with others."
+msgstr "為保護您的帳戶安全，請妥善保管密碼，不要與他人分享。"
+
+#: templates/members/password_reset_complete.html
+msgid "Please return to your application and login with your new password."
+msgstr "請返回您的應用程式，使用新密碼登入。"
+
+#: templates/members/password_reset_invalid.html
+msgid "Invalid Request"
+msgstr "無效請求"
+
+#: templates/members/password_reset_invalid.html
+msgid "Unable to process your request"
+msgstr "無法處理您的請求"
+
+#: templates/members/password_reset_invalid.html
+msgid "This link may have been used, expired, or does not exist."
+msgstr "該連結可能已被使用、已過期或不存在。"
+
+#: templates/members/password_reset_invalid.html
+msgid "Password reset links are only valid for 1 hour and can only be used once."
+msgstr "密碼重置連結有效期僅為1小時，且只能使用一次。"
+
+#: templates/members/password_reset_invalid.html
+msgid "Possible Reasons:"
+msgstr "可能的原因："
+
+#: templates/members/password_reset_invalid.html
+msgid "Missing required parameter (tenant_id)"
+msgstr "缺少必需參數 (tenant_id)"
+
+#: templates/members/password_reset_invalid.html
+msgid "Invalid or inactive tenant"
+msgstr "無效或未啟用的租戶"
+
+#: templates/members/password_reset_invalid.html
+msgid "Link has expired (over 1 hour)"
+msgstr "連結已過期（超過1小時）"
+
+#: templates/members/password_reset_invalid.html
+msgid "Link has already been used"
+msgstr "連結已被使用"
+
+#: templates/members/password_reset_invalid.html
+msgid "Link format is incorrect"
+msgstr "連結格式不正確"
+
+#: templates/members/password_reset_invalid.html
+msgid "Please contact your application provider for a valid password reset link."
+msgstr "請聯繫您的應用程式提供商獲取有效的密碼重置連結。"
+
+#: templates/email/password_reset.html
+msgid "You have received this email because you requested to reset your password."
+msgstr "您收到此郵件是因為您請求重置密碼。"
+
+#: templates/email/password_reset.html
+msgid "Please click the button below to reset your password:"
+msgstr "請點擊下方按鈕重置密碼："
+
+#: templates/email/password_reset.html
+msgid "Reset Password"
+msgstr "重置密碼"
+
+#: templates/email/password_reset.html
+msgid "Or copy and paste the following link into your browser:"
+msgstr "或將以下連結複製貼上到瀏覽器："
+
+#: templates/email/password_reset.html
+msgid "If you did not request a password reset, please ignore this email. Your account will remain unchanged."
+msgstr "如果您沒有請求重置密碼，請忽略此郵件，您的帳戶將保持不變。"
+
+#: templates/email/password_reset.html
+msgid "This is an automated message, please do not reply."
+msgstr "此郵件由系統自動發送，請勿回覆。"
+
+#: email plain text
+msgid "Dear %(name)s,\n\nYou have requested to reset your password.\n\nPlease click the following link to reset your password:\n%(url)s\n\nThis link will expire at %(expires)s.\n\nIf you did not request a password reset, please ignore this email."
+msgstr "尊敬的 %(name)s，\n\n您已請求重置密碼。\n\n請點擊以下連結重置密碼：\n%(url)s\n\n此連結將於 %(expires)s 過期。\n\n如果您沒有請求重置密碼，請忽略此郵件。"

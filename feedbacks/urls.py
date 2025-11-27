@@ -4,9 +4,12 @@ User Feedback System URL Configuration - APIView Version
 完全移除ViewSet和Router，使用纯APIView模式
 提供更好的调试体验和完全的控制能力
 所有API都支持 Tenant-ID header 进行租户过滤
+
+注：notification-configs 使用 ViewSet + Router 模式
 """
 
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 
 # Software Management has been moved to applications module
 # See /api/v1/applications/ for application management APIs
@@ -55,6 +58,13 @@ from .views.feedback_submit_views import (
     FeedbackSubmitSuccessView,
 )
 
+# Import Notification Configuration ViewSet
+from .views.notification_config_views import FeedbackNotificationConfigViewSet
+
+# Create router for ViewSet
+router = DefaultRouter()
+router.register(r'notification-configs', FeedbackNotificationConfigViewSet, basename='notification-config')
+
 app_name = 'feedbacks'
 
 urlpatterns = [
@@ -91,6 +101,9 @@ urlpatterns = [
     # ==================== Feedback Submission Pages (Server-side) ====================
     path('submit/', FeedbackSubmitPageView.as_view(), name='feedback-submit'),
     path('submit/success/', FeedbackSubmitSuccessView.as_view(), name='feedback-submit-success'),
+    
+    # ==================== Notification Configuration APIs (ViewSet) ====================
+    path('', include(router.urls)),
 ]
 
 # API Documentation

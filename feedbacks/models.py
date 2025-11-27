@@ -482,6 +482,7 @@ class FeedbackEmailLog(BaseModel):
         ('status_change', 'Status Change'),
         ('verification', 'Email Verification'),
         ('summary', 'Summary Report'),
+        ('new_feedback', 'New Feedback Notification'),  # 新反馈通知
     ]
     
     STATUS_CHOICES = [
@@ -568,6 +569,7 @@ class EmailTemplate(BaseModel):
         ('status_change', 'Status Change'),
         ('verification', 'Email Verification'),
         ('welcome', 'Welcome Email'),
+        ('new_feedback', 'New Feedback Notification'),  # 新反馈通知
     ]
     
     name = models.CharField(
@@ -638,3 +640,89 @@ class EmailTemplate(BaseModel):
             'body_html': body_html,
             'body_text': body_text
         }
+
+
+# ===================== Notification Configuration Models =====================
+
+class FeedbackNotificationConfig(BaseModel):
+    """
+    反馈通知配置模型
+    应用级别的新反馈邮件通知配置
+    """
+    application = models.OneToOneField(
+        'applications.Application',
+        on_delete=models.CASCADE,
+        related_name='feedback_notification_config',
+        verbose_name=_("关联应用"),
+        help_text="每个应用只能有一个通知配置"
+    )
+    is_enabled = models.BooleanField(
+        _("启用通知"),
+        default=True,
+        help_text="是否启用新反馈邮件通知"
+    )
+    
+    class Meta:
+        db_table = 'feedback_notification_config'
+        verbose_name = _('反馈通知配置')
+        verbose_name_plural = _('反馈通知配置')
+        indexes = [
+            models.Index(fields=['tenant', 'application']),
+            models.Index(fields=['is_enabled']),
+        ]
+    
+    def __str__(self):
+        status = "启用" if self.is_enabled else "禁用"
+        return f"{self.application.name} - 通知{status}"
+    
+    def get_active_recipients(self):
+        """获取所有启用的接收者"""
+        return self.recipients.filter(is_active=True, is_deleted=False)
+    
+    def get_recipient_emails(self):
+        """获取所有启用的接收者邮箱列表"""
+        return list(self.get_active_recipients().values_list('email', flat=True))
+
+
+class FeedbackNotificationRecipient(BaseModel):
+    """
+    反馈通知接收者模型
+    存储每个配置的邮件接收列表
+    """
+    config = models.ForeignKey(
+        FeedbackNotificationConfig,
+        on_delete=models.CASCADE,
+        related_name='recipients',
+        verbose_name=_("通知配置")
+    )
+    email = models.EmailField(
+        _("邮箱地址"),
+        help_text="接收通知的邮箱地址"
+    )
+    name = models.CharField(
+        _("接收者姓名"),
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="可选，用于邮件称呼"
+    )
+    is_active = models.BooleanField(
+        _("启用"),
+        default=True,
+        help_text="是否接收通知"
+    )
+    
+    class Meta:
+        db_table = 'feedback_notification_recipient'
+        verbose_name = _('通知接收者')
+        verbose_name_plural = _('通知接收者')
+        ordering = ['name', 'email']
+        indexes = [
+            models.Index(fields=['config', 'is_active']),
+            models.Index(fields=['email']),
+        ]
+        unique_together = [['config', 'email']]
+    
+    def __str__(self):
+        name_part = f"{self.name} " if self.name else ""
+        return f"{name_part}<{self.email}>"

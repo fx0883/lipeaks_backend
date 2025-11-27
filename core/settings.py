@@ -110,6 +110,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # CORS中间件提前
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',  # 多语言支持（墖理 Accept-Language）
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',  # 保持CSRF中间件位置
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -195,6 +196,21 @@ USE_I18N = True
 
 USE_TZ = True
 
+# 支持的语言列表
+LANGUAGES = [
+    ('zh-hans', '简体中文'),
+    ('zh-hant', '繁體中文'),
+    ('en', 'English'),
+    ('ja', '日本語'),
+    ('ko', '한국어'),
+    ('fr', 'Français'),
+]
+
+# 翻译文件路径
+LOCALE_PATHS = [
+    os.path.join(BASE_DIR, 'locale'),
+]
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -251,7 +267,8 @@ REST_FRAMEWORK = {
 JWT_AUTH = {
     'JWT_SECRET_KEY': SECRET_KEY,
     'JWT_ALGORITHM': 'HS256',
-    'JWT_EXPIRATION_DELTA': 7 * 24 * 3600,  # 24小时有效期
+    # 'JWT_EXPIRATION_DELTA': 7 * 24 * 3600,  # 24小时有效期
+    'JWT_EXPIRATION_DELTA': 60,
     'JWT_REFRESH_EXPIRATION_DELTA': 28 * 24 * 3600,  # 7天刷新期
 }
 
@@ -506,6 +523,10 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')  # QQ邮箱授权码
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER if EMAIL_HOST_USER else 'noreply@example.com')  # 发件人邮箱
 EMAIL_TIMEOUT = 30  # SMTP 连接超时（秒）
 
+# 网站基础 URL（用于生成邮件中的链接）
+# 生产环境应设置为实际域名，如 https://api.example.com
+SITE_URL = os.getenv('SITE_URL', '')
+
 # 前端URL（用于构建密码重置链接）
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
@@ -608,4 +629,7 @@ TENANT_PUBLIC_API_PATHS = [
     '/api/v1/licenses/heartbeat/',   # 心跳检测
     '/api/v1/licenses/unbind/',      # 解绑许可证
     '/api/v1/licenses/info/',        # 许可证信息查询（前缀匹配）
+    '/api/v1/feedbacks/submit/',     # 反馈提交页面（公开HTML表单）
+    '/api/v1/feedbacks/health/',     # 健康检查
+    '/api/v1/members/password-reset/',  # Member密码重置页面（公开HTML表单）
 ]

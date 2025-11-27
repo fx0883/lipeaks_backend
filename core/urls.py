@@ -121,6 +121,9 @@ urlpatterns = [
         # User Feedback System
         path('feedbacks/', include('feedbacks.urls', namespace='feedbacks')),
         
+        # Member 密码重置（公开HTML页面）
+        path('members/password-reset/', include('users.urls.member_password_reset_urls', namespace='member_password_reset')),
+        
         # 用户互动系统路由（收藏、点赞等）
         path('interactions/', include('interactions.urls', namespace='interactions')),
         

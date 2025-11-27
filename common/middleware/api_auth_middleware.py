@@ -38,6 +38,16 @@ class APIAuthMiddleware(MiddlewareMixin):
         if request.path.startswith(('/api/v1/schema/', '/api/v1/docs/', '/api/v1/redoc/')):
             logger.info(f"[API认证中间件] API文档路径，跳过JWT认证: {request.path}")
             return None
+        
+        # 跳过公开的表单页面（非API接口，是HTML页面）
+        if request.path.startswith('/api/v1/feedbacks/submit'):
+            logger.info(f"[API认证中间件] 公开表单页面，跳过JWT认证: {request.path}")
+            return None
+        
+        # 跳过 Member 密码重置页面（公开HTML页面）
+        if request.path.startswith('/api/v1/members/password-reset'):
+            logger.info(f"[API认证中间件] 密码重置页面，跳过JWT认证: {request.path}")
+            return None
             
         logger.info(f"[API认证中间件] 处理API请求: {request.path}")
             

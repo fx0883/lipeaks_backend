@@ -13,7 +13,8 @@ from django.db.models import Count, Q
 from .models import (
     Feedback, FeedbackReply, FeedbackStatusHistory,
     FeedbackAttachment, FeedbackVote,
-    FeedbackEmailLog, EmailTemplate
+    FeedbackEmailLog, EmailTemplate,
+    FeedbackNotificationConfig, FeedbackNotificationRecipient
 )
 
 
@@ -265,3 +266,96 @@ class FeedbackEmailLogAdmin(admin.ModelAdmin):
         # TODO: Implement email resending logic
         self.message_user(request, _('Email resending initiated.'))
     resend_email.short_description = _('Resend failed emails')
+
+
+# ===================== Notification Configuration Admin =====================
+
+class FeedbackNotificationRecipientInline(admin.TabularInline):
+    """Inline admin for Notification Recipients"""
+    model = FeedbackNotificationRecipient
+    extra = 1
+    fields = ['email', 'name', 'is_active', 'created_at']
+    readonly_fields = ['created_at']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(is_deleted=False)
+
+
+@admin.register(FeedbackNotificationConfig)
+class FeedbackNotificationConfigAdmin(admin.ModelAdmin):
+    """Admin configuration for Feedback Notification Config"""
+    list_display = [
+        'application_name', 'is_enabled', 'recipient_count', 
+        'active_recipient_count', 'tenant_name', 'created_at'
+    ]
+    list_filter = ['is_enabled', 'tenant', 'created_at']
+    search_fields = ['application__name', 'application__code']
+    readonly_fields = ['created_at', 'updated_at']
+    inlines = [FeedbackNotificationRecipientInline]
+    autocomplete_fields = ['application']
+    
+    fieldsets = (
+        (_('基本信息'), {
+            'fields': ('application', 'tenant', 'is_enabled')
+        }),
+        (_('时间信息'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(
+            is_deleted=False
+        ).select_related('application', 'tenant')
+    
+    def application_name(self, obj):
+        """显示应用名称"""
+        return obj.application.name
+    application_name.short_description = _('应用名称')
+    application_name.admin_order_field = 'application__name'
+    
+    def tenant_name(self, obj):
+        """显示租户名称"""
+        return obj.tenant.name if obj.tenant else '-'
+    tenant_name.short_description = _('租户')
+    tenant_name.admin_order_field = 'tenant__name'
+    
+    def recipient_count(self, obj):
+        """显示接收者总数"""
+        return obj.recipients.filter(is_deleted=False).count()
+    recipient_count.short_description = _('接收者数量')
+    
+    def active_recipient_count(self, obj):
+        """显示活跃接收者数量"""
+        return obj.get_active_recipients().count()
+    active_recipient_count.short_description = _('活跃接收者')
+
+
+@admin.register(FeedbackNotificationRecipient)
+class FeedbackNotificationRecipientAdmin(admin.ModelAdmin):
+    """Admin configuration for Notification Recipients"""
+    list_display = [
+        'email', 'name', 'config_application', 'is_active', 
+        'tenant_name', 'created_at'
+    ]
+    list_filter = ['is_active', 'config__application', 'tenant', 'created_at']
+    search_fields = ['email', 'name', 'config__application__name']
+    readonly_fields = ['created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(
+            is_deleted=False
+        ).select_related('config__application', 'tenant')
+    
+    def config_application(self, obj):
+        """显示关联的应用"""
+        return obj.config.application.name
+    config_application.short_description = _('应用')
+    config_application.admin_order_field = 'config__application__name'
+    
+    def tenant_name(self, obj):
+        """显示租户名称"""
+        return obj.tenant.name if obj.tenant else '-'
+    tenant_name.short_description = _('租户')
+    tenant_name.admin_order_field = 'tenant__name'

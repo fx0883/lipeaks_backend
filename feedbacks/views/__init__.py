@@ -30,6 +30,9 @@ from .email_api_views import (
     EmailLogListView,
     EmailLogDetailView,
 )
+from .notification_config_views import (
+    FeedbackNotificationConfigViewSet,
+)
 
 __all__ = [
     # Feedback Management
@@ -50,4 +53,6 @@ __all__ = [
     'EmailTemplateDetailView',
     'EmailLogListView',
     'EmailLogDetailView',
+    # Notification Configuration
+    'FeedbackNotificationConfigViewSet',
 ]

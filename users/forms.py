@@ -11,25 +11,23 @@ from tenants.models import Tenant
 class MemberPasswordResetRequestForm(forms.Form):
     """
     Member 密码重置请求表单
-    用户输入邮箱和租户ID请求密码重置
+    用户输入邮箱请求密码重置
+    tenant_id 通过 URL 参数传递（隐藏字段）
     """
     email = forms.EmailField(
-        label=_('邮箱地址'),
+        label=_('Email Address'),
         max_length=254,
         required=True,
         widget=forms.EmailInput(attrs={
             'class': 'form-control',
-            'placeholder': _('请输入您的邮箱地址'),
             'autocomplete': 'email'
         })
     )
     
-    tenant_id = forms.ChoiceField(
-        label=_('所属租户'),
-        required=True,
-        widget=forms.Select(attrs={
-            'class': 'form-select'
-        })
+    # tenant_id 作为隐藏字段，从 URL 参数获取
+    tenant_id = forms.CharField(
+        widget=forms.HiddenInput(),
+        required=True
     )
     
     def __init__(self, *args, **kwargs):
@@ -37,32 +35,24 @@ class MemberPasswordResetRequestForm(forms.Form):
         initial_tenant_id = kwargs.pop('initial_tenant_id', None)
         super().__init__(*args, **kwargs)
         
-        # 如果有URL参数tenant_id，将字段改为隐藏的CharField
+        # 设置 placeholder（支持多语言）
+        self.fields['email'].widget.attrs['placeholder'] = str(_('Enter your email address'))
+        
+        # 设置 tenant_id 初始值
         if initial_tenant_id:
-            # 重新定义为 CharField 以便隐藏提交
-            self.fields['tenant_id'] = forms.CharField(
-                widget=forms.HiddenInput(),
-                initial=initial_tenant_id,
-                required=True
-            )
-        else:
-            # 动态加载活跃的租户列表
-            tenants = Tenant.objects.filter(status='active', is_deleted=False).order_by('name')
-            self.fields['tenant_id'].choices = [('', _('—— 请选择租户 ——'))] + [
-                (tenant.id, tenant.name) for tenant in tenants
-            ]
+            self.fields['tenant_id'].initial = initial_tenant_id
     
     def clean_tenant_id(self):
         """验证租户ID"""
         tenant_id = self.cleaned_data.get('tenant_id')
         if not tenant_id:
-            raise ValidationError(_('请选择租户'))
+            raise ValidationError(_('Tenant ID is required'))
         try:
             tenant_id = int(tenant_id)
             # 验证租户是否存在且活跃
             Tenant.objects.get(id=tenant_id, status='active', is_deleted=False)
         except (ValueError, Tenant.DoesNotExist):
-            raise ValidationError(_('无效的租户'))
+            raise ValidationError(_('Invalid tenant'))
         return tenant_id
 
 
@@ -72,7 +62,7 @@ class MemberPasswordResetConfirmForm(forms.Form):
     用户输入新密码完成密码重置
     """
     new_password = forms.CharField(
-        label=_('新密码'),
+        label=_('New Password'),
         required=True,
         widget=forms.PasswordInput(attrs={
             'class': 'form-control',
@@ -81,7 +71,7 @@ class MemberPasswordResetConfirmForm(forms.Form):
     )
     
     new_password_confirm = forms.CharField(
-        label=_('确认新密码'),
+        label=_('Confirm New Password'),
         required=True,
         widget=forms.PasswordInput(attrs={
             'class': 'form-control',
@@ -92,8 +82,8 @@ class MemberPasswordResetConfirmForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Set placeholders dynamically to support i18n
-        self.fields['new_password'].widget.attrs['placeholder'] = _('请输入新密码')
-        self.fields['new_password_confirm'].widget.attrs['placeholder'] = _('请再次输入新密码')
+        self.fields['new_password'].widget.attrs['placeholder'] = str(_('Enter new password'))
+        self.fields['new_password_confirm'].widget.attrs['placeholder'] = str(_('Confirm new password'))
     
     def clean_new_password(self):
         """验证新密码强度"""
@@ -111,7 +101,7 @@ class MemberPasswordResetConfirmForm(forms.Form):
         if password and password_confirm:
             if password != password_confirm:
                 raise ValidationError({
-                    'new_password_confirm': _('两次输入的密码不一致')
+                    'new_password_confirm': _('Passwords do not match')
                 })
         
         return cleaned_data

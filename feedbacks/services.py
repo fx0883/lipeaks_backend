@@ -15,12 +15,15 @@ import time
 
 from .models import (
     Feedback, FeedbackReply, FeedbackStatusHistory,
-    EmailTemplate, FeedbackEmailLog
+    EmailTemplate, FeedbackEmailLog,
+    FeedbackNotificationConfig, FeedbackNotificationRecipient
 )
 from .tasks import (
     send_feedback_reply_email,
     send_status_change_email,
-    send_verification_email
+    send_verification_email,
+    send_new_feedback_notification,
+    send_test_feedback_notification
 )
 from .utils import TaskExecutor, RedisHealthChecker, EmailValidator
 
@@ -131,6 +134,33 @@ def _process_email_in_background(email_type: str, target_id: int, context: str =
 
 # 获取线程池管理器实例
 _email_thread_pool = EmailThreadPoolManager()
+
+
+def _process_new_feedback_notification(feedback_id: int, context: str = ""):
+    """
+    后台处理新反馈通知 - 在线程中执行
+    
+    Args:
+        feedback_id: Feedback实例的ID
+        context: 上下文信息用于日志
+    """
+    logger.info(f"Background new feedback notification started: #{feedback_id}{context}")
+    
+    try:
+        # 执行 Celery 任务（Redis 不可用时降级到同步执行）
+        result = TaskExecutor.execute_task(
+            send_new_feedback_notification,
+            feedback_id,
+            fallback_to_sync=True
+        )
+        
+        if result.get('mode') == 'failed':
+            logger.error(f"New feedback notification task failed: #{feedback_id} - {result.get('error')}")
+        else:
+            logger.info(f"New feedback notification task submitted: #{feedback_id} - mode: {result.get('mode')}")
+            
+    except Exception as e:
+        logger.error(f"Background new feedback notification error: #{feedback_id} - {str(e)}")
 
 
 class EmailService:
@@ -254,6 +284,81 @@ class EmailService:
         except Exception as e:
             logger.error(f"Failed to submit verification email task for feedback {feedback.id}: {str(e)}")
             return {'status': 'failed', 'error': str(e)}
+    
+    @staticmethod
+    def send_new_feedback_notification(feedback: Feedback) -> Optional[dict]:
+        """
+        发送新反馈通知到配置的接收者
+        
+        当用户提交新反馈后调用此方法，会检查应用是否配置了通知，
+        如果配置了则提交任务到后台线程池处理。
+        
+        Args:
+            feedback: Feedback instance
+            
+        Returns:
+            dict: 提交结果 {'status': 'submitted/skipped', ...}
+        """
+        try:
+            # 检查是否有关联应用
+            if not feedback.application:
+                logger.info(f"Feedback {feedback.id} has no application, skipping notification")
+                return {'status': 'skipped', 'reason': 'no_application'}
+            
+            # 检查应用是否配置了通知
+            try:
+                config = FeedbackNotificationConfig.objects.get(
+                    application=feedback.application,
+                    is_deleted=False
+                )
+                if not config.is_enabled:
+                    logger.info(f"Notifications disabled for application {feedback.application.id}")
+                    return {'status': 'skipped', 'reason': 'notifications_disabled'}
+            except FeedbackNotificationConfig.DoesNotExist:
+                logger.info(f"No notification config for application {feedback.application.id}")
+                return {'status': 'skipped', 'reason': 'no_config'}
+            
+            # 提交到后台线程池
+            future = _email_thread_pool.submit_email_task(
+                _process_new_feedback_notification,
+                feedback.id,
+                f" from API thread {threading.current_thread().name}"
+            )
+            
+            if future:
+                logger.info(f"New feedback notification task submitted: feedback {feedback.id}")
+                return {'status': 'submitted', 'mode': 'thread_pool'}
+            else:
+                logger.error(f"Failed to submit new feedback notification task: feedback {feedback.id}")
+                return {'status': 'failed', 'reason': 'thread_pool_submit_failed'}
+            
+        except Exception as e:
+            logger.error(f"Failed to submit new feedback notification for feedback {feedback.id}: {str(e)}")
+            return {'status': 'failed', 'error': str(e)}
+    
+    @staticmethod
+    def send_test_notification(config: FeedbackNotificationConfig, test_email: str) -> dict:
+        """
+        发送测试通知邮件
+        
+        用于验证邮件配置是否正确。
+        
+        Args:
+            config: FeedbackNotificationConfig instance
+            test_email: 测试邮箱地址
+            
+        Returns:
+            dict: 发送结果
+        """
+        try:
+            # 直接调用 Celery 任务（同步执行以获取结果）
+            result = send_test_feedback_notification.apply(
+                args=[config.id, test_email]
+            )
+            return result.get(timeout=30)
+        except Exception as e:
+            logger.error(f"Failed to send test notification: {str(e)}")
+            return {'status': 'error', 'error': str(e)}
     
     @staticmethod
     def create_default_templates(tenant) -> Dict[str, EmailTemplate]:
@@ -486,6 +591,93 @@ Your feedback ID: #{feedback_id}
                 'software_name': 'Software name',
                 'verification_url': 'Email verification URL',
                 'contact_name': 'Contact name'
+            }
+        )
+        
+        # New feedback notification template
+        templates['new_feedback'] = EmailTemplate.objects.create(
+            tenant=tenant,
+            name="New Feedback Notification",
+            template_type='new_feedback',
+            subject="[{application_name}] 新反馈: {feedback_title}",
+            body_html="""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background-color: #f9f9f9; }
+        .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; }
+        .label { font-weight: bold; color: #666; }
+        .button { display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; }
+        .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📬 新反馈通知</h1>
+        </div>
+        <div class="content">
+            <p>您好，</p>
+            <p><strong>{application_name}</strong> 收到了一条新的用户反馈：</p>
+            
+            <div class="info-box">
+                <p><span class="label">标题：</span>{feedback_title}</p>
+                <p><span class="label">类型：</span>{feedback_type}</p>
+                <p><span class="label">优先级：</span>{priority}</p>
+                <p><span class="label">提交者：</span>{contact_name} ({contact_email})</p>
+                <p><span class="label">提交时间：</span>{submitted_at}</p>
+            </div>
+            
+            <div class="info-box">
+                <p><span class="label">反馈内容：</span></p>
+                <p>{feedback_description}</p>
+            </div>
+            
+            <p style="text-align: center; margin-top: 20px;">
+                <a href="{view_url}" class="button">查看详情</a>
+            </p>
+        </div>
+        <div class="footer">
+            <p>此邮件由系统自动发送，请勿直接回复。</p>
+            <p>反馈 ID: #{feedback_id}</p>
+        </div>
+    </div>
+</body>
+</html>
+            """,
+            body_text="""
+新反馈通知
+
+{application_name} 收到了一条新的用户反馈：
+
+标题：{feedback_title}
+类型：{feedback_type}
+优先级：{priority}
+提交者：{contact_name} ({contact_email})
+提交时间：{submitted_at}
+
+反馈内容：
+{feedback_description}
+
+查看详情：{view_url}
+
+反馈 ID: #{feedback_id}
+            """,
+            variables={
+                'application_name': 'Application name',
+                'feedback_title': 'Feedback title',
+                'feedback_description': 'Feedback description',
+                'feedback_type': 'Feedback type',
+                'priority': 'Priority',
+                'contact_name': 'Submitter name',
+                'contact_email': 'Submitter email',
+                'submitted_at': 'Submission time',
+                'feedback_id': 'Feedback ID',
+                'view_url': 'URL to view feedback'
             }
         )
         

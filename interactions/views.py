@@ -1604,9 +1604,10 @@ class ArticleLikeViewSet(TenantModelViewSet):
         member = self.request.user
         article = serializer.validated_data['article']
         
-        # 保存点赞记录
+        # 保存点赞记录（需要手动设置 tenant_id，因为 interactions 路径不在租户隔离列表中）
         like = serializer.save(
             from_member=member,
+            tenant_id=member.tenant_id,
             ip_address=self.request.META.get('REMOTE_ADDR'),
             user_agent=self.request.META.get('HTTP_USER_AGENT', '')
         )

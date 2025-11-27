@@ -13,7 +13,8 @@ from django.utils import timezone
 from .models import (
     Feedback, FeedbackReply, FeedbackStatusHistory,
     FeedbackAttachment, FeedbackVote,
-    FeedbackEmailLog, EmailTemplate
+    FeedbackEmailLog, EmailTemplate,
+    FeedbackNotificationConfig, FeedbackNotificationRecipient
 )
 from applications.models import Application
 from applications.serializers import ApplicationListSerializer
@@ -460,3 +461,102 @@ class FeedbackStatisticsSerializer(serializers.Serializer):
     daily_trend = serializers.ListField(
         child=serializers.DictField()
     )
+
+
+# ===================== Notification Configuration Serializers =====================
+
+class FeedbackNotificationRecipientSerializer(serializers.ModelSerializer):
+    """反馈通知接收者序列化器"""
+    
+    class Meta:
+        model = FeedbackNotificationRecipient
+        fields = [
+            'id', 'email', 'name', 'is_active', 
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class FeedbackNotificationRecipientCreateSerializer(serializers.ModelSerializer):
+    """创建反馈通知接收者序列化器"""
+    
+    class Meta:
+        model = FeedbackNotificationRecipient
+        fields = ['email', 'name', 'is_active']
+    
+    def validate_email(self, value):
+        """验证邮箱格式并检查重复"""
+        config = self.context.get('config')
+        if config:
+            if FeedbackNotificationRecipient.objects.filter(
+                config=config, 
+                email=value,
+                is_deleted=False
+            ).exists():
+                raise serializers.ValidationError(_("该邮箱已在接收列表中"))
+        return value
+
+
+class FeedbackNotificationConfigSerializer(serializers.ModelSerializer):
+    """反馈通知配置序列化器"""
+    recipients = FeedbackNotificationRecipientSerializer(many=True, read_only=True)
+    recipient_count = serializers.SerializerMethodField()
+    active_recipient_count = serializers.SerializerMethodField()
+    application_name = serializers.CharField(source='application.name', read_only=True)
+    application_code = serializers.CharField(source='application.code', read_only=True)
+    
+    class Meta:
+        model = FeedbackNotificationConfig
+        fields = [
+            'id', 'application', 'application_name', 'application_code',
+            'is_enabled', 'recipients', 'recipient_count', 'active_recipient_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    @extend_schema_field(serializers.IntegerField())
+    def get_recipient_count(self, obj):
+        """获取接收者总数"""
+        return obj.recipients.filter(is_deleted=False).count()
+    
+    @extend_schema_field(serializers.IntegerField())
+    def get_active_recipient_count(self, obj):
+        """获取活跃接收者数量"""
+        return obj.get_active_recipients().count()
+
+
+class FeedbackNotificationConfigCreateSerializer(serializers.ModelSerializer):
+    """创建反馈通知配置序列化器"""
+    
+    class Meta:
+        model = FeedbackNotificationConfig
+        fields = ['application', 'is_enabled']
+    
+    def validate_application(self, value):
+        """验证应用归属和唯一性"""
+        request = self.context.get('request')
+        if request and hasattr(request, 'tenant'):
+            # 检查应用是否属于当前租户
+            if value.tenant_id != request.tenant.id:
+                raise serializers.ValidationError(_("应用不属于当前租户"))
+            
+            # 检查是否已存在配置
+            if FeedbackNotificationConfig.objects.filter(
+                application=value,
+                is_deleted=False
+            ).exists():
+                raise serializers.ValidationError(_("该应用已有通知配置"))
+        return value
+
+
+class FeedbackNotificationConfigUpdateSerializer(serializers.ModelSerializer):
+    """更新反馈通知配置序列化器"""
+    
+    class Meta:
+        model = FeedbackNotificationConfig
+        fields = ['is_enabled']
+
+
+class NotificationTestSerializer(serializers.Serializer):
+    """测试邮件发送序列化器"""
+    email = serializers.EmailField(help_text="测试邮件接收地址")

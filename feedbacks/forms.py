@@ -93,7 +93,7 @@ class FeedbackSubmitForm(forms.Form):
         required=False
     )
     
-    software_id = forms.IntegerField(
+    application_id = forms.IntegerField(
         widget=forms.HiddenInput(),
         required=False
     )
@@ -101,7 +101,7 @@ class FeedbackSubmitForm(forms.Form):
     def __init__(self, *args, **kwargs):
         # Extract URL parameters
         initial_tenant_id = kwargs.pop('initial_tenant_id', None)
-        initial_software_id = kwargs.pop('initial_software_id', None)
+        initial_application_id = kwargs.pop('initial_application_id', None)
         has_member_info = kwargs.pop('has_member_info', False)
         
         super().__init__(*args, **kwargs)
@@ -116,8 +116,8 @@ class FeedbackSubmitForm(forms.Form):
         if initial_tenant_id:
             self.fields['tenant_id'].initial = initial_tenant_id
         
-        if initial_software_id:
-            self.fields['software_id'].initial = initial_software_id
+        if initial_application_id:
+            self.fields['application_id'].initial = initial_application_id
         
         # Hide contact fields if user is authenticated
         if has_member_info:
@@ -139,29 +139,29 @@ class FeedbackSubmitForm(forms.Form):
         
         return tenant_id
     
-    def clean_software_id(self):
-        """Validate software ID"""
-        software_id = self.cleaned_data.get('software_id')
-        if not software_id:
+    def clean_application_id(self):
+        """Validate application ID"""
+        application_id = self.cleaned_data.get('application_id')
+        if not application_id:
             raise ValidationError(_('Application ID is required'))
         
         try:
-            Application.objects.get(id=software_id, is_active=True, is_deleted=False)
+            Application.objects.get(id=application_id, is_active=True, is_deleted=False)
         except Application.DoesNotExist:
-            raise ValidationError(_('Invalid software'))
+            raise ValidationError(_('Invalid application'))
         
-        return software_id
+        return application_id
     
     def clean(self):
         """Cross-field validation: ensure application belongs to the tenant"""
         cleaned_data = super().clean()
         tenant_id = cleaned_data.get('tenant_id')
-        software_id = cleaned_data.get('software_id')
+        application_id = cleaned_data.get('application_id')
         
-        if tenant_id and software_id:
+        if tenant_id and application_id:
             try:
                 app = Application.objects.get(
-                    id=software_id,
+                    id=application_id,
                     tenant_id=tenant_id,
                     is_active=True,
                     is_deleted=False

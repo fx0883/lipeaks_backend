@@ -1,0 +1,389 @@
+# Korean translations for Feedback System
+msgid ""
+msgstr ""
+"Language: ko\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Bug Report"
+msgstr "버그 신고"
+
+msgid "Feature Request"
+msgstr "기능 요청"
+
+msgid "Improvement"
+msgstr "개선 제안"
+
+msgid "Question"
+msgstr "질문"
+
+msgid "Other"
+msgstr "기타"
+
+msgid "Critical"
+msgstr "긴급"
+
+msgid "High"
+msgstr "높음"
+
+msgid "Medium"
+msgstr "보통"
+
+msgid "Low"
+msgstr "낮음"
+
+msgid "Title"
+msgstr "제목"
+
+msgid "Description"
+msgstr "설명"
+
+msgid "Feedback Type"
+msgstr "피드백 유형"
+
+msgid "Priority"
+msgstr "우선순위"
+
+msgid "Contact Email"
+msgstr "연락처 이메일"
+
+msgid "Contact Name"
+msgstr "이름"
+
+msgid "Brief description of the issue"
+msgstr "문제에 대한 간략한 설명"
+
+msgid "Please describe the issue in detail"
+msgstr "문제를 자세히 설명해 주세요"
+
+msgid "Your email address for updates"
+msgstr "업데이트 수신용 이메일 주소"
+
+msgid "Your name"
+msgstr "이름"
+
+msgid "Tenant ID is required"
+msgstr "테넌트 ID가 필요합니다"
+
+msgid "Invalid tenant or tenant is inactive"
+msgstr "유효하지 않은 테넌트이거나 비활성화된 테넌트입니다"
+
+msgid "Application ID is required"
+msgstr "애플리케이션 ID가 필요합니다"
+
+msgid "Invalid application"
+msgstr "유효하지 않은 애플리케이션"
+
+msgid "The specified application does not belong to this tenant."
+msgstr "지정된 애플리케이션은 이 테넌트에 속하지 않습니다."
+
+msgid "Missing required parameters: tenant_id and application_id"
+msgstr "필수 매개변수 누락: tenant_id 및 application_id"
+
+msgid "Invalid access. Please use the correct link."
+msgstr "잘못된 접근입니다. 올바른 링크를 사용해 주세요."
+
+msgid "Invalid tenant"
+msgstr "유효하지 않은 테넌트"
+
+msgid "Tenant not found or inactive."
+msgstr "테넌트를 찾을 수 없거나 비활성화되었습니다."
+
+msgid "Invalid software"
+msgstr "유효하지 않은 소프트웨어"
+
+msgid "Application not found or inactive."
+msgstr "애플리케이션을 찾을 수 없거나 비활성화되었습니다."
+
+msgid "Thank you for your feedback! We will review it shortly."
+msgstr "피드백 감사합니다! 곧 검토하겠습니다."
+
+msgid "Failed to submit feedback. Please try again."
+msgstr "피드백 제출에 실패했습니다. 다시 시도해 주세요."
+
+msgid "Submit Feedback"
+msgstr "피드백 제출"
+
+msgid "Multi-Tenant Management System"
+msgstr "멀티테넌트 관리 시스템"
+
+msgid "Software:"
+msgstr "소프트웨어:"
+
+msgid "Submitted as:"
+msgstr "제출자:"
+
+msgid "Please provide detailed information about your feedback. We appreciate your input!"
+msgstr "피드백에 대한 자세한 정보를 제공해 주세요. 소중한 의견에 감사드립니다!"
+
+msgid "Optional: Provide your email to receive updates on your feedback"
+msgstr "선택사항: 피드백 업데이트를 받을 이메일을 입력하세요"
+
+msgid "Feedback Submitted"
+msgstr "피드백 제출됨"
+
+msgid "Feedback Submitted Successfully"
+msgstr "피드백이 성공적으로 제출되었습니다"
+
+msgid "Thank you for your feedback!"
+msgstr "피드백 감사합니다!"
+
+msgid "We have received your feedback and our team will review it shortly."
+msgstr "피드백을 접수했습니다. 팀에서 곧 검토할 예정입니다."
+
+msgid "What's next?"
+msgstr "다음 단계"
+
+msgid "Our team will review your feedback within 1-2 business days"
+msgstr "팀에서 1-2 영업일 내에 피드백을 검토합니다"
+
+msgid "You will be notified via email if you provided contact information"
+msgstr "연락처를 입력하신 경우 이메일로 알려드립니다"
+
+msgid "High priority issues will be addressed first"
+msgstr "높은 우선순위 문제가 먼저 처리됩니다"
+
+# ============================================
+# Password Reset System
+# ============================================
+
+#: users/forms.py
+msgid "Email Address"
+msgstr "이메일 주소"
+
+#: users/forms.py
+msgid "Enter your email address"
+msgstr "이메일 주소를 입력하세요"
+
+#: users/forms.py
+msgid "New Password"
+msgstr "새 비밀번호"
+
+#: users/forms.py
+msgid "Confirm New Password"
+msgstr "새 비밀번호 확인"
+
+#: users/forms.py
+msgid "Enter new password"
+msgstr "새 비밀번호 입력"
+
+#: users/forms.py
+msgid "Confirm new password"
+msgstr "새 비밀번호 재입력"
+
+#: users/forms.py
+msgid "Passwords do not match"
+msgstr "비밀번호가 일치하지 않습니다"
+
+#: users/views/member_password_reset_views.py
+msgid "Missing required parameter: tenant_id"
+msgstr "필수 매개변수 누락: tenant_id"
+
+#: users/views/member_password_reset_views.py
+msgid "Invalid access. Please use the correct link with tenant_id parameter."
+msgstr "잘못된 접근입니다. tenant_id 매개변수가 포함된 올바른 링크를 사용하세요."
+
+#: users/views/member_password_reset_views.py
+msgid "Too many requests. Please try again later."
+msgstr "요청이 너무 많습니다. 나중에 다시 시도하세요."
+
+#: users/views/member_password_reset_views.py
+msgid "Password Reset"
+msgstr "비밀번호 재설정"
+
+#: users/views/member_password_reset_views.py
+msgid "Failed to send email. Please try again later."
+msgstr "이메일 전송에 실패했습니다. 나중에 다시 시도하세요."
+
+#: users/views/member_password_reset_views.py
+msgid "This reset link does not exist or has already been used."
+msgstr "이 재설정 링크가 존재하지 않거나 이미 사용되었습니다."
+
+#: users/views/member_password_reset_views.py
+msgid "This reset link has expired. Please request a new password reset."
+msgstr "이 재설정 링크가 만료되었습니다. 새 비밀번호 재설정을 요청하세요."
+
+#: users/views/member_password_reset_views.py
+msgid "Password reset successful. Please login with your new password."
+msgstr "비밀번호 재설정 완료. 새 비밀번호로 로그인하세요."
+
+#: users/views/member_password_reset_views.py
+msgid "Password reset failed. Please try again."
+msgstr "비밀번호 재설정 실패. 다시 시도하세요."
+
+#: templates/members/password_reset_request.html
+msgid "Please enter your email address, we will send you a password reset link."
+msgstr "이메일 주소를 입력하시면 비밀번호 재설정 링크를 보내드립니다."
+
+#: templates/members/password_reset_request.html
+msgid "Please enter the email address used during registration"
+msgstr "가입 시 사용한 이메일 주소를 입력하세요"
+
+#: templates/members/password_reset_request.html
+msgid "Send Reset Link"
+msgstr "재설정 링크 보내기"
+
+#: templates/members/password_reset_request_sent.html
+msgid "Password Reset Link Sent"
+msgstr "비밀번호 재설정 링크 전송 완료"
+
+#: templates/members/password_reset_request_sent.html
+msgid "Email sent successfully!"
+msgstr "이메일 전송 완료!"
+
+#: templates/members/password_reset_request_sent.html
+msgid "If this email address is registered, we have sent a password reset link to it."
+msgstr "이 이메일 주소가 등록되어 있다면 비밀번호 재설정 링크를 보냈습니다."
+
+#: templates/members/password_reset_request_sent.html
+msgid "Please check your inbox and click the link in the email to complete the password reset."
+msgstr "받은 편지함을 확인하고 이메일의 링크를 클릭하여 비밀번호 재설정을 완료하세요."
+
+#: templates/members/password_reset_request_sent.html
+msgid "Tips:"
+msgstr "안내:"
+
+#: templates/members/password_reset_request_sent.html
+msgid "The reset link is valid for 1 hour"
+msgstr "재설정 링크 유효 기간은 1시간입니다"
+
+#: templates/members/password_reset_request_sent.html
+msgid "If you don't receive the email, please check your spam folder"
+msgstr "이메일을 받지 못한 경우 스팸 폴더를 확인하세요"
+
+#: templates/members/password_reset_request_sent.html
+msgid "Each link can only be used once"
+msgstr "각 링크는 한 번만 사용할 수 있습니다"
+
+#: templates/members/password_reset_form.html
+msgid "Set New Password"
+msgstr "새 비밀번호 설정"
+
+#: templates/members/password_reset_form.html
+msgid "Reset Account:"
+msgstr "재설정 계정:"
+
+#: templates/members/password_reset_form.html
+msgid "Tenant:"
+msgstr "테넌트:"
+
+#: templates/members/password_reset_form.html
+msgid "Please set your new password. Password must meet security requirements."
+msgstr "새 비밀번호를 설정하세요. 비밀번호는 보안 요구 사항을 충족해야 합니다."
+
+#: templates/members/password_reset_form.html
+msgid "Password Requirements:"
+msgstr "비밀번호 요구 사항:"
+
+#: templates/members/password_reset_form.html
+msgid "At least 8 characters"
+msgstr "8자 이상"
+
+#: templates/members/password_reset_form.html
+msgid "Cannot be a commonly used password"
+msgstr "흔히 사용되는 비밀번호는 사용할 수 없습니다"
+
+#: templates/members/password_reset_form.html
+msgid "Cannot be entirely numeric"
+msgstr "숫자로만 구성될 수 없습니다"
+
+#: templates/members/password_reset_form.html
+msgid "Confirm Reset Password"
+msgstr "비밀번호 재설정 확인"
+
+#: templates/members/password_reset_complete.html
+msgid "Password Reset Successful"
+msgstr "비밀번호 재설정 완료"
+
+#: templates/members/password_reset_complete.html
+msgid "Your password has been successfully reset!"
+msgstr "비밀번호가 성공적으로 재설정되었습니다!"
+
+#: templates/members/password_reset_complete.html
+msgid "You can now login to the system with your new password."
+msgstr "이제 새 비밀번호로 시스템에 로그인할 수 있습니다."
+
+#: templates/members/password_reset_complete.html
+msgid "Security Tips:"
+msgstr "보안 팁:"
+
+#: templates/members/password_reset_complete.html
+msgid "To protect your account security, please keep your password safe and do not share it with others."
+msgstr "계정 보안을 위해 비밀번호를 안전하게 보관하고 다른 사람과 공유하지 마세요."
+
+#: templates/members/password_reset_complete.html
+msgid "Please return to your application and login with your new password."
+msgstr "애플리케이션으로 돌아가서 새 비밀번호로 로그인하세요."
+
+#: templates/members/password_reset_invalid.html
+msgid "Invalid Request"
+msgstr "잘못된 요청"
+
+#: templates/members/password_reset_invalid.html
+msgid "Unable to process your request"
+msgstr "요청을 처리할 수 없습니다"
+
+#: templates/members/password_reset_invalid.html
+msgid "This link may have been used, expired, or does not exist."
+msgstr "이 링크가 이미 사용되었거나 만료되었거나 존재하지 않을 수 있습니다."
+
+#: templates/members/password_reset_invalid.html
+msgid "Password reset links are only valid for 1 hour and can only be used once."
+msgstr "비밀번호 재설정 링크는 1시간 동안만 유효하며 한 번만 사용할 수 있습니다."
+
+#: templates/members/password_reset_invalid.html
+msgid "Possible Reasons:"
+msgstr "가능한 이유:"
+
+#: templates/members/password_reset_invalid.html
+msgid "Missing required parameter (tenant_id)"
+msgstr "필수 매개변수 누락 (tenant_id)"
+
+#: templates/members/password_reset_invalid.html
+msgid "Invalid or inactive tenant"
+msgstr "잘못되었거나 비활성 테넌트"
+
+#: templates/members/password_reset_invalid.html
+msgid "Link has expired (over 1 hour)"
+msgstr "링크 만료 (1시간 초과)"
+
+#: templates/members/password_reset_invalid.html
+msgid "Link has already been used"
+msgstr "링크가 이미 사용됨"
+
+#: templates/members/password_reset_invalid.html
+msgid "Link format is incorrect"
+msgstr "링크 형식이 잘못됨"
+
+#: templates/members/password_reset_invalid.html
+msgid "Please contact your application provider for a valid password reset link."
+msgstr "유효한 비밀번호 재설정 링크는 애플리케이션 제공업체에 문의하세요."
+
+#: templates/email/password_reset.html
+msgid "You have received this email because you requested to reset your password."
+msgstr "비밀번호 재설정을 요청하셨기 때문에 이 이메일을 보내드립니다."
+
+#: templates/email/password_reset.html
+msgid "Please click the button below to reset your password:"
+msgstr "아래 버튼을 클릭하여 비밀번호를 재설정하세요:"
+
+#: templates/email/password_reset.html
+msgid "Reset Password"
+msgstr "비밀번호 재설정"
+
+#: templates/email/password_reset.html
+msgid "Or copy and paste the following link into your browser:"
+msgstr "또는 다음 링크를 브라우저에 복사하여 붙여넣기 하세요:"
+
+#: templates/email/password_reset.html
+msgid "If you did not request a password reset, please ignore this email. Your account will remain unchanged."
+msgstr "비밀번호 재설정을 요청하지 않은 경우 이 이메일을 무시하세요. 계정은 변경되지 않습니다."
+
+#: templates/email/password_reset.html
+msgid "This is an automated message, please do not reply."
+msgstr "이 메일은 자동으로 발송되었습니다. 회신하지 마세요."
+
+#: email plain text
+msgid "Dear %(name)s,\n\nYou have requested to reset your password.\n\nPlease click the following link to reset your password:\n%(url)s\n\nThis link will expire at %(expires)s.\n\nIf you did not request a password reset, please ignore this email."
+msgstr "%(name)s 님,\n\n비밀번호 재설정을 요청하셨습니다.\n\n다음 링크를 클릭하여 비밀번호를 재설정하세요:\n%(url)s\n\n이 링크는 %(expires)s에 만료됩니다.\n\n비밀번호 재설정을 요청하지 않은 경우 이 이메일을 무시하세요."
