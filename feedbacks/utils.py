@@ -102,6 +102,16 @@ class RedisHealthChecker:
     """Redis连接健康检查"""
     
     @staticmethod
+    def is_celery_enabled() -> bool:
+        """
+        检查 Celery 是否启用
+        
+        Returns:
+            bool: Celery 启用返回 True，否则返回 False
+        """
+        return getattr(settings, 'CELERY_ENABLED', True)
+    
+    @staticmethod
     def is_redis_available() -> bool:
         """
         检查Redis是否可用
@@ -109,10 +119,14 @@ class RedisHealthChecker:
         Returns:
             bool: Redis可用返回True，否则返回False
         """
+        # 如果 Celery 被禁用，直接返回 False
+        if not RedisHealthChecker.is_celery_enabled():
+            logger.debug("Celery 已禁用，跳过 Redis 检查")
+            return False
+        
         try:
             # 尝试连接Redis
             from redis import Redis
-            from django.conf import settings
             
             # 从Celery配置中获取Redis URL
             redis_url = getattr(settings, 'CELERY_BROKER_URL', None)
@@ -127,6 +141,9 @@ class RedisHealthChecker:
             logger.debug("Redis连接正常")
             return True
             
+        except ImportError:
+            logger.warning("Redis 库未安装，将使用同步模式")
+            return False
         except Exception as e:
             logger.warning(f"Redis连接失败: {str(e)}")
             return False
@@ -177,6 +194,9 @@ class RedisHealthChecker:
 class TaskExecutor:
     """
     任务执行器 - 支持异步/同步自动降级
+    
+    当 CELERY_ENABLED=False 或 Redis 不可用时，自动降级到同步执行。
+    对于 bind=True 的 Celery 任务，使用 task.run() 方法正确调用。
     """
     
     @staticmethod
@@ -198,31 +218,37 @@ class TaskExecutor:
         Returns:
             任务执行结果或任务ID
         """
-        try:
-            # 首先尝试异步执行
-            if RedisHealthChecker.is_redis_available():
-                logger.info(f"异步执行任务: {task_func.__name__}")
+        task_name = getattr(task_func, '__name__', str(task_func))
+        
+        # 检查是否应该使用异步模式
+        use_async = RedisHealthChecker.is_celery_enabled() and RedisHealthChecker.is_redis_available()
+        
+        if use_async:
+            try:
+                logger.info(f"异步执行任务: {task_name}")
                 result = task_func.delay(*args, **kwargs)
                 return {'mode': 'async', 'task_id': result.id}
-            else:
-                raise Exception("Redis not available")
-                
-        except Exception as e:
-            logger.warning(f"异步执行失败: {str(e)}")
-            
-            if fallback_to_sync:
-                # 降级到同步执行
-                logger.info(f"降级到同步执行: {task_func.__name__}")
-                try:
-                    # 直接调用任务函数（不通过Celery）
+            except Exception as e:
+                logger.warning(f"异步执行失败: {str(e)}")
+                if not fallback_to_sync:
+                    return {'mode': 'failed', 'error': str(e)}
+                # 继续尝试同步执行
+        
+        # 同步执行（Celery 禁用、Redis 不可用、或异步失败后降级）
+        if fallback_to_sync or not use_async:
+            logger.info(f"同步执行任务: {task_name}")
+            try:
+                # 对于 Celery 任务，使用 .run() 方法正确调用（处理 bind=True 的情况）
+                if hasattr(task_func, 'run'):
+                    result = task_func.run(*args, **kwargs)
+                else:
                     result = task_func(*args, **kwargs)
-                    return {'mode': 'sync', 'result': result}
-                except Exception as sync_error:
-                    logger.error(f"同步执行也失败: {str(sync_error)}")
-                    return {'mode': 'failed', 'error': str(sync_error)}
-            else:
-                logger.error(f"任务执行失败，未启用降级: {task_func.__name__}")
-                return {'mode': 'failed', 'error': str(e)}
+                return {'mode': 'sync', 'result': result}
+            except Exception as sync_error:
+                logger.error(f"同步执行失败: {str(sync_error)}")
+                return {'mode': 'failed', 'error': str(sync_error)}
+        
+        return {'mode': 'failed', 'error': 'No execution mode available'}
 
 
 def safe_async_task(task_func: Callable, *args, **kwargs):

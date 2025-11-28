@@ -548,6 +548,10 @@ TENANT_MIDDLEWARE_PERFORMANCE_MONITORING = get_env_with_validation(
 )
 
 # Celery Configuration
+# CELERY_ENABLED: 设置为 False 可禁用异步任务，所有任务将同步执行
+# 适用于 cPanel 等无法运行 Celery Worker 的环境
+CELERY_ENABLED = os.getenv('CELERY_ENABLED', 'true').lower() == 'true'
+
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
@@ -555,6 +559,10 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_ENABLE_UTC = True
+
+# 当 CELERY_ENABLED=False 时，强制任务同步执行
+CELERY_TASK_ALWAYS_EAGER = not CELERY_ENABLED
+CELERY_TASK_EAGER_PROPAGATES = not CELERY_ENABLED
 
 # Celery Task Routes
 CELERY_TASK_ROUTES = {

@@ -50,8 +50,7 @@ EMAIL_HOST_PASSWORD=fxsxbiwcbhjsbrbjda
 # 发件人邮箱（与 EMAIL_HOST_USER 相同）
 DEFAULT_FROM_EMAIL=7548155@qq.com
 
-
-	
+CELERY_ENABLED=false
  
 
 
