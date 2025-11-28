@@ -1,6 +1,6 @@
 # 数据库配置
-DB_NAME=espresso_multi_tenant_db	
-DB_USER=espresso_root
+DB_NAME=compress_multi_tenant_db_dev	
+DB_USER=compress_root
 DB_PASSWORD=admin_main
 DB_HOST=localhost
 DB_PORT=3306
@@ -10,9 +10,49 @@ SECRET_KEY=django-insecure-change-this-in-production
 
 # 调试模式
 DEBUG=True
-
+LOG_TO_CONSOLE=False
 # 允许的主机
 ALLOWED_HOSTS=localhost,127.0.0.1 
+
+
+
+ API请求频率限制配置
+# 控制激活API的总体请求频率，防止系统过载
+ACTIVATION_API_RATE_LIMIT = 100/hour
+
+# 可疑活动检测 - IP频率限制配置
+# 控制同一IP地址的激活频率，防止恶意批量激活
+SUSPICIOUS_IP_ACTIVATION_LIMIT = 15
+SUSPICIOUS_IP_CHECK_HOURS = 1
+
+# 可疑活动检测 - 许可证频率限制配置  
+# 控制同一许可证的重复激活频率，防止许可证滥用
+SUSPICIOUS_LICENSE_ACTIVATION_LIMIT = 13
+SUSPICIOUS_LICENSE_CHECK_MINUTES = 60
+
+
+
+#EMAIL_HOST_USER = 7548155@qq.com
+#EMAIL_HOST_PASSWORD = sxbiwcbhjsbrbjda
+#DEFAULT_FROM_EMAIL = 7548155@qq.com
+
+
+# 邮件配置（QQ邮箱SMTP）
+# 关闭控制台模式，启用真实 SMTP 发送
+EMAIL_USE_CONSOLE=false
+
+# QQ邮箱地址
+EMAIL_HOST_USER=7548155@qq.com
+
+# QQ邮箱授权码（16位字符，不是密码）
+EMAIL_HOST_PASSWORD=fxsxbiwcbhjsbrbjda
+
+# 发件人邮箱（与 EMAIL_HOST_USER 相同）
+DEFAULT_FROM_EMAIL=7548155@qq.com
+
+
+	
+ 
 
 
 
