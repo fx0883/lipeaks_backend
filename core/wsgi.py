@@ -67,6 +67,16 @@ def _fix_cpanel_encoding():
 
 _fix_cpanel_encoding()
 
+# ============================================================================
+# 限制 OpenBLAS/MKL/OMP 线程数
+# cPanel 共享主机环境通常限制进程/线程总数，默认的多线程配置可能导致资源耗尽
+# ============================================================================
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+
 import pymysql
 
 # 必须在导入 Django 之前设置
