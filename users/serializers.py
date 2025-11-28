@@ -392,9 +392,15 @@ class LoginSerializer(serializers.Serializer):
             if request:
                 require_member_header_match(request)  # 缺失/非法会抛4001；未认证用户仅校验Header格式
             status_key, member = self._member_lookup_by_identifier(identifier, header_tid)
+            
             if status_key == 'found' and member and member.check_password(password):
                 user = member
             else:
+                # 记录成员登录失败详情
+                logger.warning(f"成员登录失败: username={identifier}, tenant_id={header_tid}, status={status_key}, member_found={member is not None}")
+                if member and not member.check_password(password):
+                    logger.warning(f"成员密码验证失败: username={identifier}")
+                
                 # 若凭据命中了管理员账号，也应当禁止（管理员/超管禁头）
                 possible_admin = authenticate(username=identifier, password=password)
                 if not possible_admin:
@@ -406,6 +412,7 @@ class LoginSerializer(serializers.Serializer):
                         pass
                 if possible_admin is not None:
                     # 管理员/超管携带Header登录，返回4001
+                    logger.warning(f"管理员尝试携带Header登录: username={identifier}, tenant_id={header_tid}")
                     raise TenantHeaderInvalidOrMissing()
                 # 其他情况按通用失败处理
                 raise serializers.ValidationError("Invalid username/email or password")
@@ -419,9 +426,24 @@ class LoginSerializer(serializers.Serializer):
                         user = user_by_email
                 except User.DoesNotExist:
                     pass
+            
+            # 记录管理员登录失败详情
+            if not user:
+                logger.warning(f"管理员登录验证失败: username={identifier} (无Header流程)")
+                # 检查是否存在该用户但密码错误
+                try:
+                    u = User.objects.filter(username=identifier).first() or User.objects.filter(email=identifier).first()
+                    if u:
+                        logger.warning(f"用户存在但验证失败: username={u.username}, is_active={u.is_active}, is_staff={u.is_staff}, check_password={u.check_password(password)}")
+                    else:
+                        logger.warning(f"用户不存在: username={identifier}")
+                except Exception as e:
+                    logger.error(f"检查用户状态时出错: {e}")
+
             # 若命中成员，则因无Header而拒绝
             if not user:
                 # 不再进行成员查找，直接要求Header
+                logger.warning(f"登录失败且未命中User，抛出TenantHeaderInvalidOrMissing以提示可能需要Header: username={identifier}")
                 raise TenantHeaderInvalidOrMissing()
 
         if not user:
