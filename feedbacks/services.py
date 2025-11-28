@@ -171,7 +171,8 @@ class EmailService:
         """
         Send email notification for a feedback reply
         
-        ✅ 新版本：使用后台线程池，API立即返回
+        当 CELERY_ENABLED=False 时（如 cPanel 环境），直接同步执行。
+        否则使用后台线程池，API立即返回。
         
         Args:
             reply: FeedbackReply instance
@@ -185,7 +186,16 @@ class EmailService:
                 logger.info(f"Skipping email for internal note reply {reply.id}")
                 return {'status': 'skipped', 'reason': 'internal_note'}
             
-            # ✅ 提交到后台线程池，API立即返回
+            # 检查是否禁用了 Celery（如 cPanel 环境）
+            celery_enabled = getattr(settings, 'CELERY_ENABLED', True)
+            
+            if not celery_enabled:
+                # cPanel 模式：直接同步执行
+                logger.info(f"Sync mode: executing reply notification directly for reply {reply.id}")
+                _process_email_in_background('reply', reply.id, " (sync mode)")
+                return {'status': 'completed', 'mode': 'sync'}
+            
+            # 正常模式：提交到后台线程池，API立即返回
             future = _email_thread_pool.submit_email_task(
                 _process_email_in_background,
                 'reply',
@@ -209,7 +219,8 @@ class EmailService:
         """
         Send email notification for status change
         
-        ✅ 新版本：使用后台线程池，API立即返回
+        当 CELERY_ENABLED=False 时（如 cPanel 环境），直接同步执行。
+        否则使用后台线程池，API立即返回。
         
         Args:
             status_history: FeedbackStatusHistory instance
@@ -228,7 +239,16 @@ class EmailService:
                 logger.info(f"Skipping email for insignificant status change: {change}")
                 return {'status': 'skipped', 'reason': 'insignificant_change'}
             
-            # ✅ 提交到后台线程池，API立即返回
+            # 检查是否禁用了 Celery（如 cPanel 环境）
+            celery_enabled = getattr(settings, 'CELERY_ENABLED', True)
+            
+            if not celery_enabled:
+                # cPanel 模式：直接同步执行
+                logger.info(f"Sync mode: executing status notification directly for history {status_history.id}")
+                _process_email_in_background('status_change', status_history.id, " (sync mode)")
+                return {'status': 'completed', 'mode': 'sync'}
+            
+            # 正常模式：提交到后台线程池，API立即返回
             future = _email_thread_pool.submit_email_task(
                 _process_email_in_background,
                 'status_change',
@@ -252,7 +272,8 @@ class EmailService:
         """
         Send email verification for anonymous feedback
         
-        ✅ 新版本：使用后台线程池，API立即返回
+        当 CELERY_ENABLED=False 时（如 cPanel 环境），直接同步执行。
+        否则使用后台线程池，API立即返回。
         
         Args:
             feedback: Feedback instance
@@ -266,7 +287,16 @@ class EmailService:
                 logger.info(f"Skipping verification for feedback {feedback.id}")
                 return {'status': 'skipped', 'reason': 'already_verified_or_has_user'}
             
-            # ✅ 提交到后台线程池，API立即返回
+            # 检查是否禁用了 Celery（如 cPanel 环境）
+            celery_enabled = getattr(settings, 'CELERY_ENABLED', True)
+            
+            if not celery_enabled:
+                # cPanel 模式：直接同步执行
+                logger.info(f"Sync mode: executing verification directly for feedback {feedback.id}")
+                _process_email_in_background('verification', feedback.id, " (sync mode)")
+                return {'status': 'completed', 'mode': 'sync'}
+            
+            # 正常模式：提交到后台线程池，API立即返回
             future = _email_thread_pool.submit_email_task(
                 _process_email_in_background,
                 'verification',
@@ -293,6 +323,8 @@ class EmailService:
         当用户提交新反馈后调用此方法，会检查应用是否配置了通知，
         如果配置了则提交任务到后台线程池处理。
         
+        当 CELERY_ENABLED=False 时（如 cPanel 环境），直接同步执行，绕过线程池。
+        
         Args:
             feedback: Feedback instance
             
@@ -318,7 +350,17 @@ class EmailService:
                 logger.info(f"No notification config for application {feedback.application.id}")
                 return {'status': 'skipped', 'reason': 'no_config'}
             
-            # 提交到后台线程池
+            # 检查是否禁用了 Celery（如 cPanel 环境）
+            # 禁用时直接同步执行，绕过线程池（cPanel 可能限制后台线程）
+            celery_enabled = getattr(settings, 'CELERY_ENABLED', True)
+            
+            if not celery_enabled:
+                # cPanel 模式：直接同步执行
+                logger.info(f"Sync mode: executing new feedback notification directly for feedback {feedback.id}")
+                _process_new_feedback_notification(feedback.id, " (sync mode)")
+                return {'status': 'completed', 'mode': 'sync'}
+            
+            # 正常模式：提交到后台线程池
             future = _email_thread_pool.submit_email_task(
                 _process_new_feedback_notification,
                 feedback.id,
