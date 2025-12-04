@@ -91,6 +91,7 @@ class Article(BaseModel):
     is_featured = models.BooleanField(_("是否特色"), default=False)
     is_pinned = models.BooleanField(_("是否置顶"), default=False)
     allow_comment = models.BooleanField(_("允许评论"), default=True)
+    is_locked = models.BooleanField(_("是否锁定"), default=False, help_text="锁定后文章不可编辑")
     visibility = models.CharField(_("可见性"), max_length=20, choices=VISIBILITY_CHOICES, default='public')
     password = models.CharField(_("访问密码"), max_length=128, blank=True, null=True)
     published_at = models.DateTimeField(_("发布时间"), blank=True, null=True)

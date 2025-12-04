@@ -288,7 +288,7 @@ class ArticleListSerializer(serializers.ModelSerializer):
         model = Article
         fields = [
             'id', 'title', 'slug', 'excerpt', 'author_info', 'author_type',
-            'status', 'is_featured', 'is_pinned', 'cover_image', 'cover_image_small',
+            'status', 'is_featured', 'is_pinned', 'is_locked', 'cover_image', 'cover_image_small',
             'published_at', 'created_at', 'updated_at', 'categories', 'tags', 
             'comments_count', 'likes_count', 'views_count',
             'parent', 'parent_info', 'children_count'
@@ -408,7 +408,7 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'content', 'content_type', 'excerpt',
             'author_info', 'author_type', 'status', 'is_featured', 'is_pinned',
-            'allow_comment', 'visibility', 'password', 'created_at',
+            'is_locked', 'allow_comment', 'visibility', 'password', 'created_at',
             'updated_at', 'published_at', 'cover_image', 'cover_image_small', 'template',
             'sort_order', 'tenant', 'tenant_info', 'categories', 'tags',
             'meta', 'stats', 'version_info',
@@ -560,7 +560,7 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
         model = Article
         fields = [
             'id', 'title', 'content', 'content_type', 'excerpt',
-            'status', 'is_featured', 'is_pinned', 'allow_comment',
+            'status', 'is_featured', 'is_pinned', 'is_locked', 'allow_comment',
             'visibility', 'password', 'cover_image', 'cover_image_small', 'template',
             'sort_order', 'parent', 'category_ids', 'tag_ids', 'applications', 'meta',
             'change_description', 'create_new_version', 'publish_now',
@@ -833,7 +833,7 @@ class MemberArticleCreateUpdateSerializer(ArticleCreateUpdateSerializer):
     class Meta(ArticleCreateUpdateSerializer.Meta):
         fields = [
             'id', 'title', 'content', 'content_type', 'excerpt',
-            'status', 'is_featured', 'is_pinned', 'allow_comment',
+            'status', 'is_featured', 'is_pinned', 'is_locked', 'allow_comment',
             'visibility', 'password', 'cover_image', 'cover_image_small', 'template',
             'sort_order', 'parent', 'category_ids', 'tag_ids', 'application', 'meta',
             'change_description', 'create_new_version', 'publish_now',

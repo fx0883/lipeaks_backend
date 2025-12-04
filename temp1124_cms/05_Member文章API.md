@@ -69,6 +69,7 @@ curl -X GET "http://localhost:8000/api/v1/cms/member/articles/?application=6" \
 | cover_image | string | 否 | - | 封面图片URL |
 | category_ids | array | 否 | [] | 分类ID数组 |
 | tag_ids | array | 否 | [] | 标签ID数组 |
+| is_locked | boolean | 否 | false | 是否锁定（锁定后文章不可编辑） |
 | allow_comment | boolean | 否 | true | 是否允许评论 |
 | visibility | string | 否 | public | 可见性：public/private/password |
 | password | string | 否 | - | 访问密码（visibility=password时必填） |

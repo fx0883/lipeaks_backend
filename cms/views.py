@@ -67,6 +67,12 @@ logger = logging.getLogger(__name__)
             OpenApiParameter(name="date_from", description="发布日期起始，格式YYYY-MM-DD", required=False, type=str),
             OpenApiParameter(name="date_to", description="发布日期截止，格式YYYY-MM-DD", required=False, type=str),
             OpenApiParameter(name="application", description="应用ID过滤（可选）", required=False, type=int),
+            OpenApiParameter(name="has_parent", description="是否有父文章（true: 是子文章, false: 是顶级文章）", required=False, type=bool),
+            OpenApiParameter(name="parent_id", description="父文章ID", required=False, type=int),
+            OpenApiParameter(name="author_type", description="作者类型", required=False, type=str, enum=["member", "admin"]),
+            OpenApiParameter(name="user_id", description="管理员用户ID", required=False, type=int),
+            OpenApiParameter(name="member_id", description="会员用户ID", required=False, type=int),
+            OpenApiParameter(name="category_application_id", description="按分类所属应用ID过滤", required=False, type=int),
             OpenApiParameter(name="X-Tenant-ID", description="租户ID", required=False, type=str, location=OpenApiParameter.HEADER),
         ],
         examples=[
