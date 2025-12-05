@@ -17,6 +17,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 
 from common.authentication.jwt_auth import generate_jwt_token
 from common.utils.image_url import add_domain_to_image_url
+from users.models import User
 from users.serializers import (
     LoginSerializer, TokenRefreshSerializer, RegisterSerializer,
     ChangePasswordSerializer, PasswordResetRequestSerializer, PasswordResetVerifySerializer,
@@ -573,7 +574,13 @@ class AdminChangePasswordSerializer(serializers.Serializer):
         
         # 验证新密码强度
         from django.contrib.auth.password_validation import validate_password
-        validate_password(data['new_password'])
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        
+        try:
+            validate_password(data['new_password'])
+        except DjangoValidationError as e:
+            # 将Django的ValidationError转换为DRF的ValidationError
+            raise serializers.ValidationError({"new_password": list(e.messages)})
         
         return data
 
