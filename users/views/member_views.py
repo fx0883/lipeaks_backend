@@ -25,7 +25,8 @@ from users.serializers import (
     MemberCreateSerializer,
     SubAccountSerializer,
     SubAccountCreateSerializer,
-    UserPasswordUpdateSerializer
+    UserPasswordUpdateSerializer,
+    MemberDeactivateSerializer
 )
 from common.schema import api_schema, common_search_parameter, user_status_parameter, common_pagination_parameters, common_error_responses
 from tenants.models import Tenant
@@ -1150,4 +1151,172 @@ class MemberSpecificAvatarUploadView(APIView):
             return Response(
                 {"detail": f"头像上传失败: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            ) 
+            )
+
+
+class MemberDeactivateView(APIView):
+    """
+    会员账号注销视图
+    
+    允许 Member 用户注销自己的账号，同时删除所有关联数据和子账号。
+    此操作不可逆，所有数据将被永久删除。
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @extend_schema(
+        summary="注销会员账号",
+        description="""
+        注销当前登录的会员账号。此操作将：
+        1. 验证用户密码确认操作
+        2. 删除用户的所有关联数据（文章、点赞、关注、收藏、积分等）
+        3. 删除用户的所有子账号及其关联数据
+        4. 永久删除用户账号
+        
+        **警告：此操作不可逆，所有数据将被永久删除。**
+        """,
+        request=MemberDeactivateSerializer,
+        responses={
+            200: OpenApiResponse(
+                description="账号注销成功",
+                examples=[
+                    OpenApiExample(
+                        name="注销成功示例",
+                        value={
+                            "success": True,
+                            "code": 2000,
+                            "message": "账号已成功注销",
+                            "data": {
+                                "deleted_articles": 5,
+                                "deleted_likes": 10,
+                                "deleted_follows": 3,
+                                "deleted_sub_accounts": 2
+                            }
+                        }
+                    )
+                ]
+            ),
+            400: OpenApiResponse(
+                description="请求参数错误",
+                examples=[
+                    OpenApiExample(
+                        name="密码错误示例",
+                        value={
+                            "password": ["密码错误"]
+                        }
+                    )
+                ]
+            ),
+            403: OpenApiResponse(
+                description="权限不足（非Member用户）",
+                examples=[
+                    OpenApiExample(
+                        name="非Member用户示例",
+                        value={
+                            "detail": "此接口仅适用于普通用户"
+                        }
+                    )
+                ]
+            )
+        },
+        tags=["普通用户管理"]
+    )
+    def post(self, request):
+        """
+        处理会员账号注销请求
+        """
+        from users.serializers import MemberDeactivateSerializer
+        from interactions.models import MemberLike, MemberFollow, ArticleLike
+        from cms.models import Article
+        from points.models import TenantUserProfile, TenantUserPoints, TenantUserTypeTag
+        from users.models import PasswordResetToken
+        
+        user = request.user
+        
+        # 检查当前用户是否为 Member 类型
+        if not isinstance(user, Member):
+            logger.warning(f"非普通用户 {user.username} 尝试访问会员注销接口")
+            return Response(
+                {"detail": "此接口仅适用于普通用户"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 验证请求数据
+        serializer = MemberDeactivateSerializer(data=request.data, context={'request': request})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        reason = serializer.validated_data.get('reason', '')
+        
+        # 记录注销原因（用于统计）
+        logger.info(f"用户 {user.username} (ID: {user.id}) 请求注销账号，原因: {reason or '未提供'}")
+        
+        # 统计删除的数据量
+        stats = {
+            "deleted_articles": 0,
+            "deleted_article_likes": 0,
+            "deleted_member_likes": 0,
+            "deleted_follows": 0,
+            "deleted_points_records": 0,
+            "deleted_sub_accounts": 0
+        }
+        
+        try:
+            # 获取所有需要删除的用户（主账号 + 子账号）
+            members_to_delete = [user]
+            sub_accounts = Member.objects.filter(parent=user)
+            members_to_delete.extend(list(sub_accounts))
+            stats["deleted_sub_accounts"] = sub_accounts.count()
+            
+            # 对每个用户删除关联数据
+            for member in members_to_delete:
+                # 1. 删除 interactions 数据
+                # MemberLike (发出的和收到的)
+                deleted_count = MemberLike.objects.filter(from_member=member).delete()[0]
+                stats["deleted_member_likes"] += deleted_count
+                MemberLike.objects.filter(to_member=member).delete()
+                
+                # MemberFollow (关注的和被关注的)
+                deleted_count = MemberFollow.objects.filter(follower=member).delete()[0]
+                stats["deleted_follows"] += deleted_count
+                MemberFollow.objects.filter(following=member).delete()
+                
+                # ArticleLike
+                deleted_count = ArticleLike.objects.filter(from_member=member).delete()[0]
+                stats["deleted_article_likes"] += deleted_count
+                
+                # 2. 删除 CMS 数据
+                deleted_count = Article.objects.filter(member=member).delete()[0]
+                stats["deleted_articles"] += deleted_count
+                
+                # 3. 删除 Points 数据
+                TenantUserTypeTag.objects.filter(member=member).delete()
+                deleted_count = TenantUserPoints.objects.filter(member=member).delete()[0]
+                stats["deleted_points_records"] += deleted_count
+                TenantUserProfile.objects.filter(member=member).delete()
+                
+                # 4. 删除密码重置令牌
+                PasswordResetToken.objects.filter(member=member).delete()
+            
+            # 删除子账号
+            sub_accounts.delete()
+            
+            # 删除主账号
+            username = user.username
+            user_id = user.id
+            user.delete()
+            
+            logger.info(f"用户 {username} (ID: {user_id}) 账号已成功注销，统计: {stats}")
+            
+            return Response({
+                "success": True,
+                "code": 2000,
+                "message": "账号已成功注销",
+                "data": stats
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"用户 {user.username} 注销账号失败: {str(e)}")
+            return Response(
+                {"detail": f"注销失败: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

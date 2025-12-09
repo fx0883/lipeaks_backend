@@ -1175,4 +1175,33 @@ class SubAccountCreateSerializer(serializers.ModelSerializer):
         # 保存子账号
         member.save()
         
-        return member 
+        return member
+
+
+class MemberDeactivateSerializer(serializers.Serializer):
+    """
+    会员账号注销序列化器
+    
+    用于验证注销请求，需要提供当前密码以确认操作
+    """
+    password = serializers.CharField(
+        required=True, 
+        write_only=True,
+        style={'input_type': 'password'},
+        help_text="当前账号密码，用于确认注销操作"
+    )
+    reason = serializers.CharField(
+        required=False, 
+        max_length=500, 
+        allow_blank=True,
+        help_text="注销原因（可选），用于统计分析"
+    )
+    
+    def validate_password(self, value):
+        """
+        验证密码是否正确
+        """
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("密码错误")
+        return value

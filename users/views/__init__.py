@@ -34,6 +34,7 @@ from .member_views import (
     SubAccountListCreateView,
     SubAccountDetailView,
     MemberAvatarUploadView,
+    MemberDeactivateView,
 )
 
 # 从member_admin_views.py导入管理员端Member管理视图
