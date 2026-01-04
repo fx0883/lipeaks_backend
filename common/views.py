@@ -724,14 +724,14 @@ class FileUploadView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # 验证文件大小
-        max_size = 5 * 1024 * 1024  # 5MB
+        max_size = 10 * 1024 * 1024  # 10MB
         if upload_file.size > max_size:
             return Response({
                 'success': False,
                 'code': 4000,
                 'message': '请求参数错误',
                 'data': {
-                    'detail': f'文件太大，图片大小不能超过5MB'
+                    'detail': f'文件太大，图片大小不能超过10MB'
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
         
@@ -930,14 +930,14 @@ class ImageUploadWithThumbnailView(APIView):
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        max_size = 5 * 1024 * 1024  # 5MB
+        max_size = 10 * 1024 * 1024  # 10MB
         if upload_file.size > max_size:
             return Response({
                 'success': False,
                 'code': 4000,
                 'message': '请求参数错误',
                 'data': {
-                    'detail': f'文件太大，图片大小不能超过5MB'
+                    'detail': f'文件太大，图片大小不能超过10MB'
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
         
