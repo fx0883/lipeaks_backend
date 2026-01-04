@@ -609,13 +609,13 @@ PARLER_DEFAULT_LANGUAGE_CODE = 'zh-hans'
 # ============================================================================
 # 增加内存上传大小限制，支持较大文件上传（例如图片、文档等）
 # 默认值：2.5MB (2621440 bytes)
-# 设置为 10MB，可根据实际需求调整
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
+# 设置为 20MB，可根据实际需求调整
+DATA_UPLOAD_MAX_MEMORY_SIZE = 20971520  # 20MB
 
 # 请求体最大大小限制（包括文件上传）
 # 设置为 50MB，防止恶意请求
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000  # 表单字段数量限制
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB - 在内存中处理的最大文件大小
+FILE_UPLOAD_MAX_MEMORY_SIZE = 20971520  # 20MB - 在内存中处理的最大文件大小
 
 # ============================================================================
 # 租户隔离配置 (Tenant Isolation Configuration)
