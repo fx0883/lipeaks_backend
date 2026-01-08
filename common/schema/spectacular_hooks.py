@@ -35,7 +35,10 @@ def add_security_requirement(endpoints, **kwargs):
 
 def customize_feedback_tags(result, generator, request, public):
     """
-    自定义反馈系统的标签，确保所有 feedbacks 相关的端点使用 'Feedback System' 标签
+    自定义应用的标签，确保不同系统的端点使用正确的标签
+    - feedbacks: 'Feedback System'
+    - notifications (admin): '通知系统-管理端'
+    - notifications (member): '通知系统-成员端'
     
     Args:
         result: OpenAPI schema 字典
@@ -68,5 +71,31 @@ def customize_feedback_tags(result, generator, request, public):
                         # 如果当前是 'api' 或其他默认 tag，替换为 'Feedback System'
                         elif any(tag in ['api', 'feedbacks'] for tag in current_tags):
                             operation['tags'] = ['Feedback System']
+        
+        # 处理通知系统-管理端 (/api/v1/admin/notifications/)
+        elif '/admin/notifications/' in path:
+            for method in ['get', 'post', 'put', 'patch', 'delete', 'options', 'head']:
+                if method in path_item:
+                    operation = path_item[method]
+                    current_tags = operation.get('tags', [])
+                    
+                    # 如果已经有正确的tag，保留；否则设置正确的tag
+                    if '通知系统-管理端' in current_tags:
+                        operation['tags'] = ['通知系统-管理端']
+                    elif any(tag in ['api', 'admin', 'notifications'] for tag in current_tags):
+                        operation['tags'] = ['通知系统-管理端']
+        
+        # 处理通知系统-成员端 (/api/v1/notifications/)
+        elif '/notifications/' in path and '/admin/notifications/' not in path:
+            for method in ['get', 'post', 'put', 'patch', 'delete', 'options', 'head']:
+                if method in path_item:
+                    operation = path_item[method]
+                    current_tags = operation.get('tags', [])
+                    
+                    # 如果已经有正确的tag，保留；否则设置正确的tag
+                    if '通知系统-成员端' in current_tags:
+                        operation['tags'] = ['通知系统-成员端']
+                    elif any(tag in ['api', 'notifications'] for tag in current_tags):
+                        operation['tags'] = ['通知系统-成员端']
     
     return result

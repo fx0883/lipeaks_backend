@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 
 from common.viewsets import TenantModelViewSet
 from common.utils.tenant_context import get_current_tenant
@@ -19,7 +20,7 @@ def get_tenant_from_request(request):
     """
     从 request 中获取租户
     
-    优先级：
+    优先级:
     1. request.tenant (中间件设置)
     2. get_current_tenant() (线程本地存储)
     3. request.user.tenant (用户关联的租户)
@@ -55,12 +56,20 @@ from .serializers import (
 from .permissions import NotificationPermission
 
 
+@extend_schema_view(
+    list=extend_schema(tags=['通知系统-管理端'], summary='获取通知列表'),
+    retrieve=extend_schema(tags=['通知系统-管理端'], summary='获取通知详情'),
+    create=extend_schema(tags=['通知系统-管理端'], summary='创建通知'),
+    update=extend_schema(tags=['通知系统-管理端'], summary='更新通知'),
+    partial_update=extend_schema(tags=['通知系统-管理端'], summary='部分更新通知'),
+    destroy=extend_schema(tags=['通知系统-管理端'], summary='删除通知'),
+)
 class NotificationViewSet(TenantModelViewSet):
     """
     通知管理视图集
     
-    管理端API，用于租户管理员管理通知
-    - GET 请求不需要认证，通过 X-Tenant-ID header 获取租户ID
+    管理端 API,用于租户管理员管理通知
+    - GET 请求不需要认证,通过 X-Tenant-ID header 获取租户ID
     - POST/PATCH/DELETE 需要租户管理员权限
     """
     queryset = Notification.objects.all()
@@ -88,8 +97,8 @@ class NotificationViewSet(TenantModelViewSet):
     def get_queryset(self):
         """
         获取查询集
-        - 认证用户：基于用户的租户
-        - 匿名用户：基于 X-Tenant-ID header
+        - 认证用户:基于用户的租户
+        - 匿名用户:基于 X-Tenant-ID header
         """
         queryset = Notification.objects.filter(is_deleted=False)
         
@@ -138,6 +147,7 @@ class NotificationViewSet(TenantModelViewSet):
         
         serializer.save(tenant=tenant)
     
+    @extend_schema(tags=['通知系统-管理端'], summary='获取通知的接收者列表')
     @action(detail=True, methods=['get'], url_path='recipients')
     def recipients(self, request, pk=None):
         """获取通知的接收者列表"""
@@ -155,10 +165,11 @@ class NotificationViewSet(TenantModelViewSet):
         serializer = NotificationRecipientSerializer(recipients, many=True)
         return Response(serializer.data)
     
+    @extend_schema(tags=['通知系统-管理端'], summary='添加通知接收者')
     @action(detail=True, methods=['post'], url_path='add-recipients')
     def add_recipients(self, request, pk=None):
         """
-        添加接收者（仅用于 scope=members 的通知）
+        添加接收者(仅用于 scope=members 的通知)
         """
         notification = self.get_object()
         
@@ -174,7 +185,7 @@ class NotificationViewSet(TenantModelViewSet):
         
         member_ids = serializer.validated_data['member_ids']
         
-        # 获取有效的成员（同租户）
+        # 获取有效的成员(同租户)
         members = Member.objects.filter(
             id__in=member_ids,
             tenant=notification.tenant,
@@ -196,6 +207,7 @@ class NotificationViewSet(TenantModelViewSet):
             'added_count': added_count
         })
     
+    @extend_schema(tags=['通知系统-管理端'], summary='移除通知接收者')
     @action(detail=True, methods=['post'], url_path='remove-recipients')
     def remove_recipients(self, request, pk=None):
         """移除接收者"""
@@ -218,13 +230,14 @@ class NotificationViewSet(TenantModelViewSet):
             'removed_count': deleted_count
         })
     
+    @extend_schema(tags=['通知系统-管理端'], summary='发布通知')
     @action(detail=True, methods=['post'], url_path='publish')
     def publish(self, request, pk=None):
         """
         发布通知
         - 将状态从 draft 改为 published
         - 根据 scope 自动创建接收者记录
-        - 如果 send_email=True，发送邮件
+        - 如果 send_email=True,发送邮件
         """
         notification = self.get_object()
         
@@ -242,7 +255,7 @@ class NotificationViewSet(TenantModelViewSet):
         notification.published_at = timezone.now()
         notification.save(update_fields=['status', 'published_at', 'updated_at'])
         
-        # 发送邮件（异步）
+        # 发送邮件(异步)
         if notification.send_email:
             from .services import send_notification_email
             send_notification_email(notification.id)
@@ -259,14 +272,14 @@ class NotificationViewSet(TenantModelViewSet):
                 is_active=True
             )
         elif notification.scope == 'application':
-            # 面向应用下所有成员（这里假设所有租户成员都能看到应用的通知）
-            # 如果有应用-成员关联，可以在这里筛选
+            # 面向应用下所有成员(这里假设所有租户成员都能看到应用的通知)
+            # 如果有应用-成员关联,可以在这里筛选
             members = Member.objects.filter(
                 tenant=notification.tenant,
                 is_active=True
             )
         else:
-            # scope=members，不自动创建，由管理员手动添加
+            # scope=members,不自动创建,由管理员手动添加
             return
         
         # 批量创建接收者记录
@@ -290,6 +303,7 @@ class NotificationViewSet(TenantModelViewSet):
         if recipients_to_create:
             NotificationRecipient.objects.bulk_create(recipients_to_create)
     
+    @extend_schema(tags=['通知系统-管理端'], summary='归档通知')
     @action(detail=True, methods=['post'], url_path='archive')
     def archive(self, request, pk=None):
         """归档通知"""
@@ -307,6 +321,7 @@ class NotificationViewSet(TenantModelViewSet):
         serializer = NotificationDetailSerializer(notification)
         return Response(serializer.data)
     
+    @extend_schema(tags=['通知系统-管理端'], summary='获取通知统计信息')
     @action(detail=True, methods=['get'], url_path='statistics')
     def statistics(self, request, pk=None):
         """获取通知统计信息"""

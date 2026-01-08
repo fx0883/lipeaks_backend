@@ -10,4 +10,5 @@ app_name = 'member-notifications'
 router = DefaultRouter()
 router.register('', MemberNotificationViewSet, basename='member-notification')
 
+# 成员端 API: /api/v1/notifications/
 urlpatterns = router.urls

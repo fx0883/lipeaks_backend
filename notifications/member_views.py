@@ -7,25 +7,64 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from common.permissions import IsMemberUser
+from users.models import Member
 
-from .models import NotificationRecipient
+from .models import Notification, NotificationRecipient
 from .serializers import (
     MemberNotificationListSerializer,
     MemberNotificationDetailSerializer,
     UnreadCountSerializer,
 )
+from .permissions import MemberNotificationPermission
 
 
+def get_tenant_from_request(request):
+    """
+    从 request 中获取租户
+    
+    优先级:
+    1. request.tenant (中间件设置)
+    2. X-Tenant-ID header
+    3. request.user.tenant (用户关联的租户)
+    """
+    from common.utils.tenant_context import get_current_tenant
+    
+    # 1. 尝试从 request 属性获取
+    tenant = getattr(request, 'tenant', None)
+    if tenant:
+        return tenant
+    
+    # 2. 尝试从线程本地存储获取
+    tenant = get_current_tenant()
+    if tenant:
+        return tenant
+    
+    # 3. 尝试从用户关联的租户获取
+    user = getattr(request, 'user', None)
+    if user and user.is_authenticated:
+        tenant = getattr(user, 'tenant', None)
+        if tenant:
+            return tenant
+    
+    return None
+
+
+@extend_schema_view(
+    list=extend_schema(tags=['通知系统-成员端'], summary='获取成员通知列表'),
+    retrieve=extend_schema(tags=['通知系统-成员端'], summary='获取成员通知详情'),
+)
 class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     """
     成员端通知视图集
     
-    成员端API，用于成员查看和管理自己的通知
-    - 所有请求都需要成员认证
+    成员端 API,用于成员查看和管理自己的通知
+    - GET请求不需要认证（通过X-Tenant-ID和member_id参数）
+    - POST请求需要认证
     """
-    permission_classes = [IsMemberUser]
+    permission_classes = [MemberNotificationPermission]
     
     def get_serializer_class(self):
         if self.action == 'list':
@@ -37,9 +76,30 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
         return MemberNotificationListSerializer
     
     def get_queryset(self):
-        """获取当前成员的通知列表"""
-        # 获取当前成员
-        member = getattr(self.request.user, 'member_profile', None)
+        """
+        获取成员的通知列表
+        - 认证用户:基于用户的member信息
+        - 匿名用户:基于 member_id 参数
+        """
+        # 获取成员
+        member = None
+        if self.request.user.is_authenticated:
+            member = getattr(self.request.user, 'member_profile', None)
+            if not member:
+                try:
+                    member = Member.objects.get(id=self.request.user.id)
+                except Member.DoesNotExist:
+                    pass
+        
+        # 如果没有认证，尝试从查询参数获取member_id
+        if not member:
+            member_id = self.request.query_params.get('member_id')
+            if member_id:
+                try:
+                    member = Member.objects.get(id=member_id)
+                except Member.DoesNotExist:
+                    pass
+        
         if not member:
             return NotificationRecipient.objects.none()
         
@@ -84,6 +144,7 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
+    @extend_schema(tags=['通知系统-成员端'], summary='标记通知为已读')
     @action(detail=True, methods=['post'], url_path='read')
     def mark_read(self, request, pk=None):
         """标记单条通知为已读"""
@@ -97,6 +158,7 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
         serializer = MemberNotificationDetailSerializer(instance)
         return Response(serializer.data)
     
+    @extend_schema(tags=['通知系统-成员端'], summary='标记所有通知为已读')
     @action(detail=False, methods=['post'], url_path='read-all')
     def read_all(self, request):
         """标记所有通知为已读"""
@@ -125,6 +187,7 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
             'updated_count': updated_count
         })
     
+    @extend_schema(tags=['通知系统-成员端'], summary='获取未读通知数量')
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
         """获取未读通知数量"""

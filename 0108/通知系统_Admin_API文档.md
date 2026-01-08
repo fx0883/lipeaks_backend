@@ -1,4 +1,4 @@
-# 通知系统 Admin API 文档
+﻿# 通知系统 Admin API 文档
 
 本文档详细说明了通知系统管理端的所有API接口，包括通知的创建、查询、发布、归档、接收者管理和统计等功能。
 
@@ -8,7 +8,7 @@
 
 ### 基础URL
 ```
-http://localhost:8000/api/v1/notifications/
+http://localhost:8000/api/v1/admin/notifications/
 ```
 
 ### 认证方式
@@ -52,7 +52,7 @@ X-Tenant-ID: {TENANT_ID}
 
 ### 1.1 获取通知列表
 
-**接口**: `GET /api/v1/notifications/`
+**接口**: `GET /api/v1/admin/notifications/`
 
 **权限**: GET请求允许匿名访问（需要X-Tenant-ID header）
 
@@ -70,7 +70,7 @@ X-Tenant-ID: {TENANT_ID}
 
 **curl命令示例**:
 ```bash
-curl -X GET "http://localhost:8000/api/v1/notifications/?status=published&page=1&page_size=10" \
+curl -X GET "http://localhost:8000/api/v1/admin/notifications/?status=published&page=1&page_size=10" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -82,7 +82,7 @@ curl -X GET "http://localhost:8000/api/v1/notifications/?status=published&page=1
   "message": "获取成功",
   "data": {
     "count": 25,
-    "next": "http://localhost:8000/api/v1/notifications/?page=2",
+    "next": "http://localhost:8000/api/v1/admin/notifications/?page=2",
     "previous": null,
     "results": [
       {
@@ -140,7 +140,7 @@ curl -X GET "http://localhost:8000/api/v1/notifications/?status=published&page=1
 
 ### 1.2 创建通知
 
-**接口**: `POST /api/v1/notifications/`
+**接口**: `POST /api/v1/admin/notifications/`
 
 **权限**: 需要租户管理员权限
 
@@ -171,7 +171,7 @@ curl -X GET "http://localhost:8000/api/v1/notifications/?status=published&page=1
 
 **curl命令示例**:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/notifications/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: 3" \
@@ -239,7 +239,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/" \
 
 **curl命令示例**:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/notifications/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: 3" \
@@ -258,7 +258,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/" \
 
 ### 1.4 获取通知详情
 
-**接口**: `GET /api/v1/notifications/{id}/`
+**接口**: `GET /api/v1/admin/notifications/{id}/`
 
 **权限**: GET请求允许匿名访问（需要X-Tenant-ID header）
 
@@ -270,7 +270,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/" \
 
 **curl命令示例**:
 ```bash
-curl -X GET "http://localhost:8000/api/v1/notifications/1/" \
+curl -X GET "http://localhost:8000/api/v1/admin/notifications/1/" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -313,7 +313,7 @@ curl -X GET "http://localhost:8000/api/v1/notifications/1/" \
 
 ### 1.5 更新通知
 
-**接口**: `PATCH /api/v1/notifications/{id}/` 或 `PUT /api/v1/notifications/{id}/`
+**接口**: `PATCH /api/v1/admin/notifications/{id}/` 或 `PUT /api/v1/admin/notifications/{id}/`
 
 **权限**: 需要租户管理员权限
 
@@ -330,7 +330,7 @@ curl -X GET "http://localhost:8000/api/v1/notifications/1/" \
 
 **curl命令示例**:
 ```bash
-curl -X PATCH "http://localhost:8000/api/v1/notifications/10/" \
+curl -X PATCH "http://localhost:8000/api/v1/admin/notifications/10/" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: 3" \
@@ -365,7 +365,7 @@ curl -X PATCH "http://localhost:8000/api/v1/notifications/10/" \
 
 ### 1.6 删除通知
 
-**接口**: `DELETE /api/v1/notifications/{id}/`
+**接口**: `DELETE /api/v1/admin/notifications/{id}/`
 
 **权限**: 需要租户管理员权限
 
@@ -373,7 +373,7 @@ curl -X PATCH "http://localhost:8000/api/v1/notifications/10/" \
 
 **curl命令示例**:
 ```bash
-curl -X DELETE "http://localhost:8000/api/v1/notifications/10/" \
+curl -X DELETE "http://localhost:8000/api/v1/admin/notifications/10/" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "X-Tenant-ID: 3"
 ```
@@ -393,7 +393,7 @@ curl -X DELETE "http://localhost:8000/api/v1/notifications/10/" \
 
 ### 2.1 发布通知
 
-**接口**: `POST /api/v1/notifications/{id}/publish/`
+**接口**: `POST /api/v1/admin/notifications/{id}/publish/`
 
 **权限**: 需要租户管理员权限
 
@@ -407,7 +407,7 @@ curl -X DELETE "http://localhost:8000/api/v1/notifications/10/" \
 
 **curl命令示例**:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/notifications/10/publish/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/10/publish/" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "X-Tenant-ID: 3"
 ```
@@ -440,7 +440,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/10/publish/" \
 
 ### 2.2 归档通知
 
-**接口**: `POST /api/v1/notifications/{id}/archive/`
+**接口**: `POST /api/v1/admin/notifications/{id}/archive/`
 
 **权限**: 需要租户管理员权限
 
@@ -448,7 +448,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/10/publish/" \
 
 **curl命令示例**:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/notifications/1/archive/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/1/archive/" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "X-Tenant-ID: 3"
 ```
@@ -475,7 +475,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/1/archive/" \
 
 ### 3.1 获取通知接收者列表
 
-**接口**: `GET /api/v1/notifications/{id}/recipients/`
+**接口**: `GET /api/v1/admin/notifications/{id}/recipients/`
 
 **权限**: GET请求允许匿名访问（需要X-Tenant-ID header）
 
@@ -494,7 +494,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/1/archive/" \
 
 **curl命令示例**:
 ```bash
-curl -X GET "http://localhost:8000/api/v1/notifications/1/recipients/?page=1&page_size=20" \
+curl -X GET "http://localhost:8000/api/v1/admin/notifications/1/recipients/?page=1&page_size=20" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -506,7 +506,7 @@ curl -X GET "http://localhost:8000/api/v1/notifications/1/recipients/?page=1&pag
   "message": "获取成功",
   "data": {
     "count": 150,
-    "next": "http://localhost:8000/api/v1/notifications/1/recipients/?page=2",
+    "next": "http://localhost:8000/api/v1/admin/notifications/1/recipients/?page=2",
     "previous": null,
     "results": [
       {
@@ -536,7 +536,7 @@ curl -X GET "http://localhost:8000/api/v1/notifications/1/recipients/?page=1&pag
 
 ### 3.2 添加接收者
 
-**接口**: `POST /api/v1/notifications/{id}/add-recipients/`
+**接口**: `POST /api/v1/admin/notifications/{id}/add-recipients/`
 
 **权限**: 需要租户管理员权限
 
@@ -557,7 +557,7 @@ curl -X GET "http://localhost:8000/api/v1/notifications/1/recipients/?page=1&pag
 
 **curl命令示例**:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/notifications/15/add-recipients/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/15/add-recipients/" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: 3" \
@@ -592,7 +592,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/15/add-recipients/" \
 
 ### 3.3 移除接收者
 
-**接口**: `POST /api/v1/notifications/{id}/remove-recipients/`
+**接口**: `POST /api/v1/admin/notifications/{id}/remove-recipients/`
 
 **权限**: 需要租户管理员权限
 
@@ -613,7 +613,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/15/add-recipients/" \
 
 **curl命令示例**:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/notifications/15/remove-recipients/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/15/remove-recipients/" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: 3" \
@@ -641,7 +641,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/15/remove-recipients/" 
 
 ### 4.1 获取通知统计
 
-**接口**: `GET /api/v1/notifications/{id}/statistics/`
+**接口**: `GET /api/v1/admin/notifications/{id}/statistics/`
 
 **权限**: GET请求允许匿名访问（需要X-Tenant-ID header）
 
@@ -655,7 +655,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/15/remove-recipients/" 
 
 **curl命令示例**:
 ```bash
-curl -X GET "http://localhost:8000/api/v1/notifications/1/statistics/" \
+curl -X GET "http://localhost:8000/api/v1/admin/notifications/1/statistics/" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -730,7 +730,7 @@ curl -X GET "http://localhost:8000/api/v1/notifications/1/statistics/" \
 
 ```bash
 # 1. 创建草稿
-curl -X POST "http://localhost:8000/api/v1/notifications/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: 3" \
@@ -746,7 +746,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/" \
 # 响应: { "data": { "id": 20, "status": "draft", ... } }
 
 # 2. 发布通知
-curl -X POST "http://localhost:8000/api/v1/notifications/20/publish/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/20/publish/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 
@@ -757,7 +757,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/20/publish/" \
 
 ```bash
 # 创建并发布应用通知
-curl -X POST "http://localhost:8000/api/v1/notifications/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: 3" \
@@ -776,7 +776,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/" \
 
 ```bash
 # 1. 创建面向特定成员的通知
-curl -X POST "http://localhost:8000/api/v1/notifications/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: 3" \
@@ -791,7 +791,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/" \
 # 响应: { "data": { "id": 25, "status": "draft", ... } }
 
 # 2. 添加接收者
-curl -X POST "http://localhost:8000/api/v1/notifications/25/add-recipients/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/25/add-recipients/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-ID: 3" \
@@ -800,7 +800,7 @@ curl -X POST "http://localhost:8000/api/v1/notifications/25/add-recipients/" \
   }'
 
 # 3. 发布通知
-curl -X POST "http://localhost:8000/api/v1/notifications/25/publish/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/25/publish/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 ```
@@ -839,24 +839,24 @@ curl -X POST "http://localhost:8000/api/v1/notifications/25/publish/" \
 
 **Q: 如何查询某个应用的所有通知？**
 ```bash
-curl -X GET "http://localhost:8000/api/v1/notifications/?application=5" \
+curl -X GET "http://localhost:8000/api/v1/admin/notifications/?application=5" \
   -H "X-Tenant-ID: 3"
 ```
 
 **Q: 如何查询所有已发布的通知？**
 ```bash
-curl -X GET "http://localhost:8000/api/v1/notifications/?status=published" \
+curl -X GET "http://localhost:8000/api/v1/admin/notifications/?status=published" \
   -H "X-Tenant-ID: 3"
 ```
 
 **Q: 如何查看通知的阅读情况？**
 ```bash
 # 查看统计信息
-curl -X GET "http://localhost:8000/api/v1/notifications/1/statistics/" \
+curl -X GET "http://localhost:8000/api/v1/admin/notifications/1/statistics/" \
   -H "X-Tenant-ID: 3"
 
 # 查看具体接收者列表
-curl -X GET "http://localhost:8000/api/v1/notifications/1/recipients/" \
+curl -X GET "http://localhost:8000/api/v1/admin/notifications/1/recipients/" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -868,7 +868,7 @@ curl -X GET "http://localhost:8000/api/v1/notifications/1/recipients/" \
 
 可以通过归档API将通知状态改为archived，归档后成员端将看不到该通知。
 ```bash
-curl -X POST "http://localhost:8000/api/v1/notifications/1/archive/" \
+curl -X POST "http://localhost:8000/api/v1/admin/notifications/1/archive/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 ```

@@ -41,7 +41,8 @@ class NotificationPermission(permissions.BasePermission):
     通知系统权限类
     
     - GET请求允许匿名访问（租户ID通过 X-Tenant-ID header 获取）
-    - POST/PATCH/DELETE 需要认证 + 租户管理员权限
+    - POST 请求需要认证（成员和管理员都可以）
+    - PATCH/DELETE 需要认证 + 租户管理员权限
     """
     
     def has_permission(self, request, view):
@@ -61,7 +62,14 @@ class NotificationPermission(permissions.BasePermission):
             logger.warning(f"[NotificationPermission] 未认证用户尝试访问: {path}")
             return False
         
-        # 检查是否是租户管理员
+        # POST请求（如标记已读）允许认证用户访问
+        if request.method == 'POST':
+            # 检查是否是特定的成员操作
+            if any(action in path for action in ['/read', '/read-all']):
+                logger.info(f"[NotificationPermission] 认证用户 {user.username} 执行读操作: {path}")
+                return True
+        
+        # PATCH/DELETE和其他POST操作需要管理员权限
         if not is_tenant_admin(user):
             logger.warning(
                 f"[NotificationPermission] 用户 {user.username} 尝试访问需要管理员权限的资源: {path}"
@@ -100,14 +108,21 @@ class MemberNotificationPermission(permissions.BasePermission):
     """
     成员端通知权限类
     
-    - 需要 Member 用户认证
+    - GET请求允许匿名访问（需要member_id参数）
+    - POST请求需要 Member 用户认证
     - 只能操作自己的通知状态
     """
     
     def has_permission(self, request, view):
         """
-        检查是否是已认证的 Member 用户
+        检查用户是否有权限访问视图
         """
+        # GET请求允许匿名访问
+        if request.method in permissions.SAFE_METHODS:
+            logger.debug(f"[MemberNotificationPermission] GET请求允许访问: {request.path}")
+            return True
+        
+        # POST请求需要认证
         user = request.user
         
         if not user or not user.is_authenticated:

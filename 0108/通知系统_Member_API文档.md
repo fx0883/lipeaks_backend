@@ -1,4 +1,4 @@
-# 通知系统 Member API 文档
+﻿# 通知系统 Member API 文档
 
 本文档详细说明了通知系统成员端的所有API接口，供普通用户（Member）查看和管理自己的通知。
 
@@ -8,11 +8,24 @@
 
 ### 基础URL
 ```
-http://localhost:8000/api/v1/member/notifications/
+http://localhost:8000/api/v1/notifications/
 ```
 
 ### 认证方式
-所有API都需要JWT认证，请在Header中添加：
+
+#### GET请求（查询操作）
+**不需要JWT认证**，但需要提供以下参数：
+- Header中指定租户ID: `X-Tenant-ID: {TENANT_ID}`
+- Query参数中指定成员ID: `member_id={MEMBER_ID}`
+
+```bash
+# GET请求示例（无需token）
+curl -X GET "http://localhost:8000/api/v1/notifications/?member_id=123" \
+  -H "X-Tenant-ID: 3"
+```
+
+#### POST请求（操作）
+需要JWT认证，请在Header中添加：
 ```
 Authorization: Bearer {JWT_TOKEN}
 ```
@@ -22,8 +35,6 @@ Authorization: Bearer {JWT_TOKEN}
 ```
 X-Tenant-ID: {TENANT_ID}
 ```
-
-**注意**: Member用户的租户ID通常从登录信息中自动获取，但仍建议在Header中明确指定。
 
 ### 响应格式
 所有响应遵循标准格式：
@@ -50,16 +61,17 @@ X-Tenant-ID: {TENANT_ID}
 
 ### 1.1 获取我的通知列表
 
-**接口**: `GET /api/v1/member/notifications/`
+**接口**: `GET /api/v1/notifications/`
 
-**权限**: 需要Member用户认证
+**权限**: 不需要认证（需要member_id参数）
 
-**功能说明**: 获取当前登录Member的所有已发布通知，按发布时间倒序排列
+**功能说明**: 获取指定Member的所有已发布通知，按发布时间倒序排列
 
 **请求参数** (Query):
 
 | 参数名 | 类型 | 必填 | 说明 |
 |-------|------|------|------|
+| member_id | int | 是 | 成员ID（必须提供） |
 | application | int | 否 | 关联应用ID，筛选特定应用的通知 |
 | is_read | bool | 否 | 是否已读：true/false |
 | type | string | 否 | 类型：info, warning, error, update, announcement |
@@ -67,10 +79,9 @@ X-Tenant-ID: {TENANT_ID}
 | page | int | 否 | 页码，默认1 |
 | page_size | int | 否 | 每页数量，默认10 |
 
-**curl命令示例**:
+**curl命令示例（无需token）**:
 ```bash
-curl -X GET "http://localhost:8000/api/v1/member/notifications/?page=1&page_size=10" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+curl -X GET "http://localhost:8000/api/v1/notifications/?member_id=123&page=1&page_size=10" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -82,7 +93,7 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/?page=1&page_size
   "message": "获取成功",
   "data": {
     "count": 25,
-    "next": "http://localhost:8000/api/v1/member/notifications/?page=2",
+    "next": "http://localhost:8000/api/v1/notifications/?page=2",
     "previous": null,
     "results": [
       {
@@ -148,10 +159,9 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/?page=1&page_size
 
 ### 1.2 获取未读通知列表
 
-**curl命令示例**:
+**curl命令示例（无需token）**:
 ```bash
-curl -X GET "http://localhost:8000/api/v1/member/notifications/?is_read=false&page=1" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+curl -X GET "http://localhost:8000/api/v1/notifications/?member_id=123&is_read=false&page=1" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -182,10 +192,9 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/?is_read=false&pa
 
 ### 1.3 获取特定应用的通知
 
-**curl命令示例**:
+**curl命令示例（无需token）**:
 ```bash
-curl -X GET "http://localhost:8000/api/v1/member/notifications/?application=5" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+curl -X GET "http://localhost:8000/api/v1/notifications/?member_id=123&application=5" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -193,10 +202,9 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/?application=5" \
 
 ### 1.4 获取高优先级通知
 
-**curl命令示例**:
+**curl命令示例（无需token）**:
 ```bash
-curl -X GET "http://localhost:8000/api/v1/member/notifications/?priority=high" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+curl -X GET "http://localhost:8000/api/v1/notifications/?member_id=123&priority=high" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -204,9 +212,9 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/?priority=high" \
 
 ### 1.5 获取通知详情
 
-**接口**: `GET /api/v1/member/notifications/{id}/`
+**接口**: `GET /api/v1/notifications/{id}/`
 
-**权限**: 需要Member用户认证
+**权限**: 不需要认证
 
 **功能说明**: 
 - 获取通知的完整内容
@@ -218,10 +226,9 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/?priority=high" \
 |-------|------|------|
 | id | int | 通知接收记录ID（非通知ID） |
 
-**curl命令示例**:
+**curl命令示例（无需token）**:
 ```bash
-curl -X GET "http://localhost:8000/api/v1/member/notifications/1001/" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+curl -X GET "http://localhost:8000/api/v1/notifications/1001/" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -260,7 +267,7 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/1001/" \
 
 ### 2.1 标记单条通知为已读
 
-**接口**: `POST /api/v1/member/notifications/{id}/read/`
+**接口**: `POST /api/v1/notifications/{id}/read/`
 
 **权限**: 需要Member用户认证
 
@@ -274,7 +281,7 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/1001/" \
 
 **curl命令示例**:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/member/notifications/1001/read/" \
+curl -X POST "http://localhost:8000/api/v1/notifications/1001/read/" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "X-Tenant-ID: 3"
 ```
@@ -301,7 +308,7 @@ curl -X POST "http://localhost:8000/api/v1/member/notifications/1001/read/" \
 
 ### 2.2 标记所有通知为已读
 
-**接口**: `POST /api/v1/member/notifications/read-all/`
+**接口**: `POST /api/v1/notifications/read-all/`
 
 **权限**: 需要Member用户认证
 
@@ -309,7 +316,7 @@ curl -X POST "http://localhost:8000/api/v1/member/notifications/1001/read/" \
 
 **curl命令示例**:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/member/notifications/read-all/" \
+curl -X POST "http://localhost:8000/api/v1/notifications/read-all/" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "X-Tenant-ID: 3"
 ```
@@ -340,16 +347,21 @@ curl -X POST "http://localhost:8000/api/v1/member/notifications/read-all/" \
 
 ### 3.1 获取未读通知数量
 
-**接口**: `GET /api/v1/member/notifications/unread-count/`
+**接口**: `GET /api/v1/notifications/unread-count/`
 
-**权限**: 需要Member用户认证
+**权限**: 不需要认证（需要member_id参数）
 
-**功能说明**: 获取当前用户的未读通知总数，常用于页面顶部的消息提醒角标
+**功能说明**: 获取指定用户的未读通知总数，常用于页面顶部的消息提醒角标
 
-**curl命令示例**:
+**请求参数** (Query):
+
+| 参数名 | 类型 | 必填 | 说明 |
+|-------|------|------|------|
+| member_id | int | 否 | 成员ID（如已认证可不提供） |
+
+**curl命令示例（无需token）**:
 ```bash
-curl -X GET "http://localhost:8000/api/v1/member/notifications/unread-count/" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+curl -X GET "http://localhost:8000/api/v1/notifications/unread-count/?member_id=123" \
   -H "X-Tenant-ID: 3"
 ```
 
@@ -410,7 +422,7 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/unread-count/" \
 
 ```bash
 # 用于页面头部显示未读消息数量
-curl -X GET "http://localhost:8000/api/v1/member/notifications/unread-count/" \
+curl -X GET "http://localhost:8000/api/v1/notifications/unread-count/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 
@@ -421,7 +433,7 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/unread-count/" \
 
 ```bash
 # 获取所有通知（未读的在前）
-curl -X GET "http://localhost:8000/api/v1/member/notifications/?page=1&page_size=20" \
+curl -X GET "http://localhost:8000/api/v1/notifications/?page=1&page_size=20" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 ```
@@ -430,7 +442,7 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/?page=1&page_size
 
 ```bash
 # 点击通知项查看详情（自动标记为已读）
-curl -X GET "http://localhost:8000/api/v1/member/notifications/1001/" \
+curl -X GET "http://localhost:8000/api/v1/notifications/1001/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 
@@ -441,7 +453,7 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/1001/" \
 
 ```bash
 # 用户点击"全部已读"按钮
-curl -X POST "http://localhost:8000/api/v1/member/notifications/read-all/" \
+curl -X POST "http://localhost:8000/api/v1/notifications/read-all/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 
@@ -452,7 +464,7 @@ curl -X POST "http://localhost:8000/api/v1/member/notifications/read-all/" \
 
 ```bash
 # 在应用详情页查看该应用的通知
-curl -X GET "http://localhost:8000/api/v1/member/notifications/?application=5&page=1" \
+curl -X GET "http://localhost:8000/api/v1/notifications/?application=5&page=1" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 ```
@@ -461,7 +473,7 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/?application=5&pa
 
 ```bash
 # 筛选未读通知
-curl -X GET "http://localhost:8000/api/v1/member/notifications/?is_read=false" \
+curl -X GET "http://localhost:8000/api/v1/notifications/?is_read=false" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 ```
@@ -475,7 +487,7 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/?is_read=false" \
 ```javascript
 // 1. 初始化时获取未读数量
 async function loadUnreadCount() {
-  const response = await fetch('/api/v1/member/notifications/unread-count/', {
+  const response = await fetch('/api/v1/notifications/unread-count/', {
     headers: {
       'Authorization': `Bearer ${token}`,
       'X-Tenant-ID': tenantId
@@ -489,7 +501,7 @@ async function loadUnreadCount() {
 // 2. 打开通知列表
 async function loadNotifications(page = 1) {
   const response = await fetch(
-    `/api/v1/member/notifications/?page=${page}&page_size=20`,
+    `/api/v1/notifications/?page=${page}&page_size=20`,
     {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -503,7 +515,7 @@ async function loadNotifications(page = 1) {
 
 // 3. 查看通知详情（自动标记为已读）
 async function viewNotification(id) {
-  const response = await fetch(`/api/v1/member/notifications/${id}/`, {
+  const response = await fetch(`/api/v1/notifications/${id}/`, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'X-Tenant-ID': tenantId
@@ -517,7 +529,7 @@ async function viewNotification(id) {
 
 // 4. 全部已读
 async function markAllAsRead() {
-  const response = await fetch('/api/v1/member/notifications/read-all/', {
+  const response = await fetch('/api/v1/notifications/read-all/', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -537,7 +549,7 @@ async function markAllAsRead() {
 ```javascript
 // 每30秒检查一次是否有新通知
 setInterval(async () => {
-  const response = await fetch('/api/v1/member/notifications/unread-count/', {
+  const response = await fetch('/api/v1/notifications/unread-count/', {
     headers: {
       'Authorization': `Bearer ${token}`,
       'X-Tenant-ID': tenantId
@@ -643,31 +655,31 @@ API默认按发布时间倒序。前端可以：
 # 登录API返回token和租户ID
 
 # 2. 页面加载，获取未读数量
-curl -X GET "http://localhost:8000/api/v1/member/notifications/unread-count/" \
+curl -X GET "http://localhost:8000/api/v1/notifications/unread-count/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 # 响应: { "data": { "unread_count": 5 } }
 
 # 3. 用户点击通知图标，打开通知中心
-curl -X GET "http://localhost:8000/api/v1/member/notifications/?page=1&page_size=20" \
+curl -X GET "http://localhost:8000/api/v1/notifications/?page=1&page_size=20" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 # 显示通知列表
 
 # 4. 用户点击某条通知查看详情
-curl -X GET "http://localhost:8000/api/v1/member/notifications/1001/" \
+curl -X GET "http://localhost:8000/api/v1/notifications/1001/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 # 显示详情，自动标记为已读
 
 # 5. 用户点击"全部已读"
-curl -X POST "http://localhost:8000/api/v1/member/notifications/read-all/" \
+curl -X POST "http://localhost:8000/api/v1/notifications/read-all/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 # 所有通知标记为已读
 
 # 6. 刷新未读数量
-curl -X GET "http://localhost:8000/api/v1/member/notifications/unread-count/" \
+curl -X GET "http://localhost:8000/api/v1/notifications/unread-count/" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "X-Tenant-ID: 3"
 # 响应: { "data": { "unread_count": 0 } }
@@ -679,11 +691,11 @@ curl -X GET "http://localhost:8000/api/v1/member/notifications/unread-count/" \
 
 | 方法 | 端点 | 说明 | 自动标记已读 |
 |-----|------|------|------------|
-| GET | `/api/v1/member/notifications/` | 获取通知列表 | 否 |
-| GET | `/api/v1/member/notifications/{id}/` | 获取通知详情 | 是 |
-| POST | `/api/v1/member/notifications/{id}/read/` | 标记单条已读 | 是 |
-| POST | `/api/v1/member/notifications/read-all/` | 标记全部已读 | 是 |
-| GET | `/api/v1/member/notifications/unread-count/` | 获取未读数量 | 否 |
+| GET | `/api/v1/notifications/` | 获取通知列表 | 否 |
+| GET | `/api/v1/notifications/{id}/` | 获取通知详情 | 是 |
+| POST | `/api/v1/notifications/{id}/read/` | 标记单条已读 | 是 |
+| POST | `/api/v1/notifications/read-all/` | 标记全部已读 | 是 |
+| GET | `/api/v1/notifications/unread-count/` | 获取未读数量 | 否 |
 
 ---
 

@@ -131,10 +131,11 @@ urlpatterns = [
         path('admin/charts/', include('charts.urls', namespace='charts')),
         
         # 通知系统路由
-        path('notifications/', include('notifications.urls', namespace='notifications')),
+        # 成员端: /api/v1/notifications/
+        path('notifications/', include('notifications.member_urls', namespace='member-notifications')),
         
-        # 成员端通知路由
-        path('member/notifications/', include('notifications.member_urls', namespace='member-notifications')),
+        # 管理端通知路由: /api/v1/admin/notifications/
+        path('admin/notifications/', include('notifications.urls', namespace='notifications')),
         
         # API 文档
         path('schema/', LoggingSpectacularAPIView.as_view(), name='schema'),
