@@ -103,6 +103,7 @@ INSTALLED_APPS = [
     'applications',  # 应用管理（整合licenses和feedbacks的软件实体）
     'feedbacks',  # User Feedback System
     'interactions',  # 用户互动应用（收藏、点赞等）
+    'notifications',  # 通知系统
 ]
 
 MIDDLEWARE = [

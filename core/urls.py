@@ -130,6 +130,12 @@ urlpatterns = [
         # 图表数据API
         path('admin/charts/', include('charts.urls', namespace='charts')),
         
+        # 通知系统路由
+        path('notifications/', include('notifications.urls', namespace='notifications')),
+        
+        # 成员端通知路由
+        path('member/notifications/', include('notifications.member_urls', namespace='member-notifications')),
+        
         # API 文档
         path('schema/', LoggingSpectacularAPIView.as_view(), name='schema'),
         path('docs/', LoggingSpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
