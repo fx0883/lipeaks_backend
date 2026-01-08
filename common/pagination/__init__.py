@@ -27,7 +27,7 @@ class StandardResultsSetPagination(PageNumberPagination):
             'count': self.page.paginator.count,
             'next': self.get_next_link(),
             'previous': self.get_previous_link(),
-            'page_size': self.page_size,
+            'page_size': self.page.paginator.per_page,
             'current_page': self.page.number,
             'total_pages': self.page.paginator.num_pages,
         }
@@ -37,4 +37,4 @@ class StandardResultsSetPagination(PageNumberPagination):
         return Response({
             'pagination': pagination_info,
             'results': data
-        }) 
+        })
