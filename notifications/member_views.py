@@ -133,7 +133,22 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
     
     def retrieve(self, request, *args, **kwargs):
         """获取通知详情并自动标记为已读"""
-        instance = self.get_object()
+        # 直接从pk获取NotificationRecipient
+        pk = kwargs.get('pk')
+        try:
+            instance = NotificationRecipient.objects.select_related(
+                'notification', 'notification__application'
+            ).get(
+                id=pk,
+                is_deleted=False,
+                notification__status='published',
+                notification__is_deleted=False
+            )
+        except NotificationRecipient.DoesNotExist:
+            return Response(
+                {'detail': '通知不存在'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         # 自动标记为已读
         if not instance.is_read:
@@ -191,7 +206,25 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
         """获取未读通知数量"""
-        member = getattr(request.user, 'member_profile', None)
+        # 获取成员
+        member = None
+        if request.user.is_authenticated:
+            member = getattr(request.user, 'member_profile', None)
+            if not member:
+                try:
+                    member = Member.objects.get(id=request.user.id)
+                except Member.DoesNotExist:
+                    pass
+        
+        # 如果没有认证，尝试从查询参数获取member_id
+        if not member:
+            member_id = request.query_params.get('member_id')
+            if member_id:
+                try:
+                    member = Member.objects.get(id=member_id)
+                except Member.DoesNotExist:
+                    pass
+        
         if not member:
             return Response({'unread_count': 0})
         

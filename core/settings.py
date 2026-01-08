@@ -630,6 +630,8 @@ TENANT_ISOLATED_API_PATHS = [
     '/api/v1/feedbacks/',     # 反馈管理
     '/api/v1/customers/',     # 客户管理
     '/api/v1/orders/',        # 订单管理
+    '/api/v1/notifications/',       # 通知系统-成员端
+    '/api/v1/admin/notifications/', # 通知系统-管理端
 ]
 
 # 公开API路径（不需要租户验证）

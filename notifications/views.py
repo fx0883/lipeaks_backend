@@ -21,11 +21,14 @@ def get_tenant_from_request(request):
     从 request 中获取租户
     
     优先级:
-    1. request.tenant (中间件设置)
+    1. request.tenant (中间件设置的租户对象)
     2. get_current_tenant() (线程本地存储)
-    3. request.user.tenant (用户关联的租户)
+    3. request.tenant_id (中间件设置的租户ID)
+    4. request.user.tenant (用户关联的租户)
     """
-    # 1. 尝试从 request 属性获取
+    from tenants.models import Tenant
+    
+    # 1. 尝试从 request.tenant 属性获取
     tenant = getattr(request, 'tenant', None)
     if tenant:
         return tenant
@@ -35,7 +38,16 @@ def get_tenant_from_request(request):
     if tenant:
         return tenant
     
-    # 3. 尝试从用户关联的租户获取
+    # 3. 尝试从 request.tenant_id 获取
+    tenant_id = getattr(request, 'tenant_id', None)
+    if tenant_id:
+        try:
+            tenant = Tenant.objects.get(id=int(tenant_id))
+            return tenant
+        except (Tenant.DoesNotExist, ValueError, TypeError):
+            pass
+    
+    # 4. 尝试从用户关联的租户获取
     user = getattr(request, 'user', None)
     if user and user.is_authenticated:
         tenant = getattr(user, 'tenant', None)
