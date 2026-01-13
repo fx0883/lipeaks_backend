@@ -332,10 +332,14 @@ class EmailService:
             dict: 提交结果 {'status': 'submitted/skipped', ...}
         """
         try:
+            print(f"\n[邮件服务] 开始检查新反馈通知 - 反馈ID: {feedback.id}")
             # 检查是否有关联应用
             if not feedback.application:
+                print(f"[邮件服务] [FAILED] 反馈未关联应用 - 反馈ID: {feedback.id}")
                 logger.info(f"Feedback {feedback.id} has no application, skipping notification")
                 return {'status': 'skipped', 'reason': 'no_application'}
+            
+            print(f"[邮件服务] [OK] 反馈关联应用: {feedback.application.name} (ID: {feedback.application.id})")
             
             # 检查应用是否配置了通知
             try:
@@ -343,10 +347,13 @@ class EmailService:
                     application=feedback.application,
                     is_deleted=False
                 )
+                print(f"[邮件服务] [OK] 找到通知配置 - 启用状态: {config.is_enabled}")
                 if not config.is_enabled:
+                    print(f"[邮件服务] [FAILED] 通知已禁用 - 应用ID: {feedback.application.id}")
                     logger.info(f"Notifications disabled for application {feedback.application.id}")
                     return {'status': 'skipped', 'reason': 'notifications_disabled'}
             except FeedbackNotificationConfig.DoesNotExist:
+                print(f"[邮件服务] [FAILED] 应用未配置通知 - 应用ID: {feedback.application.id}")
                 logger.info(f"No notification config for application {feedback.application.id}")
                 return {'status': 'skipped', 'reason': 'no_config'}
             

@@ -658,6 +658,8 @@ def send_new_feedback_notification(self, feedback_id: int) -> Dict[str, any]:
         failed_count = 0
         recipient_results = []
         
+        print(f"\n[邮件发送] 开始发送新反馈通知 - 反馈ID: {feedback_id}, 接收者数: {recipients.count()}")
+        
         for recipient in recipients:
             # 验证邮箱
             if not EmailValidator.validate_and_log(recipient.email, f" for new feedback notification {feedback_id}"):
@@ -667,6 +669,7 @@ def send_new_feedback_notification(self, feedback_id: int) -> Dict[str, any]:
                     'status': 'skipped',
                     'reason': 'invalid_email'
                 })
+                print(f"[邮件发送] [FAILED] 邮箱验证失败: {recipient.email}")
                 continue
             
             # 创建邮件日志
@@ -683,6 +686,8 @@ def send_new_feedback_notification(self, feedback_id: int) -> Dict[str, any]:
             
             try:
                 # 发送邮件
+                print(f"[邮件发送] 正在发送至: {recipient.email}")
+                print(f"[邮件发送] SMTP配置 - HOST: {settings.EMAIL_HOST}, PORT: {settings.EMAIL_PORT}, USE_SSL: {settings.EMAIL_USE_SSL}")
                 msg = EmailMultiAlternatives(
                     subject=subject,
                     body=body_text,
@@ -704,9 +709,11 @@ def send_new_feedback_notification(self, feedback_id: int) -> Dict[str, any]:
                     'email_log_id': email_log.id
                 })
                 
+                print(f"[邮件发送] [OK] 成功发送至: {recipient.email}")
                 logger.info(f"New feedback notification sent to {recipient.email} for feedback {feedback_id}")
                 
             except Exception as e:
+                print(f"[邮件发送] [FAILED] 发送失败至 {recipient.email}: {str(e)}")
                 logger.error(f"Failed to send notification to {recipient.email}: {str(e)}")
                 email_log.status = 'failed'
                 email_log.error_message = str(e)
@@ -719,6 +726,8 @@ def send_new_feedback_notification(self, feedback_id: int) -> Dict[str, any]:
                     'error': str(e)
                 })
         
+        summary_msg = f"[邮件发送] 总结 - 反馈ID: {feedback_id}, 成功: {sent_count}, 失败: {failed_count}"
+        print(summary_msg)
         logger.info(
             f"New feedback notification completed for feedback {feedback_id}: "
             f"sent={sent_count}, failed={failed_count}"

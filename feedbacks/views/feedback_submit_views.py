@@ -173,10 +173,13 @@ class FeedbackSubmitPageView(FormView):
             # 触发新反馈通知邮件（异步处理，不影响用户体验）
             try:
                 from feedbacks.services import EmailService
+                print(f"\n[反馈提交] 准备发送新反馈通知邮件 - 反馈ID: {feedback.id}")
                 notification_result = EmailService.send_new_feedback_notification(feedback)
+                print(f"[反馈提交] 通知任务已提交: {notification_result}")
                 logger.info(f"New feedback notification triggered: {notification_result}")
             except Exception as notify_error:
                 # 通知失败不影响反馈提交成功
+                print(f"[反馈提交] [FAILED] 通知发送失败: {str(notify_error)}")
                 logger.warning(f"Failed to trigger notification for feedback {feedback.id}: {notify_error}")
             
             messages.success(
