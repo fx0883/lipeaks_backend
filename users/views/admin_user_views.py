@@ -16,7 +16,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, OpenApiExample
 
-from common.permissions import IsSuperAdmin, IsAdmin
+from common.permissions import IsSuperAdminUser, IsAdminUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from users.models import User
 from users.serializers import (
@@ -36,7 +36,7 @@ class CurrentAdminUserView(APIView):
     """
     获取和更新current登录管理员用户信息
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     
     @extend_schema(
         summary="获取current管理员信息",
@@ -112,7 +112,7 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
     """
     管理员用户列表和创建视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     serializer_class = UserSerializer
     pagination_class = PageNumberPagination
     
@@ -353,7 +353,7 @@ class AdminUserRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
     管理员用户详情、更新和删除视图
     """
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     
     @extend_schema(
         summary="获取管理员详情",
@@ -493,7 +493,7 @@ class GrantSuperAdminView(APIView):
     """
     授予超级管理员权限视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsSuperAdminUser]
     serializer_class = SimpleResponseSerializer  # 添加序列化器类
     
     @extend_schema(
@@ -557,7 +557,7 @@ class RevokeSuperAdminView(APIView):
     """
     撤销超级管理员权限视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsSuperAdminUser]
     serializer_class = SimpleResponseSerializer  # 添加序列化器类
     
     @extend_schema(
@@ -641,7 +641,7 @@ class AdminPasswordUpdateView(generics.UpdateAPIView):
     管理员密码更新视图
     """
     serializer_class = ChangePasswordSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     
     def get_object(self):
         return self.request.user
@@ -712,7 +712,7 @@ class SuperAdminCreateView(generics.CreateAPIView):
     """
     创建超级管理员账号视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsSuperAdminUser]
     serializer_class = SuperAdminCreateSerializer
     
     def perform_create(self, serializer):
@@ -727,7 +727,7 @@ class AdminUserAvatarUploadView(APIView):
     """
     管理员用户头像上传视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     parser_classes = [MultiPartParser, FormParser]
     
     @extend_schema(
@@ -868,7 +868,7 @@ class AdminUserSpecificAvatarUploadView(APIView):
     
     允许超级管理员和租户管理员为其管理权限内的管理员用户上传头像
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     parser_classes = [MultiPartParser, FormParser]
     
     @extend_schema(
@@ -1016,7 +1016,7 @@ class DeactivateAdminUserView(APIView):
     """
     停用管理员用户视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     serializer_class = SimpleResponseSerializer  # 使用简单响应序列化器
     
     @extend_schema(
@@ -1092,7 +1092,7 @@ class ActivateAdminUserView(APIView):
     """
     激活管理员用户视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     serializer_class = SimpleResponseSerializer  # 使用简单响应序列化器
     
     @extend_schema(

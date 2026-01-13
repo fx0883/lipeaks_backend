@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 
-from common.permissions import IsAdmin
+from common.permissions import IsAdminUser
 from orders.models import Order
 from orders.serializers import OrderListSerializer, OrderDetailSerializer
 from users.models import Member

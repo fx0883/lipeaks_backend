@@ -5,7 +5,7 @@ from rest_framework import generics, status, serializers
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample, inline_serializer
-from common.permissions import IsSuperAdmin, IsAdmin, IsAdminUser
+from common.permissions import IsSuperAdminUser, IsAdminUser, IsAdminUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from common.models import APILog, Config
 from common.serializers import APILogSerializer, APILogDetailSerializer

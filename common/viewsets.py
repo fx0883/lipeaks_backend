@@ -71,16 +71,16 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         # 记录视图集类名和请求路径
         view_name = self.__class__.__name__
         request_path = getattr(self.request, 'path', 'unknown_path')
-        logger.info(f"[TenantModelViewSet] {view_name} 处理请求: {request_path}")
+        logger.debug(f"[TenantModelViewSet] {view_name} 处理请求: {request_path}")
         
         # 检查请求路径是否需要租户隔离
         if not self._needs_tenant_isolation():
-            logger.info(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户过滤: {request_path}")
+            logger.debug(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户过滤: {request_path}")
             return queryset
         
         # 如果模型没有tenant字段，则不需要过滤
         if not hasattr(queryset.model, 'tenant'):
-            logger.info(f"[TenantModelViewSet] {view_name} 模型 {queryset.model.__name__} 没有tenant字段，跳过租户过滤")
+            logger.debug(f"[TenantModelViewSet] {view_name} 模型 {queryset.model.__name__} 没有tenant字段，跳过租户过滤")
             return queryset
         
         # feature flag：开启后按新规则执行租户来源与角色分流
@@ -133,37 +133,37 @@ class TenantModelViewSet(viewsets.ModelViewSet):
                     raise TenantHeaderInvalidOrMissing()
                 effective_tenant_id = int(header_tid_val)
 
-            logger.info(f"[TenantModelViewSet] {view_name} 按新规则过滤租户: {effective_tenant_id}")
+            logger.debug(f"[TenantModelViewSet] {view_name} 按新规则过滤租户: {effective_tenant_id}")
             return queryset.filter(tenant_id=effective_tenant_id)
         
         # feature flag 关闭：维持旧逻辑（依赖中间件注入的 request.tenant_id 等）
         tenant_id = getattr(self.request, 'tenant_id', None)
         tenant_source = getattr(self.request, 'tenant_source', None)
         is_super_admin_no_tenant = getattr(self.request, 'is_super_admin_no_tenant', False)
-        logger.info(f"[TenantModelViewSet] {view_name} 获取到租户信息: tenant_id={tenant_id}, source={tenant_source}, is_super_admin_no_tenant={is_super_admin_no_tenant}")
+        logger.debug(f"[TenantModelViewSet] {view_name} 获取到租户信息: tenant_id={tenant_id}, source={tenant_source}, is_super_admin_no_tenant={is_super_admin_no_tenant}")
         user = getattr(self.request, 'user', None)
         if user and user.is_authenticated:
             is_super_admin = getattr(user, 'is_super_admin', False)
             user_tenant = getattr(user, 'tenant', None)
-            logger.info(f"[TenantModelViewSet] {view_name} 用户: {user.username}, 超管: {is_super_admin}, 用户租户ID: {user_tenant.id if user_tenant else None}")
+            logger.debug(f"[TenantModelViewSet] {view_name} 用户: {user.username}, 超管: {is_super_admin}, 用户租户ID: {user_tenant.id if user_tenant else None}")
         else:
-            logger.info(f"[TenantModelViewSet] {view_name} 用户未认证")
+            logger.debug(f"[TenantModelViewSet] {view_name} 用户未认证")
             is_super_admin = False
         if is_super_admin:
             if tenant_source == 'query_param':
-                logger.info(f"[TenantModelViewSet] {view_name} 超级管理员通过查询参数过滤租户: {tenant_id}")
+                logger.debug(f"[TenantModelViewSet] {view_name} 超级管理员通过查询参数过滤租户: {tenant_id}")
                 return queryset.filter(tenant_id=tenant_id)
             elif tenant_source == 'header':
-                logger.info(f"[TenantModelViewSet] {view_name} 超级管理员通过请求头过滤租户: {tenant_id}")
+                logger.debug(f"[TenantModelViewSet] {view_name} 超级管理员通过请求头过滤租户: {tenant_id}")
                 return queryset.filter(tenant_id=tenant_id)
             elif is_super_admin_no_tenant:
-                logger.info(f"[TenantModelViewSet] {view_name} 超级管理员未指定租户，返回所有租户数据")
+                logger.debug(f"[TenantModelViewSet] {view_name} 超级管理员未指定租户，返回所有租户数据")
                 return queryset
             else:
-                logger.info(f"[TenantModelViewSet] {view_name} 超级管理员返回所有租户数据")
+                logger.debug(f"[TenantModelViewSet] {view_name} 超级管理员返回所有租户数据")
                 return queryset
         if tenant_id:
-            logger.info(f"[TenantModelViewSet] {view_name} 普通用户按租户ID过滤: {tenant_id}")
+            logger.debug(f"[TenantModelViewSet] {view_name} 普通用户按租户ID过滤: {tenant_id}")
             try:
                 tenant_id = int(tenant_id)
                 return queryset.filter(tenant_id=tenant_id)
@@ -186,17 +186,17 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         
         # 检查请求路径是否需要租户隔离
         if not self._needs_tenant_isolation():
-            logger.info(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户设置: {self.request.path}")
+            logger.debug(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户设置: {self.request.path}")
             return serializer.save()
         
         # 计算有效租户ID（新规则下覆盖 request.tenant_id）
         tenant_id = self._effective_tenant_id_for_write()
-        logger.info(f"[TenantModelViewSet] {view_name} 创建对象使用有效租户ID: {tenant_id}")
+        logger.debug(f"[TenantModelViewSet] {view_name} 创建对象使用有效租户ID: {tenant_id}")
         
         # 如果模型有tenant字段且有租户ID，则自动设置
         if tenant_id and hasattr(serializer.Meta.model, 'tenant'):
             model_name = serializer.Meta.model.__name__
-            logger.info(f"[TenantModelViewSet] {view_name} 为模型 {model_name} 创建对象时设置租户ID: {tenant_id}")
+            logger.debug(f"[TenantModelViewSet] {view_name} 为模型 {model_name} 创建对象时设置租户ID: {tenant_id}")
             try:
                 # 确保租户ID是整数
                 tenant_id = int(tenant_id)
@@ -227,18 +227,18 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         
         # 检查请求路径是否需要租户隔离
         if not self._needs_tenant_isolation():
-            logger.info(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户验证: {self.request.path}")
+            logger.debug(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户验证: {self.request.path}")
             return serializer.save()
         
         # 获取current对象
         instance = serializer.instance
-        logger.info(f"[TenantModelViewSet] {view_name} 更新对象: {instance.__class__.__name__} ID={instance.pk}")
+        logger.debug(f"[TenantModelViewSet] {view_name} 更新对象: {instance.__class__.__name__} ID={instance.pk}")
         
         # 验证对象所属租户
         self._verify_tenant_ownership(instance)
         
         # 执行更新
-        logger.info(f"[TenantModelViewSet] {view_name} 租户验证通过，执行更新操作")
+        logger.debug(f"[TenantModelViewSet] {view_name} 租户验证通过，执行更新操作")
         serializer.save()
     
     def perform_destroy(self, instance):
@@ -250,23 +250,23 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         
         # 检查请求路径是否需要租户隔离
         if not self._needs_tenant_isolation():
-            logger.info(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户验证: {self.request.path}")
+            logger.debug(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户验证: {self.request.path}")
             # 使用软删除（如果支持）
             if hasattr(instance, 'soft_delete'):
                 return instance.soft_delete()
             return instance.delete()
         
         # 验证对象所属租户
-        logger.info(f"[TenantModelViewSet] {view_name} 删除对象: {instance.__class__.__name__} ID={instance.pk}")
+        logger.debug(f"[TenantModelViewSet] {view_name} 删除对象: {instance.__class__.__name__} ID={instance.pk}")
         self._verify_tenant_ownership(instance)
         
         # 执行删除（优先使用软删除）
-        logger.info(f"[TenantModelViewSet] {view_name} 租户验证通过，执行删除操作")
+        logger.debug(f"[TenantModelViewSet] {view_name} 租户验证通过，执行删除操作")
         if hasattr(instance, 'soft_delete'):
-            logger.info(f"[TenantModelViewSet] {view_name} 使用软删除")
+            logger.debug(f"[TenantModelViewSet] {view_name} 使用软删除")
             instance.soft_delete()
         else:
-            logger.info(f"[TenantModelViewSet] {view_name} 使用硬删除")
+            logger.debug(f"[TenantModelViewSet] {view_name} 使用硬删除")
             instance.delete()
     
     def _verify_tenant_ownership(self, obj):
@@ -283,12 +283,12 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         
         # 检查请求路径是否需要租户隔离
         if not self._needs_tenant_isolation():
-            logger.info(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户验证: {self.request.path}")
+            logger.debug(f"[TenantModelViewSet] {view_name} 路径不需要租户隔离，跳过租户验证: {self.request.path}")
             return
         
         # 如果对象没有tenant字段，则跳过验证
         if not hasattr(obj, 'tenant'):
-            logger.info(f"[TenantModelViewSet] {view_name} 对象 {obj.__class__.__name__} 没有tenant字段，跳过租户验证")
+            logger.debug(f"[TenantModelViewSet] {view_name} 对象 {obj.__class__.__name__} 没有tenant字段，跳过租户验证")
             return
             
         # 获取current租户ID
@@ -301,7 +301,7 @@ class TenantModelViewSet(viewsets.ModelViewSet):
             
         # 验证对象所属租户与current租户ID是否匹配
         obj_tenant_id = str(obj.tenant.id) if obj.tenant else None
-        logger.info(f"[TenantModelViewSet] {view_name} 验证租户所有权: 对象租户ID={obj_tenant_id}, current租户ID={tenant_id}")
+        logger.debug(f"[TenantModelViewSet] {view_name} 验证租户所有权: 对象租户ID={obj_tenant_id}, current租户ID={tenant_id}")
         
         if obj_tenant_id and obj_tenant_id != str(tenant_id):
             logger.warning(f"[TenantModelViewSet] {view_name} 尝试操作不属于current租户的对象: 对象租户ID={obj_tenant_id}, current租户ID={tenant_id}")

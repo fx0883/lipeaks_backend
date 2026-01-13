@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 
-from common.permissions import IsAdmin, IsSuperAdmin
+from common.permissions import IsAdminUser, IsSuperAdminUser
 from common.viewsets import TenantModelViewSet
 from customers.models import Customer, CustomerMemberRelation
 from customers.serializers import CustomerMemberRelationSerializer, CustomerMemberRelationDetailSerializer
@@ -62,7 +62,7 @@ class CustomerMemberRelationViewSet(TenantModelViewSet):
     提供客户与联系人关系的管理功能
     """
     queryset = CustomerMemberRelation.objects.all()
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdminUser]
     
     def get_serializer_class(self):
         """

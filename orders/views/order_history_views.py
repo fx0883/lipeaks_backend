@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 
-from common.permissions import IsAdmin
+from common.permissions import IsAdminUser
 from orders.models import Order, OrderHistory
 from orders.serializers import (
     OrderHistorySerializer, OrderHistoryDetailSerializer, 
@@ -44,7 +44,7 @@ class OrderHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     
     提供订单历史记录的查询、比较和还原功能
     """
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     ordering_fields = ['version', 'modified_at']
     ordering = ['-version']

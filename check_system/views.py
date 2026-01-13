@@ -10,7 +10,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse, OpenApiTypes
 import logging
 
-from common.permissions import IsSuperAdmin, IsAdmin
+from common.permissions import IsSuperAdminUser, IsAdminUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from common.pagination import StandardResultsSetPagination
 from common.authentication.api_auth import APIJWTAuthentication

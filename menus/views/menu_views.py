@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 
-from common.permissions import IsSuperAdmin, IsAdmin
+from common.permissions import IsSuperAdminUser, IsAdminUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from menus.models import Menu, UserMenu
 from menus.serializers import MenuSerializer, MenuTreeSerializer
@@ -167,7 +167,7 @@ class MenuViewSet(viewsets.ModelViewSet):
     """
     菜单管理视图集
     """
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdminUser]
     serializer_class = MenuSerializer
     queryset = Menu.objects.all()
 

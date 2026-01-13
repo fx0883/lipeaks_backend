@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework import status, permissions, generics, serializers
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from common.permissions import IsSuperAdmin, IsAdmin
+from common.permissions import IsSuperAdminUser, IsAdminUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied

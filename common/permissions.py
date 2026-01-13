@@ -66,55 +66,6 @@ class IsAdminUser(permissions.BasePermission):
         return is_admin
 
 
-# 与视图文件中使用的类名保持一致
-class IsSuperAdmin(IsSuperAdminUser):
-    """
-    检查用户是否是超级管理员（别名，保持与视图代码一致）
-    """
-    pass
-
-
-# 与视图文件中使用的类名保持一致
-class IsAdmin(IsAdminUser):
-    """
-    检查用户是否是管理员（别名，保持与视图代码一致）
-    """
-    def has_permission(self, request, view):
-        """
-        检查用户是否是管理员
-        
-        Args:
-            request: HTTP请求对象
-            view: 视图对象
-            
-        Returns:
-            布尔值，指示用户是否具有权限
-        """
-        user = request.user
-        path = request.path
-        
-        # 增强日志以便诊断问题
-        is_authenticated = bool(user and user.is_authenticated)
-        is_admin = bool(is_authenticated and user.is_admin)
-        is_super_admin = bool(is_authenticated and user.is_super_admin)
-        has_permission = bool(is_authenticated and (is_admin or is_super_admin))
-        
-        logger.info(f"权限检查 [IsAdmin] - 路径: {path}")
-        logger.info(f"  用户: {user.username if is_authenticated else 'Anonymous'}")
-        logger.info(f"  已认证: {is_authenticated}")
-        logger.info(f"  是管理员: {is_admin}")
-        logger.info(f"  是超级管理员: {is_super_admin}")
-        logger.info(f"  权限检查结果: {'通过' if has_permission else '拒绝'}")
-        
-        if not has_permission:
-            logger.warning(
-                f"用户 {user.username if is_authenticated else 'Anonymous'} "
-                f"尝试访问需要管理员权限的资源 {path}，但权限检查未通过"
-            )
-        
-        return has_permission
-
-
 class IsTenantAdmin(permissions.BasePermission):
     """
     检查用户是否是租户管理员

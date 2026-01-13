@@ -14,7 +14,7 @@ import logging
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from common.permissions import IsSuperAdmin, IsAdmin
+from common.permissions import IsSuperAdminUser, IsAdminUser
 from common.pagination import StandardResultsSetPagination
 from common.authentication.api_auth import APIJWTAuthentication
 from common.viewsets import TenantModelViewSet
@@ -25,19 +25,19 @@ from common.utils.user_permissions import (
     filter_queryset_by_user_permissions
 )
 from users.models import User
-from .models import (
+from ..models import (
     Article, Category, Tag, TagGroup, Comment, 
     ArticleCategory, ArticleTag, ArticleMeta,
     ArticleStatistics, ArticleVersion,
     UserLevel, UserLevelRelation, AccessLog, OperationLog
 )
-from .serializers import (
+from ..serializers import (
     ArticleListSerializer, ArticleDetailSerializer, ArticleCreateUpdateSerializer,
     CategorySerializer, TagSerializer, TagGroupSerializer,
     CommentSerializer, ArticleVersionSerializer, ArticleMetaSerializer,
     ArticleStatisticsSerializer
 )
-from .permissions import (
+from ..permissions import (
     ArticlePermission, CategoryPermission, TagPermission,
     CommentPermission, ArticleVersionPermission, ArticleMetaPermission,
     ArticleStatisticsPermission

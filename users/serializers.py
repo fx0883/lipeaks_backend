@@ -10,7 +10,7 @@ from tenants.models import Tenant
 from common.utils.image_url import add_domain_to_image_url
 from common.mixins import ImageFieldNormalizerMixin
 from common.utils.tenant_header import get_header_tenant_id, require_member_header_match
-from common.permissions import IsSuperAdmin, IsAdmin
+from common.permissions import IsSuperAdminUser, IsAdminUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from common.exceptions import TenantHeaderInvalidOrMissing, TenantMismatchOrNoPermission
 
