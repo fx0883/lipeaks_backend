@@ -1,8 +1,11 @@
-"""Seed 21 themes via Django management command with multi-language support (Parler)"""
-from django.core.management.base import BaseCommand
-from django.utils import translation
-from check_system.models import TaskCategory
+import os
+import django
+from django.db import transaction
 
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
+django.setup()
+
+from check_system.models import TaskCategory
 
 # Format: (name_en, icon, color, form_type, desc_en, name_zh, desc_zh, 
 #          name_ja, desc_ja, name_ko, desc_ko, name_fr, desc_fr)
@@ -51,79 +54,86 @@ THEMES = [
      '振り返り', '内省と改善', '회고', '반성과 개선', 'Bilan', 'Réflexion et amélioration'),
 ]
 
-
-class Command(BaseCommand):
-    help = 'Seed 21-day check-in themes with multi-language support (Parler)'
-
-    def handle(self, *args, **options):
-        created_count = 0
-        updated_count = 0
+@transaction.atomic
+def fix():
+    # 2. 修复原始记录 (ID 1-21)
+    
+    print("Repairing original categories (ID 1-21) with new translations...")
+    for i, (name_en, icon, color, form_type, desc_en, name_zh, desc_zh, name_ja, desc_ja, name_ko, desc_ko, name_fr, desc_fr) in enumerate(THEMES):
+        sort_order = i + 1
         
-        for i, (name_en, icon, color, form_type, desc_en, name_zh, desc_zh) in enumerate(THEMES):
-            # 1. 尝试查找已存在的 Category
-            # 使用显示查询避免 FieldError
-            try:
-                cat = TaskCategory.objects.filter(
-                    translations__name=name_en, 
-                    translations__language_code='en',
-                    is_system=True
-                ).first()
-                
-                if cat:
-                    created = False
-                else:
-                    raise TaskCategory.DoesNotExist
-            except TaskCategory.DoesNotExist:
-                # 创建新对象，设置默认值为英文
-                cat = TaskCategory(is_system=True)
-                created = True
-            
-            # 2. 更新共享字段
-            cat.icon = icon
-            cat.color = color
-            cat.form_type = form_type
-            cat.sort_order = i + 1
-            cat.tenant = None # 系统预设
-            
-            # 3. 设置多语言字段
-            # zh-hans
-            cat.set_current_language('zh-hans')
-            cat.name = name_zh
-            cat.description = desc_zh
-            cat.goal = ''
-            cat.tip = ''
-            cat.quote = ''
-            cat.save() # 保存 zh-hans
-            
-            # en
-            cat.set_current_language('en')
-            cat.name = name_en
-            cat.description = desc_en
-            cat.goal = ''
-            cat.tip = ''
-            cat.quote = ''
-            cat.save() # 保存 en
-            
-            # 其他语言（暂时用占位符，同之前的逻辑）
-            other_langs = ['zh-hant', 'ja', 'ko', 'fr']
-            for lang in other_langs:
-                cat.set_current_language(lang)
-                if lang == 'zh-hant':
-                    cat.name = name_zh
-                    cat.description = desc_zh
-                else:
-                    cat.name = name_en
-                    cat.description = desc_en
-                cat.goal = ''
-                cat.tip = ''
-                cat.quote = ''
-                cat.save()
-
-            if created:
-                created_count += 1
-                self.stdout.write(self.style.SUCCESS(f'+ Created: {name_en} / {name_zh}'))
-            else:
-                updated_count += 1
-                self.stdout.write(f'= Updated: {name_en} / {name_zh}')
+        # 查找对应的旧记录
+        cat = TaskCategory.objects.filter(sort_order=sort_order, is_system=True, id__lte=21).first()
         
-        self.stdout.write(self.style.SUCCESS(f'\nTotal: {len(THEMES)}, Created: {created_count}, Updated: {updated_count}'))
+        if not cat:
+            print(f"Warning: Could not find original category for sort_order {sort_order}. Creating new...")
+            cat = TaskCategory(is_system=True, sort_order=sort_order)
+        else:
+             print(f"Updating ID {cat.id} for {name_en}...")
+
+        # 更新基本字段
+        cat.icon = icon
+        cat.color = color
+        cat.form_type = form_type
+        cat.tenant = None
+        cat.save() 
+        
+        # 强制设置翻译
+        # zh-hans
+        cat.set_current_language('zh-hans')
+        cat.name = name_zh
+        cat.description = desc_zh
+        cat.goal = ''
+        cat.tip = ''
+        cat.quote = ''
+        cat.save()
+        
+        # en
+        cat.set_current_language('en')
+        cat.name = name_en
+        cat.description = desc_en
+        cat.goal = ''
+        cat.tip = ''
+        cat.quote = ''
+        cat.save()
+        
+        # zh-hant (Reuse zh-hans for now)
+        cat.set_current_language('zh-hant')
+        cat.name = name_zh
+        cat.description = desc_zh
+        cat.goal = ''
+        cat.tip = ''
+        cat.quote = ''
+        cat.save()
+
+        # ja
+        cat.set_current_language('ja')
+        cat.name = name_ja
+        cat.description = desc_ja
+        cat.goal = ''
+        cat.tip = ''
+        cat.quote = ''
+        cat.save()
+
+        # ko
+        cat.set_current_language('ko')
+        cat.name = name_ko
+        cat.description = desc_ko
+        cat.goal = ''
+        cat.tip = ''
+        cat.quote = ''
+        cat.save()
+
+        # fr
+        cat.set_current_language('fr')
+        cat.name = name_fr
+        cat.description = desc_fr
+        cat.goal = ''
+        cat.tip = ''
+        cat.quote = ''
+        cat.save()
+
+    print("Translation update completed.")
+
+if __name__ == '__main__':
+    fix()

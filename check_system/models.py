@@ -10,19 +10,22 @@ import logging
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
+from parler.models import TranslatableModel, TranslatedFields
+from parler.managers import TranslatableManager
 
 from common.models import BaseModel
+from common.managers import TranslatableTenantManager
 from users.models import Member
 
 logger = logging.getLogger(__name__)
 
 
-class TaskCategory(BaseModel):
+class TaskCategory(TranslatableModel):
     """
-    打卡类型模型（主题）
+    打卡类型模型（主题）- 支持多语言
     
-    由租户管理员创建和管理，Member 只能查看。
-    支持21天自律打卡的主题系统。
+    注意：由于django-parler的限制，无法继承BaseModel
+    但添加了tenant和is_deleted字段以支持租户隔离和软删除
     """
     FORM_TYPE_CHOICES = (
         ('text', '文本输入'),
@@ -34,52 +37,71 @@ class TaskCategory(BaseModel):
         ('work', '工作效率'),
     )
     
-    name = models.CharField(_("类型名称"), max_length=50)
-    description = models.CharField(_("类型描述"), max_length=200, blank=True)
+    # 可翻译字段
+    translations = TranslatedFields(
+        name=models.CharField(_("类型名称"), max_length=50),
+        description=models.CharField(_("类型描述"), max_length=200, blank=True),
+        goal=models.TextField(_("主题目标"), blank=True),
+        tip=models.TextField(_("小贴士"), blank=True),
+        quote=models.CharField(_("名言"), max_length=200, blank=True),
+    )
+    
+    # 非翻译字段（共享字段）
     is_system = models.BooleanField(_("是否系统预设"), default=False)
     icon = models.CharField(_("图标"), max_length=50, blank=True)
     color = models.CharField(_("主题色"), max_length=20, blank=True, help_text="HEX颜色值，如 #8B5CF6")
-    goal = models.TextField(_("主题目标"), blank=True)
-    tip = models.TextField(_("小贴士"), blank=True)
-    quote = models.CharField(_("名言"), max_length=200, blank=True)
     form_type = models.CharField(_("表单类型"), max_length=20, choices=FORM_TYPE_CHOICES, default='text')
     sort_order = models.IntegerField(_("排序"), default=0)
-    translations = models.JSONField(_("多语言翻译"), default=dict, blank=True)
+    
+    # 租户隔离字段
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        related_name="task_categories",
+        verbose_name=_("所属租户"),
+        null=True,
+        blank=True,
+        help_text="系统预设主题的tenant为NULL"
+    )
+    
+    # 软删除和时间戳
+    is_deleted = models.BooleanField(_("是否删除"), default=False, db_index=True)
+    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
+    
+    # 使用TranslatableTenantManager以同时支持翻译和租户过滤
+    objects = TranslatableTenantManager()
     
     class Meta:
         verbose_name = _('打卡类型')
         verbose_name_plural = _('打卡类型')
         db_table = 'task_category'
         ordering = ['sort_order', '-created_at']
-        # 同一租户内名称唯一
-        unique_together = [['name', 'tenant']]
     
     def __str__(self):
+        # parler会自动处理当前语言的name
+        name = self.safe_translation_getter('name', any_language=True) or 'Unnamed'
         if self.is_system:
-            return f"{self.name} (系统)"
-        return f"{self.name}"
+            return f"{name} (系统)"
+        return name
     
     def save(self, *args, **kwargs):
         """重写保存方法，添加日志"""
         is_new = self.pk is None
         if is_new:
+            name = self.safe_translation_getter('name', any_language=True) or 'Unknown'
             if self.is_system:
-                logger.info(f"创建系统预设类型: {self.name}")
+                logger.info(f"创建系统预设类型: {name}")
             else:
                 tenant_name = self.tenant.name if self.tenant else "无租户"
-                logger.info(f"租户 {tenant_name} 创建自定义类型: {self.name}")
+                logger.info(f"租户 {tenant_name} 创建自定义类型: {name}")
         
         super().save(*args, **kwargs)
     
-    def get_translated_name(self, language_code='zh-hans'):
-        """获取指定语言的名称"""
-        translations = self.translations.get('name', {})
-        return translations.get(language_code, self.name)
-    
-    def get_translated_description(self, language_code='zh-hans'):
-        """获取指定语言的描述"""
-        translations = self.translations.get('description', {})
-        return translations.get(language_code, self.description)
+    def soft_delete(self):
+        """软删除"""
+        self.is_deleted = True
+        self.save()
 
 
 class Task(BaseModel):

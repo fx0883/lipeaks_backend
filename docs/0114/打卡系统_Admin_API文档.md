@@ -23,6 +23,19 @@ Authorization: Bearer {JWT_TOKEN}
 X-Tenant-ID: {TENANT_ID}
 ```
 
+### 多语言支持
+打卡系统支持多语言，在Header中添加语言标识获取对应翻译：
+```
+Accept-Language: zh-hans  # 简体中文
+Accept-Language: en       # 英文
+Accept-Language: zh-hant  # 繁体中文
+```
+
+**返回字段说明**：
+- `name`, `description`, `goal`, `tip`, `quote`: 原始值（通常为英文）
+- `translated_name`, `translated_description`, `translated_goal`, `translated_tip`, `translated_quote`: 根据 Accept-Language 返回的翻译值
+- `translations`: 包含所有语言翻译的 JSON 对象
+
 ### 登录获取Token
 
 **curl命令示例**:
@@ -121,14 +134,15 @@ curl -X POST "http://localhost:8000/api/v1/auth/login/" \
 | page | int | 否 | 页码，默认1 |
 | page_size | int | 否 | 每页数量，默认10 |
 
-**curl命令示例**:
+**curl命令示例 (中文)**:
 ```bash
 curl -X GET "http://localhost:8000/api/v1/check-system/task-categories/?page=1&page_size=10" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
-  -H "X-Tenant-ID: 1"
+  -H "X-Tenant-ID: 1" \
+  -H "Accept-Language: zh-hans"
 ```
 
-**响应示例**:
+**响应示例 (中文)**:
 ```json
 {
   "success": true,
@@ -156,11 +170,17 @@ curl -X GET "http://localhost:8000/api/v1/check-system/task-categories/?page=1&p
         "quote": "",
         "form_type": "text",
         "sort_order": 1,
-        "translations": {},
+        "translations": {
+          "name": {"en": "Awakening Self", "zh-hans": "觉醒自我"},
+          "description": {"en": "Enhance self-awareness", "zh-hans": "提升自我意识"}
+        },
         "created_at": "2026-01-13T10:41:12.090845Z",
-        "updated_at": "2026-01-13T10:41:12.090862Z",
-        "translated_name": "Awakening Self",
-        "translated_description": "Enhance self-awareness"
+        "updated_at": "2026-01-14T15:36:00.000000Z",
+        "translated_name": "觉醒自我",
+        "translated_description": "提升自我意识",
+        "translated_goal": "",
+        "translated_tip": "",
+        "translated_quote": ""
       },
       {
         "id": 2,
@@ -174,11 +194,17 @@ curl -X GET "http://localhost:8000/api/v1/check-system/task-categories/?page=1&p
         "quote": "",
         "form_type": "sleep",
         "sort_order": 2,
-        "translations": {},
+        "translations": {
+          "name": {"en": "Early Sleep", "zh-hans": "早睡早起"},
+          "description": {"en": "Regular sleep schedule", "zh-hans": "规律的睡眠作息"}
+        },
         "created_at": "2026-01-13T10:41:12.093571Z",
-        "updated_at": "2026-01-13T10:41:12.093579Z",
-        "translated_name": "Early Sleep",
-        "translated_description": "Regular sleep schedule"
+        "updated_at": "2026-01-14T15:36:00.000000Z",
+        "translated_name": "早睡早起",
+        "translated_description": "规律的睡眠作息",
+        "translated_goal": "",
+        "translated_tip": "",
+        "translated_quote": ""
       }
     ]
   }

@@ -11,40 +11,104 @@ from django.utils.translation import gettext_lazy as _
 from .models import TaskCategory, Task, CheckRecord, TaskTemplate, CheckinCycle
 
 
-class TaskCategorySerializer(serializers.ModelSerializer):
+def normalize_language_code(request):
+    """
+    从请求中获取并标准化语言代码
+    """
+    if not request:
+        return 'zh-hans'
+        
+    accept_language = request.headers.get('Accept-Language', '')
+    if not accept_language:
+        return 'zh-hans'
+        
+    # 获取主语言代码 (e.g. "zh-CN,zh;q=0.9" -> "zh-cn")
+    lang_code = accept_language.split(',')[0].strip().lower()
+    
+    # 映射常见变体到内部key
+    if lang_code in ['zh-cn', 'zh-sg', 'zh']:
+        return 'zh-hans'
+    elif lang_code in ['zh-tw', 'zh-hk', 'zh-mo']:
+        return 'zh-hant'
+    elif lang_code.startswith('en'):
+        return 'en'
+        
+    return lang_code
+
+
+from parler_rest.serializers import TranslatableModelSerializer, TranslatedFieldsField
+
+class TaskCategorySerializer(TranslatableModelSerializer):
     """
     打卡类型序列化器
     
-    由租户管理员管理，Member 只读。
+    API Response Schema:
+    - translations: 包含所有语言的翻译（仅Admin可见）
+    - name, description, etc: 当前语言的翻译（通过Accept-Language自动选择）
+    - is_system, etc: 元数据（仅Admin可见）
     """
-    translated_name = serializers.SerializerMethodField()
-    translated_description = serializers.SerializerMethodField()
+    translations = TranslatedFieldsField(shared_model=TaskCategory)
     
     class Meta:
         model = TaskCategory
         fields = [
-            'id', 'name', 'description', 'is_system', 'icon',
-            'color', 'goal', 'tip', 'quote', 'form_type', 'sort_order',
-            'translations', 'created_at', 'updated_at', 
-            'translated_name', 'translated_description'
+            'id', 'name', 'description', 'icon', 'color', 
+            'goal', 'tip', 'quote', 'translations',
+            'is_system', 'form_type', 'sort_order', 
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
-    
-    def get_translated_name(self, obj) -> str:
-        """获取current语言的名称"""
+
+    def to_representation(self, instance):
+        """
+        根据用户角色定制返回字段
+        1. 自动根据 Accept-Language 返回对应语言的 name/description 等
+        2. Admin: 返回完整信息（包括 translations 字段）
+        3. Member: 隐藏 translations, is_system, created_at, updated_at 等管理字段
+        """
+        # 获取当前语言
+        current_language = self.context.get('request').META.get('HTTP_ACCEPT_LANGUAGE', 'zh-hans').split(',')[0].strip().lower()
+        
+        # 简单映射常见语言代码，parler会自动处理备选语言
+        if 'zh' in current_language:
+            if 'tw' in current_language or 'hk' in current_language or 'hant' in current_language:
+                current_language = 'zh-hant'
+            else:
+                current_language = 'zh-hans'
+        elif current_language.startswith('en'):
+            current_language = 'en'
+        elif current_language.startswith('ja'):
+            current_language = 'ja'
+        elif current_language.startswith('ko'):
+            current_language = 'ko'
+        elif current_language.startswith('fr'):
+            current_language = 'fr'
+        else:
+            current_language = 'zh-hans'
+            
+        # 设置实例的当前语言，确保序列化时读取正确的翻译
+        instance.set_current_language(current_language, initialize=True)
+            
+        # 调用父类方法获取基本数据（此时 name 等字段已经是翻译后的值了）
+        data = super().to_representation(instance)
+        
+        # Parler的getter如果找不到当前语言，会根据fallback配置找备用语言
+        # 确保字段存在
+        for field in ['name', 'description', 'goal', 'tip', 'quote']:
+            if field not in data or data[field] is None:
+                data[field] = instance.safe_translation_getter(field, default='')
+
         request = self.context.get('request')
-        if request:
-            language = request.headers.get('Accept-Language', 'zh-hans').split(',')[0]
-            return obj.get_translated_name(language)
-        return obj.name
-    
-    def get_translated_description(self, obj) -> str:
-        """获取current语言的描述"""
-        request = self.context.get('request')
-        if request:
-            language = request.headers.get('Accept-Language', 'zh-hans').split(',')[0]
-            return obj.get_translated_description(language)
-        return obj.description
+        is_staff = request and hasattr(request.user, 'is_staff') and request.user.is_staff
+
+        if not is_staff:
+            # Member: 移除管理字段和完整翻译包
+            fields_to_remove = ['translations', 'is_system', 'created_at', 'updated_at']
+            for field in fields_to_remove:
+                data.pop(field, None)
+                
+        return data
+
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -166,29 +230,36 @@ class TaskTemplateSerializer(serializers.ModelSerializer):
     
     def get_translated_name(self, obj) -> str:
         """获取current语言的名称"""
-        request = self.context.get('request')
-        if request:
-            language = request.headers.get('Accept-Language', 'zh-hans').split(',')[0]
-            return obj.get_translated_name(language)
-        return obj.name
+        language = normalize_language_code(self.context.get('request'))
+        return obj.get_translated_name(language)
     
     def get_translated_description(self, obj) -> str:
         """获取current语言的描述"""
-        request = self.context.get('request')
-        if request:
-            language = request.headers.get('Accept-Language', 'zh-hans').split(',')[0]
-            return obj.get_translated_description(language)
-        return obj.description
+        language = normalize_language_code(self.context.get('request'))
+        return obj.get_translated_description(language)
     
     def get_category_name(self, obj) -> str:
         """获取类型名称"""
         if obj.category:
-            request = self.context.get('request')
-            if request:
-                language = request.headers.get('Accept-Language', 'zh-hans').split(',')[0]
-                return obj.category.get_translated_name(language)
-            return obj.category.name
+            language = normalize_language_code(self.context.get('request'))
+            return obj.category.get_translated_name(language)
         return None
+        
+    def to_representation(self, instance):
+        """
+        根据用户身份处理返回字段
+        """
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        
+        # 如果不是管理员，移除 translations 字段
+        if request and hasattr(request.user, 'is_staff') and not request.user.is_staff:
+            data.pop('translations', None)
+            data.pop('is_system', None)
+            data.pop('created_at', None)
+            data.pop('updated_at', None)
+            
+        return data
 
 
 class CheckinCycleSerializer(serializers.ModelSerializer):
