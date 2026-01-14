@@ -115,6 +115,11 @@ local_*.py
 # 临时文件
 temp/
 tmp/
+.tmp/
+
+# Google OAuth credentials (GEMINI.md architecture)
+credentials.json
+token.json
 
 # 操作系统文件
 .DS_Store
