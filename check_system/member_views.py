@@ -47,7 +47,7 @@ class MemberThemeViewSet(TenantModelViewSet):
     """
     queryset = TaskCategory.objects.all()
     serializer_class = TaskCategorySerializer
-    pagination_class = StandardResultsSetPagination
+    pagination_class = None  # 返回所有主题，不分页
     permission_classes = [MemberPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['is_system', 'form_type']
