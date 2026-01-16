@@ -364,7 +364,7 @@ class ArticleViewSet(TenantModelViewSet):
         # 处理应用过滤（可选）
         application = self.request.query_params.get('application')
         if application:
-            from .models import ArticleApplication
+            from ..models import ArticleApplication
             article_ids = ArticleApplication.objects.filter(
                 application_id=application
             ).values_list('article_id', flat=True)

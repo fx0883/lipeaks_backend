@@ -75,6 +75,7 @@ class MemberLike(models.Model):
         verbose_name=_("所属租户")
     )
     created_at = models.DateTimeField(_("点赞时间"), default=timezone.now, db_index=True)
+    is_deleted = models.BooleanField(_("是否删除"), default=False, db_index=True)
     
     class Meta:
         verbose_name = _('用户点赞')
@@ -91,6 +92,11 @@ class MemberLike(models.Model):
     
     def __str__(self):
         return f"{self.from_member.username} liked {self.to_member.username}"
+    
+    def soft_delete(self):
+        """软删除"""
+        self.is_deleted = True
+        self.save(update_fields=['is_deleted'])
 
 
 class MemberFollow(models.Model):
@@ -118,6 +124,7 @@ class MemberFollow(models.Model):
         verbose_name=_("所属租户")
     )
     created_at = models.DateTimeField(_("关注时间"), default=timezone.now, db_index=True)
+    is_deleted = models.BooleanField(_("是否删除"), default=False, db_index=True)
     
     class Meta:
         verbose_name = _('用户关注')
@@ -139,8 +146,14 @@ class MemberFollow(models.Model):
         """检查是否互相关注"""
         return MemberFollow.objects.filter(
             follower=self.following,
-            following=self.follower
+            following=self.follower,
+            is_deleted=False
         ).exists()
+    
+    def soft_delete(self):
+        """软删除"""
+        self.is_deleted = True
+        self.save(update_fields=['is_deleted'])
 
 
 class ArticleLike(models.Model):
@@ -170,6 +183,7 @@ class ArticleLike(models.Model):
     created_at = models.DateTimeField(_("点赞时间"), default=timezone.now, db_index=True)
     ip_address = models.GenericIPAddressField(_("IP地址"), blank=True, null=True)
     user_agent = models.CharField(_("用户代理"), max_length=255, blank=True, null=True)
+    is_deleted = models.BooleanField(_("是否删除"), default=False, db_index=True)
     
     class Meta:
         verbose_name = _('文章点赞')
@@ -186,3 +200,8 @@ class ArticleLike(models.Model):
     
     def __str__(self):
         return f"{self.from_member.username} liked {self.article.title}"
+    
+    def soft_delete(self):
+        """软删除"""
+        self.is_deleted = True
+        self.save(update_fields=['is_deleted'])
