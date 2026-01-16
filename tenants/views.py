@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, OpenApiExample
-from common.permissions import IsSuperAdmin, IsAdmin, TenantApiPermission, IsAdminUser
+from common.permissions import IsSuperAdminUser, IsAdminUser, TenantApiPermission, IsAdminUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from tenants.models import Tenant, TenantQuota
 from tenants.serializers import (

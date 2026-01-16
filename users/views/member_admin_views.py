@@ -16,7 +16,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, OpenApiExample
 from common.pagination import StandardResultsSetPagination
 
-from common.permissions import IsSuperAdmin, IsAdmin
+from common.permissions import IsSuperAdminUser, IsAdminUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from users.models import Member
 from users.serializers import (
@@ -46,7 +46,7 @@ class AdminMemberListCreateView(generics.ListCreateAPIView):
     - 租户管理员：只能查看自己租户的Member
     - 普通Member：只能查看自己（在其他View中实现）
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     serializer_class = MemberSerializer
     pagination_class = StandardResultsSetPagination
     
@@ -288,7 +288,7 @@ class AdminMemberRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView)
     - 删除保护：不允许删除当前登录的账号
     """
     serializer_class = MemberSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     
     @extend_schema(
         summary="【管理员】获取Member详情",
@@ -379,7 +379,7 @@ class AdminSubAccountListView(generics.ListAPIView):
     """
     管理员端：子账号列表视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     serializer_class = SubAccountSerializer
     pagination_class = StandardResultsSetPagination
     
@@ -427,7 +427,7 @@ class AdminSubAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
     管理员端：子账号详情、更新和删除视图
     """
     serializer_class = SubAccountSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     
     @extend_schema(
         summary="【管理员】获取子账号详情",
@@ -519,7 +519,7 @@ class AdminMemberAvatarUploadView(APIView):
     """
     管理员端：为特定Member上传头像视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     parser_classes = [MultiPartParser, FormParser]
     
     @extend_schema(

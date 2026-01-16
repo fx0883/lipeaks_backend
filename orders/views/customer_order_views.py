@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 
-from common.permissions import IsAdmin
+from common.permissions import IsAdminUser
 from orders.models import Order
 from orders.serializers import OrderListSerializer, OrderDetailSerializer
 from customers.models import Customer
@@ -175,7 +175,7 @@ class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
     
     提供获取特定客户的所有订单功能
     """
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['payment_status', 'service_type'] # 移除了status字段
     search_fields = ['order_number', 'translator', 'project_details', 'customer_contact__username', 'customer_contact__nick_name', 'customer_contact__first_name', 'customer_contact__last_name'] # 移除了description字段

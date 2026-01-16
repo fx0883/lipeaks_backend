@@ -137,6 +137,9 @@ urlpatterns = [
         # 管理端通知路由: /api/v1/admin/notifications/
         path('admin/notifications/', include('notifications.urls', namespace='notifications')),
         
+        # 微信小程序登录路由
+        path('wechat/', include('wechat.urls', namespace='wechat')),
+        
         # API 文档
         path('schema/', LoggingSpectacularAPIView.as_view(), name='schema'),
         path('docs/', LoggingSpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

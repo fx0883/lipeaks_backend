@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
-from common.permissions import IsSuperAdmin, IsAdmin
+from common.permissions import IsSuperAdminUser, IsAdminUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from common.exceptions import UserPermissionDeniedException
 from users.models import User
@@ -23,7 +23,7 @@ class UserRoleUpdateView(APIView):
     """
     更新用户角色视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     
     @extend_schema(
         summary="更新用户角色",

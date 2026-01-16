@@ -104,6 +104,7 @@ INSTALLED_APPS = [
     'feedbacks',  # User Feedback System
     'interactions',  # 用户互动应用（收藏、点赞等）
     'notifications',  # 通知系统
+    'wechat',  # 微信小程序登录
 ]
 
 MIDDLEWARE = [
@@ -649,3 +650,11 @@ TENANT_PUBLIC_API_PATHS = [
     '/api/v1/feedbacks/health/',     # 健康检查
     '/api/v1/members/password-reset/',  # Member密码重置页面（公开HTML表单）
 ]
+
+# ============================================================================
+# 微信小程序配置 (WeChat Mini Program Configuration)
+# ============================================================================
+# 小程序 AppID 和 Secret（从微信开放平台获取）
+# 重要：Secret 必须保密，仅存储在服务端环境变量中
+WECHAT_APPID = os.getenv('WECHAT_APPID', '')
+WECHAT_SECRET = os.getenv('WECHAT_SECRET', '')

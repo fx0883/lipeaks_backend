@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 
-from common.permissions import IsAdmin, IsSuperAdmin
+from common.permissions import IsAdminUser, IsSuperAdminUser
 from common.viewsets import TenantModelViewSet
 from customers.models import Customer
 from customers.serializers import (
@@ -182,7 +182,7 @@ class CustomerViewSet(TenantModelViewSet):
     提供客户的增删改查、搜索、筛选、统计等功能
     """
     queryset = Customer.objects.all()
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdminUser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'type', 'value_level', 'company_size', 'is_deleted']
     search_fields = ['name', 'primary_contact_name', 'primary_contact_phone', 'primary_contact_email']

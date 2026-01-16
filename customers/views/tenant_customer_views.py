@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 
-from common.permissions import IsAdmin, IsTenantAdmin
+from common.permissions import IsAdminUser, IsTenantAdmin
 from customers.models import Customer, CustomerTenantRelation
 from customers.serializers import (
     CustomerSerializer, CustomerListSerializer, 
@@ -42,7 +42,7 @@ class TenantCustomerViewSet(viewsets.ReadOnlyModelViewSet):
     
     提供租户视角下的客户查询功能
     """
-    permission_classes = [IsAdmin | IsTenantAdmin]
+    permission_classes = [IsAdminUser | IsTenantAdmin]
     
     def get_serializer_class(self):
         """

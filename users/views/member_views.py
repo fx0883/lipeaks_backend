@@ -16,7 +16,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, OpenApiExample
 from common.pagination import StandardResultsSetPagination
 
-from common.permissions import IsSuperAdmin, IsAdmin
+from common.permissions import IsSuperAdminUser, IsAdminUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from common.exceptions import UserPermissionDeniedException, TenantException
 from users.models import Member
@@ -37,7 +37,7 @@ class MemberListCreateView(generics.ListCreateAPIView):
     """
     普通用户列表和创建视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
     serializer_class = MemberSerializer
     pagination_class = StandardResultsSetPagination
     

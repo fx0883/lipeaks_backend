@@ -15,7 +15,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 import io
 
-from common.permissions import IsAdmin
+from common.permissions import IsAdminUser
 from common.viewsets import TenantModelViewSet
 from orders.models import Order
 from orders.serializers import (
@@ -293,7 +293,7 @@ class OrderViewSet(TenantModelViewSet):
     - PATCH (partial_update): 允许只传入需要更新的字段
     """
     queryset = Order.objects.all()
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['payment_status', 'service_type', 'language', 'customer', 'customer_type']
     search_fields = ['order_number', 'customer__name', 'translator', 'project_details', 'customer_contact__username', 'customer_contact__nick_name', 'customer_contact__first_name', 'customer_contact__last_name']
