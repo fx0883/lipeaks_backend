@@ -124,6 +124,9 @@ urlpatterns = [
         # Member 密码重置（公开HTML页面）
         path('members/password-reset/', include('users.urls.member_password_reset_urls', namespace='member_password_reset')),
         
+        # Member 账号删除（公开HTML页面 - Google Play Data Safety）
+        path('members/delete-account/', include('users.urls.member_delete_account_urls', namespace='member_delete_account')),
+        
         # 用户互动系统路由（收藏、点赞等）
         path('interactions/', include('interactions.urls', namespace='interactions')),
         

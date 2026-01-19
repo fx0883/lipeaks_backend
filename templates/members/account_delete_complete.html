@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Account Deleted{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-check-circle"></i> Account Deleted Successfully</h4>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-user-slash text-success" style="font-size: 4rem;"></i>
+                    </div>
+
+                    <h5 class="mb-3">Your account has been permanently deleted.</h5>
+
+                    <p class="text-muted">
+                        All your personal data and associated information have been removed from our system.
+                    </p>
+
+                    {% if deleted_data %}
+                    <div class="mt-4">
+                        <h6>Deleted data summary:</h6>
+                        <ul class="list-group list-group-flush text-start">
+                            {% for item in deleted_data %}
+                            <li class="list-group-item"><i class="fas fa-check text-success"></i> {{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <div class="mt-4">
+                        <p class="text-muted small">
+                            Thank you for using our service. If you have any questions, please contact our support team.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
