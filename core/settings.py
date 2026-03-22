@@ -105,6 +105,7 @@ INSTALLED_APPS = [
     'interactions',  # 用户互动应用（收藏、点赞等）
     'notifications',  # 通知系统
     'wechat',  # 微信小程序登录
+    'we_rss',
 ]
 
 MIDDLEWARE = [
@@ -634,6 +635,7 @@ TENANT_ISOLATED_API_PATHS = [
     '/api/v1/orders/',        # 订单管理
     '/api/v1/notifications/',       # 通知系统-成员端
     '/api/v1/admin/notifications/', # 通知系统-管理端
+    '/api/v1/we-rss/',        # we_rss 成员接口
 ]
 
 # 公开API路径（不需要租户验证）

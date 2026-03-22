@@ -142,6 +142,7 @@ urlpatterns = [
         
         # 微信小程序登录路由
         path('wechat/', include('wechat.urls', namespace='wechat')),
+        path('we-rss/', include('we_rss.urls', namespace='we-rss')),
         
         # API 文档
         path('schema/', LoggingSpectacularAPIView.as_view(), name='schema'),
