@@ -8,6 +8,7 @@ from common.schema.responses import common_error_responses
 from we_rss.models import WechatFeed
 from we_rss.schema import (
     FEED_EXAMPLE,
+    FEED_ARTICLE_CLEAR_EXAMPLE,
     FEED_ID_PARAMETER,
     FEED_SEARCH_EXAMPLE,
     FEED_SYNC_TASK_EXAMPLE,
@@ -22,6 +23,7 @@ from we_rss.schema import (
     with_tenant_header,
 )
 from we_rss.serializers import (
+    FeedArticleClearResponseSerializer,
     FeedSearchResultSerializer,
     FeedWriteSerializer,
     WechatFeedSerializer,
@@ -48,6 +50,8 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
             return FeedWriteSerializer
         if self.action == "search":
             return FeedSearchResultSerializer
+        if self.action == "clear_articles":
+            return FeedArticleClearResponseSerializer
         if self.action == "sync":
             return WechatSyncTaskSerializer
         return WechatFeedSerializer
@@ -192,6 +196,34 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
         feed = self.get_object()
         feed.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        operation_id="we_rss_feeds_clear_articles",
+        tags=[WE_RSS_TAG],
+        summary="清空公众号下全部文章",
+        description=(
+            "永久删除当前 tenant 内指定公众号下的全部文章数据库记录。"
+            "该操作只影响当前 feed 关联文章，不会删除 feed 本身。"
+            f"{WE_RSS_AUTH_DESCRIPTION}"
+        ),
+        parameters=with_tenant_header(FEED_ID_PARAMETER),
+        request=None,
+        responses={
+            200: json_response(
+                FeedArticleClearResponseSerializer,
+                "公众号文章已清空。",
+                FEED_ARTICLE_CLEAR_EXAMPLE,
+                example_name="Feed clear articles response",
+                message="操作成功",
+            ),
+            **common_error_responses,
+        },
+    )
+    @action(detail=True, methods=["delete"], url_path="articles")
+    def clear_articles(self, request, *args, **kwargs):
+        feed = self.get_object()
+        result = FeedService.clear_articles(feed=feed)
+        return Response(result)
 
     @extend_schema(
         operation_id="we_rss_feeds_search",

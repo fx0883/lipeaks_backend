@@ -10,7 +10,7 @@ from django.utils import timezone
 from requests.cookies import cookiejar_from_dict
 
 from we_rss.models import WechatCredential, WechatCredentialLoginSession, WechatSyncTask
-from we_rss.services.task_service import TaskService
+from we_rss.services.task_service import TaskService, dispatch_we_rss_task
 
 
 class WechatCredentialGateway:
@@ -346,7 +346,7 @@ class CredentialService:
         )
         from we_rss.tasks import run_credential_login_task
 
-        run_credential_login_task.delay(task.id)
+        dispatch_we_rss_task(run_credential_login_task, task.id)
         return login_session
 
     @staticmethod

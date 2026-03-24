@@ -1,14 +1,47 @@
 # we_rss 同步任务 API
 
-这份文档专门讲 `we_rss` 的异步任务接口。前端如果要把扫码登录、
-公众号同步、文章导入和文章刷新接完整，任务接口几乎一定会用到。
+这份文档专门讲 `WechatSyncTask`，也就是 `we_rss` 当前所有异步动作共用的任务
+模型。前端只要接扫码登录、公众号同步、按 URL 导入文章、刷新文章中的任意一项，
+就几乎一定会用到这一组接口。
 
-`we_rss` 的任务模型是 `WechatSyncTask`。前端需要把它理解成统一的
-后台工作单，而不是某个具体业务接口的附属字段。
+你可以把任务模型理解成统一的“后台工作单”。触发某个异步动作后，前端先拿到
+一个任务对象，再用任务详情接口持续轮询，直到进入终态。
+
+## 通用请求头
+
+```http
+Authorization: Bearer <member_access_token>
+X-Tenant-ID: <current_member_tenant_id>
+```
 
 ## 数据结构说明
 
-任务对象字段如下。
+### 1. WechatSyncTask 模型字段
+
+`WechatSyncTask` 已继承 `BaseModel`，模型层字段包括：
+
+| 字段 | 来源 | 说明 |
+| --- | --- | --- |
+| `tenant` | `BaseModel` | 所属租户 |
+| `created_at` | `BaseModel` | 创建时间 |
+| `updated_at` | `BaseModel` | 更新时间 |
+| `is_deleted` | `BaseModel` | 软删除标记 |
+| `task_type` | 业务字段 | 任务类型 |
+| `status` | 业务字段 | 任务状态 |
+| `task_key` | 业务字段 | 去重键 |
+| `target_type` | 业务字段 | 目标对象类型 |
+| `target_id` | 业务字段 | 目标对象 ID |
+| `message` | 业务字段 | 当前任务消息 |
+| `request_payload` | 业务字段 | 任务请求快照 |
+| `result_payload` | 业务字段 | 任务结果快照 |
+| `celery_task_id` | 业务字段 | Celery 任务 ID |
+| `started_at` | 业务字段 | 开始执行时间 |
+| `finished_at` | 业务字段 | 完成时间 |
+| `created_by` | 业务字段 | 触发成员 |
+
+### 2. 任务接口返回字段
+
+列表和详情接口当前返回下面这些字段：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -19,39 +52,47 @@
 | `target_type` | `string` | 目标对象类型 |
 | `target_id` | `number \| null` | 目标对象 ID |
 | `message` | `string` | 当前任务消息 |
-| `request_payload` | `object \| null` | 创建任务时的请求载荷 |
-| `result_payload` | `object \| null` | 执行结果载荷 |
+| `request_payload` | `object \| null` | 请求快照 |
+| `result_payload` | `object \| null` | 结果快照 |
 | `celery_task_id` | `string` | Celery 任务 ID |
-| `started_at` | `string \| null` | 开始执行时间 |
-| `finished_at` | `string \| null` | 执行结束时间 |
+| `started_at` | `string \| null` | 开始时间 |
+| `finished_at` | `string \| null` | 完成时间 |
 | `created_at` | `string` | 创建时间 |
 | `updated_at` | `string` | 更新时间 |
 
-## task_type 枚举
+不会返回给前端的字段包括：
 
-当前任务类型只有下面 4 类。
+- `tenant`
+- `is_deleted`
+- `created_by`
+
+## 枚举值说明
+
+### task_type
+
+当前代码里已经固定的任务类型如下：
 
 | 值 | 含义 |
 | --- | --- |
-| `credential_login` | 扫码登录后台轮询任务 |
-| `feed_sync` | 公众号文章同步任务 |
+| `credential_login` | 扫码登录任务 |
+| `feed_sync` | 公众号同步任务 |
+| `article_refresh` | 单篇文章刷新任务 |
 | `article_import` | 按 URL 导入文章任务 |
-| `article_refresh` | 刷新文章正文和统计任务 |
 
-## status 枚举
+### status
 
-任务状态当前只有下面 4 类。
+当前任务状态只有四种：
 
 | 值 | 含义 |
 | --- | --- |
 | `pending` | 已创建，等待执行 |
 | `running` | 正在执行 |
-| `success` | 成功完成 |
+| `success` | 执行成功 |
 | `failed` | 执行失败 |
 
-## target_type 常见值
+### target_type
 
-`target_type` 不是严格枚举字段，但目前常见值如下。
+`target_type` 不是严格枚举字段，但当前实现里常见值如下：
 
 | 值 | 含义 |
 | --- | --- |
@@ -59,226 +100,257 @@
 | `feed` | 公众号 |
 | `article` | 文章 |
 
+## 接口一览
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/v1/we-rss/tasks/` | 获取当前 tenant 的任务列表 |
+| `GET` | `/api/v1/we-rss/tasks/{task_id}/` | 获取单个任务详情 |
+
 ## 1. 获取任务列表
 
-这个接口返回当前 tenant 下的任务列表，支持按任务类型、状态和目标过滤。
-前端适合做“任务中心”页，也适合做轻量轮询列表。
-
-### 请求信息
+这个接口返回当前 tenant 下的任务列表，并支持简单过滤。
 
 ```http
 GET /api/v1/we-rss/tasks/
 ```
 
-### 查询参数
+当前可用查询参数如下：
 
-| 参数 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `task_type` | `string` | 否 | 按任务类型过滤 |
-| `status` | `string` | 否 | 按状态过滤 |
-| `target_type` | `string` | 否 | 按目标类型过滤 |
-| `target_id` | `number` | 否 | 按目标对象 ID 过滤 |
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `task_type` | `string` | 按任务类型精确过滤 |
+| `status` | `string` | 按状态精确过滤 |
+| `target_type` | `string` | 按目标类型精确过滤 |
+| `target_id` | `number` | 按目标 ID 精确过滤 |
 
-### 请求示例
+示例：
 
 ```http
 GET /api/v1/we-rss/tasks/?task_type=feed_sync&status=success
 ```
 
-### 成功响应示例
-
-```json
-{
-  "success": true,
-  "code": 2000,
-  "message": "操作成功",
-  "data": [
-    {
-      "id": 101,
-      "task_type": "feed_sync",
-      "status": "success",
-      "task_key": "feed_sync:1",
-      "target_type": "feed",
-      "target_id": 1,
-      "message": "Feed sync complete",
-      "request_payload": {
-        "feed_id": 1
-      },
-      "result_payload": {
-        "fetched_count": 3,
-        "detail_success_count": 2,
-        "detail_failed_count": 1,
-        "errors": []
-      },
-      "celery_task_id": "6ec3c8a2-e570-4bd8-9031-53d5976fb415",
-      "started_at": "2026-03-21T09:20:00Z",
-      "finished_at": "2026-03-21T09:20:08Z",
-      "created_at": "2026-03-21T09:20:00Z",
-      "updated_at": "2026-03-21T09:20:08Z"
-    }
-  ]
-}
-```
-
-### 前端调用示例
-
-```ts
-const params = new URLSearchParams({
-  task_type: "feed_sync",
-  status: "success",
-});
-
-const res = await weRssRequest<Array<any>>(`/tasks/?${params.toString()}`);
-const tasks = res.data;
-```
+这个接口没有分页，返回的是数组。
 
 ## 2. 获取任务详情
 
-这个接口是前端轮询任务的核心接口。通常在发起异步动作后，用这个接口
-持续刷新进度和结果。
-
-### 请求信息
+这个接口是前端轮询后台任务的核心接口。
 
 ```http
 GET /api/v1/we-rss/tasks/{task_id}/
 ```
 
-### 路径参数
+路径参数：
 
-| 参数 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `task_id` | `number` | 是 | 任务 ID |
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `task_id` | `number` | 任务 ID |
 
-### 成功响应示例：公众号同步成功
+前端轮询时建议主要看这几个字段：
+
+- `status`
+- `message`
+- `result_payload`
+- `finished_at`
+
+## result_payload 结构说明
+
+`result_payload` 没有全局统一 schema。它会随任务类型和成功/失败状态而变化，这一
+点必须写进前端类型设计里。
+
+### 1. credential_login
+
+登录任务成功时，当前代码会返回：
 
 ```json
 {
-  "success": true,
-  "code": 2000,
-  "message": "操作成功",
-  "data": {
-    "id": 101,
-    "task_type": "feed_sync",
-    "status": "success",
-    "task_key": "feed_sync:1",
-    "target_type": "feed",
-    "target_id": 1,
-    "message": "Feed sync complete",
-    "request_payload": {
-      "feed_id": 1
-    },
-    "result_payload": {
-      "fetched_count": 3,
-      "detail_success_count": 2,
-      "detail_failed_count": 1,
-      "errors": [
-        {
-          "source_id": "article-3",
-          "url": "https://mp.weixin.qq.com/s/article-3?__biz=Qkl6&mid=1&idx=3&sn=ghi",
-          "error": "WeChat article detail fetch failed."
-        }
-      ]
-    },
-    "celery_task_id": "6ec3c8a2-e570-4bd8-9031-53d5976fb415",
-    "started_at": "2026-03-21T09:20:00Z",
-    "finished_at": "2026-03-21T09:20:08Z",
-    "created_at": "2026-03-21T09:20:00Z",
-    "updated_at": "2026-03-21T09:20:08Z"
+  "credential_id": 12,
+  "session_id": "f5d7e6f8e4c34b11"
+}
+```
+
+登录任务失败时，当前代码会返回：
+
+```json
+{
+  "session_id": "f5d7e6f8e4c34b11",
+  "task_type": "credential_login",
+  "status": "failed",
+  "error": "WeChat rejected the QR login."
+}
+```
+
+### 2. feed_sync
+
+公众号同步成功时，当前代码返回的 `result_payload` 常见结构如下：
+
+前端要特别注意两个行为：
+
+- 公众号同步当前会按页抓取文章列表，直到微信返回空页为止。
+- 后端会在请求下一页文章列表前，以及请求下一篇文章详情前，各等待 `0.5`
+  秒。
+
+```json
+{
+  "message": "Feed sync complete",
+  "feed_id": 3,
+  "article_ids": [101, 102],
+  "article_count": 2,
+  "detail_success_count": 2,
+  "detail_failed_count": 1,
+  "failed_articles": [
+    {
+      "source_id": "article-3",
+      "url": "https://mp.weixin.qq.com/s/...",
+      "error": "detail fetch failed"
+    }
+  ],
+  "result_payload": {
+    "fetched_count": 3,
+    "detail_success_count": 2,
+    "detail_failed_count": 1,
+    "errors": [
+      {
+        "source_id": "article-3",
+        "url": "https://mp.weixin.qq.com/s/...",
+        "error": "detail fetch failed"
+      }
+    ]
   }
 }
 ```
 
-### 成功响应示例：任务失败
+`result_payload` 里外两层字段的含义不同：
+
+- 外层 `article_ids`、`article_count` 是最终写入本地 `WechatArticle` 的结果。
+- 内层 `result_payload.fetched_count` 是微信网关层本次抓到的文章数汇总。
+- `failed_articles` 和 `result_payload.errors` 都表示详情抓取失败明细，前者更适合
+  前端直接展示。
+
+同步失败时，当前代码会返回：
 
 ```json
 {
-  "success": true,
-  "code": 2000,
-  "message": "操作成功",
-  "data": {
-    "id": 106,
-    "task_type": "article_import",
-    "status": "failed",
-    "task_key": "article_import:https://mp.weixin.qq.com/s/import-fail",
-    "target_type": "article",
-    "target_id": null,
-    "message": "Article import failed: WeChat import blocked by anti-bot",
-    "request_payload": {
-      "url": "https://mp.weixin.qq.com/s/import-fail"
-    },
-    "result_payload": {
-      "task_type": "article_import",
-      "url": "https://mp.weixin.qq.com/s/import-fail",
-      "error": "WeChat import blocked by anti-bot"
-    },
-    "celery_task_id": "8617396d-8d65-4fe9-94ef-0d7f1803e688",
-    "started_at": "2026-03-21T09:45:00Z",
-    "finished_at": "2026-03-21T09:45:01Z",
-    "created_at": "2026-03-21T09:45:00Z",
-    "updated_at": "2026-03-21T09:45:01Z"
-  }
+  "feed_id": 3,
+  "task_type": "feed_sync",
+  "error": "WeChat rate limit triggered"
 }
 ```
 
-### result_payload 的理解方式
+### 3. article_import
 
-`result_payload` 的结构会随任务类型变化，前端不能按一个固定结构硬编码。
-建议按 `task_type` 分支解析。
+文章导入成功时，当前代码返回：
 
-| task_type | 常见 result_payload 字段 |
-| --- | --- |
-| `credential_login` | `session_id`、`status`、`error` |
-| `feed_sync` | `fetched_count`、`detail_success_count`、`detail_failed_count`、`errors` |
-| `article_import` | `article_id`、`feed_id`、`message` 或 `error` |
-| `article_refresh` | `article_id`、`read_num`、`comment_total_count` 或 `error` |
+```json
+{
+  "message": "Article import complete",
+  "article_id": 15,
+  "feed_id": 9,
+  "source_id": "article-source-id"
+}
+```
 
-### 前端轮询示例
+补充说明：
+
+- `article_import` 的 `task_key` 使用归一化后的公开文章 URL。
+- 同一篇文章如果只是抓取时多了 `token` 这类临时参数，仍会命中同一个导入任务。
+
+文章导入失败时，当前代码返回：
+
+```json
+{
+  "task_type": "article_import",
+  "url": "https://mp.weixin.qq.com/s/import-fail",
+  "error": "Wechat article is unavailable or has been deleted."
+}
+```
+
+### 4. article_refresh
+
+文章刷新成功时，当前代码返回：
+
+```json
+{
+  "message": "Article refresh complete",
+  "article_id": 15,
+  "title": "Updated title",
+  "updated_by_id": 21
+}
+```
+
+补充说明：
+
+- 刷新任务重新抓取正文时，会使用微信返回页做解析，但不会把带 `token` 的跳转 URL 写回文章记录。
+
+文章刷新失败时，当前代码返回：
+
+```json
+{
+  "task_type": "article_refresh",
+  "article_id": 15,
+  "error": "WeChat refresh blocked by anti-bot"
+}
+```
+
+## 轮询建议
+
+前端统一任务轮询建议如下：
+
+1. 触发异步动作后先拿到任务 ID。
+2. 每 2 秒左右请求一次任务详情。
+3. `status === "success"` 时结束轮询并消费 `result_payload`。
+4. `status === "failed"` 时结束轮询并优先显示
+   `result_payload.error`，没有的话显示 `message`。
+5. 到达设定超时后给出“任务超时，请稍后刷新”的提示。
+
+一个通用轮询示例：
 
 ```ts
-async function pollTask(taskId: number) {
-  const timer = window.setInterval(async () => {
+async function pollWeRssTask(taskId: number) {
+  const interval = 2000;
+  const maxAttempts = 60;
+
+  for (let i = 0; i < maxAttempts; i += 1) {
     const res = await weRssRequest<any>(`/tasks/${taskId}/`);
     const task = res.data;
 
     if (task.status === "success") {
-      clearInterval(timer);
-      console.log("task done", task.result_payload);
+      return task;
     }
 
     if (task.status === "failed") {
-      clearInterval(timer);
-      console.error("task failed", task.result_payload?.error);
+      throw new Error(task.result_payload?.error || task.message);
     }
-  }, 2000);
+
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
+
+  throw new Error("we_rss task polling timed out");
 }
 ```
 
-## 常见前端场景
-
-前端通常会在下面这些场景使用任务接口。
-
-1. 扫码登录弹窗里轮询登录任务结果。
-2. 公众号同步后轮询同步状态。
-3. 按 URL 导入文章后轮询导入状态。
-4. 刷新文章后轮询刷新状态。
-5. 单独做一个“最近任务”面板或任务中心页。
-
 ## UI 展示建议
 
-任务的 UI 最好把“任务状态”和“业务结果”分开显示。
+如果你要做任务详情面板或任务中心页，建议至少展示下面几个区块：
 
 | 展示区块 | 建议显示内容 |
 | --- | --- |
-| 基础状态 | `task_type`、`status`、`message` |
-| 时间信息 | `created_at`、`started_at`、`finished_at` |
-| 请求上下文 | `request_payload` |
+| 基础信息 | `task_type`、`status`、`message` |
+| 目标对象 | `target_type`、`target_id` |
+| 请求快照 | `request_payload` |
 | 执行结果 | `result_payload` |
-| 失败原因 | `result_payload.error` 或 `message` |
+| 时间信息 | `created_at`、`started_at`、`finished_at` |
+
+## 容易踩坑的点
+
+- `result_payload` 不是统一结构，必须按 `task_type` 分支处理。
+- `task_key` 并不是每个任务都有。只有某些去重任务会显式写入，例如文章导入。
+- 某些触发接口会直接复用已有运行中任务，所以“返回旧任务”是正常行为。
+- 任务列表当前没有分页。
 
 ## 下一步
 
-如果你的任务已经能跑通，下一步通常是根据任务结果刷新文章列表，或者接
-RSS 和正文输出能力。
+如果你是按链路联调，建议继续看：
 
-- [03_公众号文章API.md](./03_%E5%85%AC%E4%BC%97%E5%8F%B7%E6%96%87%E7%AB%A0API.md)
-- [05_RSS与正文输出API.md](./05_RSS%E4%B8%8E%E6%AD%A3%E6%96%87%E8%BE%93%E5%87%BAAPI.md)
+- [02_公众号API.md](./02_公众号API.md)
+- [03_公众号文章API.md](./03_公众号文章API.md)

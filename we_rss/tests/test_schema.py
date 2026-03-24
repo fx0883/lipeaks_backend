@@ -108,6 +108,20 @@ class WeRssSchemaTests(SimpleTestCase):
         self.assertIn("target_type", parameter_names)
         self.assertIn("target_id", parameter_names)
 
+    def test_article_list_operation_documents_article_type_filter_and_field(self):
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        operation = schema["paths"]["/api/v1/we-rss/articles/"]["get"]
+        parameter_names = {parameter["name"] for parameter in operation["parameters"]}
+        self.assertIn("article_type", parameter_names)
+
+        response_schema = self._resolve_schema(
+            schema,
+            operation["responses"]["200"]["content"]["application/json"]["schema"],
+        )
+        article_list_schema = self._resolve_schema(schema, response_schema["properties"]["data"])
+        article_schema = self._resolve_schema(schema, article_list_schema["items"])
+        self.assertIn("article_type", article_schema["properties"])
+
     def test_detail_and_action_routes_document_id_parameter_description(self):
         schema = SchemaGenerator().get_schema(request=None, public=True)
 
@@ -116,6 +130,7 @@ class WeRssSchemaTests(SimpleTestCase):
             ("/api/v1/we-rss/credentials/{id}/check/", "post"),
             ("/api/v1/we-rss/feeds/{id}/", "get"),
             ("/api/v1/we-rss/feeds/{id}/sync/", "post"),
+            ("/api/v1/we-rss/feeds/{id}/articles/", "delete"),
             ("/api/v1/we-rss/articles/{id}/", "get"),
             ("/api/v1/we-rss/articles/{id}/refresh/", "post"),
         ]:
@@ -127,6 +142,18 @@ class WeRssSchemaTests(SimpleTestCase):
             )
 
             self.assertTrue(parameter.get("description"), msg=f"{method.upper()} {path}")
+
+    def test_feed_article_clear_operation_documents_deleted_count_response(self):
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        operation = schema["paths"]["/api/v1/we-rss/feeds/{id}/articles/"]["delete"]
+
+        response_schema = self._resolve_schema(
+            schema,
+            operation["responses"]["200"]["content"]["application/json"]["schema"],
+        )
+        data_schema = self._resolve_schema(schema, response_schema["properties"]["data"])
+        self.assertIn("feed_id", data_schema["properties"])
+        self.assertIn("deleted_count", data_schema["properties"])
 
     def test_request_body_operations_include_examples_for_every_documented_media_type(self):
         schema = SchemaGenerator().get_schema(request=None, public=True)

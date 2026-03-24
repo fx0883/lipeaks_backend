@@ -1,13 +1,16 @@
 from datetime import datetime, timezone as dt_timezone
 import json
 import re
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 from bs4 import BeautifulSoup
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from requests.cookies import cookiejar_from_dict
+
+
+WECHAT_ARTICLE_STABLE_QUERY_KEYS = ("__biz", "mid", "idx", "sn", "chksm")
 
 
 def build_wechat_session(session_factory=None):
@@ -49,6 +52,51 @@ def extract_source_id_from_url(url):
     if path_parts:
         return path_parts[-1]
     return ""
+
+
+def normalize_wechat_article_url(url):
+    raw_url = str(url or "").strip()
+    if not raw_url:
+        return ""
+
+    parsed = urlparse(raw_url)
+    stable_query = [
+        (key, value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=False)
+        if key in WECHAT_ARTICLE_STABLE_QUERY_KEYS and value
+    ]
+    normalized_query = urlencode(stable_query, doseq=True)
+    return urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            normalized_query,
+            "",
+        )
+    )
+
+
+def infer_article_type_from_url(url, default="news"):
+    idx_value = parse_qs(urlparse(url or "").query).get("idx", [""])[0]
+    try:
+        return "newspic" if int(idx_value) > 1 else "news"
+    except (TypeError, ValueError):
+        return default
+
+
+def infer_article_type_from_item(item, default="news"):
+    try:
+        item_show_type = int((item or {}).get("item_show_type"))
+    except (TypeError, ValueError):
+        return default
+
+    if item_show_type == 8:
+        return "newspic"
+    if item_show_type == 0:
+        return "news"
+    return default
 
 
 def normalize_publish_time(raw_value):
@@ -188,6 +236,7 @@ def parse_wechat_article_html(html, url):
 
     payload = {
         "source_id": extract_source_id_from_url(url),
+        "article_type": infer_article_type_from_url(url),
         "title": title,
         "description": description,
         "content": content,
@@ -217,13 +266,19 @@ def parse_publish_page_articles(payload):
 
         appmsg = publish_info.get("appmsg")
         if isinstance(appmsg, dict):
-            articles.append(appmsg)
+            articles.append({**appmsg, "article_type": infer_article_type_from_item(appmsg, default="news")})
         elif isinstance(appmsg, list):
-            articles.extend(appmsg)
+            articles.extend(
+                {**item, "article_type": infer_article_type_from_item(item, default="news")}
+                for item in appmsg
+            )
 
         appmsgex = publish_info.get("appmsgex") or []
         if isinstance(appmsgex, dict):
-            articles.append(appmsgex)
+            articles.append({**appmsgex, "article_type": infer_article_type_from_item(appmsgex, default="newspic")})
         else:
-            articles.extend(appmsgex)
+            articles.extend(
+                {**item, "article_type": infer_article_type_from_item(item, default="newspic")}
+                for item in appmsgex
+            )
     return articles

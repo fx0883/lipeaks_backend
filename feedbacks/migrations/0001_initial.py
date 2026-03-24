@@ -61,7 +61,7 @@ class Migration(migrations.Migration):
                 ('total_feedbacks', models.PositiveIntegerField(default=0, verbose_name='Total Feedbacks')),
                 ('open_feedbacks', models.PositiveIntegerField(default=0, verbose_name='Open Feedbacks')),
                 ('tenant', models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='%(class)s_set', to='tenants.tenant', verbose_name='租户')),
-                ('category', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='software_list', to='feedbacks.applicationcategory', verbose_name='Software Category')),
+                ('category', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='software_list', to='feedbacks.softwarecategory', verbose_name='Software Category')),
             ],
             options={
                 'verbose_name': 'Software',
@@ -84,7 +84,7 @@ class Migration(migrations.Migration):
                 ('is_stable', models.BooleanField(default=True, help_text='Distinguish between stable and beta versions', verbose_name='Is Stable')),
                 ('is_active', models.BooleanField(default=True, verbose_name='Is Active')),
                 ('download_url', models.URLField(blank=True, null=True, verbose_name='Download URL')),
-                ('software', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='versions', to='feedbacks.application', verbose_name='Related Software')),
+                ('software', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='versions', to='feedbacks.software', verbose_name='Related Software')),
                 ('tenant', models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='%(class)s_set', to='tenants.tenant', verbose_name='租户')),
             ],
             options={
@@ -123,8 +123,8 @@ class Migration(migrations.Migration):
                 ('assigned_to', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='assigned_feedbacks', to=settings.AUTH_USER_MODEL, verbose_name='Assigned To')),
                 ('tenant', models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='%(class)s_set', to='tenants.tenant', verbose_name='租户')),
                 ('user', models.ForeignKey(blank=True, help_text='Registered user (if logged in)', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='submitted_feedbacks', to=settings.AUTH_USER_MODEL, verbose_name='User')),
-                ('software', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='feedbacks', to='feedbacks.application', verbose_name='Related Software')),
-                ('application_version', models.ForeignKey(blank=True, help_text='Related to specific software version', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='feedbacks', to='feedbacks.applicationversion', verbose_name='Software Version')),
+                ('software', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='feedbacks', to='feedbacks.software', verbose_name='Related Software')),
+                ('application_version', models.ForeignKey(blank=True, help_text='Related to specific software version', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='feedbacks', to='feedbacks.softwareversion', verbose_name='Software Version')),
             ],
             options={
                 'verbose_name': 'Feedback',

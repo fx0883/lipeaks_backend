@@ -131,6 +131,11 @@ class FeedSearchResultSerializer(serializers.Serializer):
     mp_intro = serializers.CharField(required=False, allow_blank=True)
 
 
+class FeedArticleClearResponseSerializer(serializers.Serializer):
+    feed_id = serializers.IntegerField()
+    deleted_count = serializers.IntegerField()
+
+
 class WechatSyncTaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = WechatSyncTask
@@ -155,6 +160,10 @@ class WechatSyncTaskSerializer(serializers.ModelSerializer):
 
 class WechatArticleSerializer(serializers.ModelSerializer):
     feed_id = serializers.IntegerField(read_only=True)
+    url = serializers.URLField(
+        read_only=True,
+        help_text="Stable public WeChat article URL. Crawl-time parameters such as `token` are removed.",
+    )
 
     class Meta:
         model = WechatArticle
@@ -162,6 +171,7 @@ class WechatArticleSerializer(serializers.ModelSerializer):
             "id",
             "feed_id",
             "source_id",
+            "article_type",
             "title",
             "description",
             "content",
@@ -187,7 +197,12 @@ class WechatArticleSerializer(serializers.ModelSerializer):
 
 
 class ArticleImportSerializer(serializers.Serializer):
-    url = serializers.URLField()
+    url = serializers.URLField(
+        help_text=(
+            "Public WeChat article URL. The backend normalizes it before deduplicating and persisting, "
+            "and removes transient query parameters such as `token`."
+        )
+    )
 
 
 class ArticleReadUpdateSerializer(serializers.Serializer):

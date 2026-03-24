@@ -8,6 +8,7 @@ from we_rss.models import WechatArticle, WechatCredential, WechatCredentialLogin
 from we_rss.services.article_service import ArticleService
 from we_rss.services.credential_service import CredentialService
 from we_rss.services.feed_service import FeedService
+from we_rss.services.task_service import dispatch_we_rss_task
 
 
 class FakeAsyncCredentialGateway:
@@ -57,6 +58,7 @@ class FakeAsyncFeedGateway:
             "articles": [
                 {
                     "source_id": "feed-article-1",
+                    "article_type": "newspic",
                     "title": "Synced Article",
                     "description": "Synced description",
                     "content": "<p>Synced content</p>",
@@ -87,6 +89,7 @@ class FakeAsyncArticleGateway:
     def import_article_by_url(self, url, credential):
         return {
             "source_id": "async-import-1",
+            "article_type": "newspic",
             "title": "Imported Async Article",
             "description": "Imported description",
             "content": "<p>Imported async content</p>",
@@ -96,6 +99,7 @@ class FakeAsyncArticleGateway:
 
     def refresh_article(self, article, credential):
         return {
+            "article_type": "newspic",
             "title": f"{article.title} Updated",
             "description": "Updated description",
             "content": "<p>Updated content</p>",
@@ -146,7 +150,21 @@ class FakeFailingArticleGateway:
         raise Exception("WeChat refresh blocked by anti-bot")
 
 
-@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+class WeRssTaskDispatchTests(TestCase):
+    @override_settings(CELERY_ENABLED=False, CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+    def test_dispatch_runs_inline_when_eager_mode_is_enabled(self):
+        captured = []
+
+        def task_func(*args, **kwargs):
+            captured.append((args, kwargs))
+
+        result = dispatch_we_rss_task(task_func, 1, article_id=2)
+
+        self.assertIsNone(result)
+        self.assertEqual(captured, [((1,), {"article_id": 2})])
+
+
+@override_settings(CELERY_ENABLED=True, CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
 class WeRssTaskWorkflowTests(TestCase):
     def setUp(self):
         self.tenant = Tenant.objects.create(name="Tenant A", code="tenant_a")
@@ -235,6 +253,7 @@ class WeRssTaskWorkflowTests(TestCase):
         self.assertEqual(task.task_type, "feed_sync")
         self.assertEqual(article.feed_id, self.feed.id)
         self.assertEqual(article.title, "Synced Article")
+        self.assertEqual(article.article_type, "newspic")
         self.assertIsNotNone(self.feed.last_synced_at)
         self.assertEqual(self.feed.biz, "Qkl6")
         self.assertEqual(self.feed.mp_name, "Synced Feed Name")
@@ -242,6 +261,18 @@ class WeRssTaskWorkflowTests(TestCase):
         self.assertEqual(task.result_payload["detail_success_count"], 1)
         self.assertEqual(task.result_payload["detail_failed_count"], 0)
         self.assertEqual(task.result_payload["failed_articles"], [])
+
+    @override_settings(CELERY_ENABLED=False, CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+    def test_feed_sync_dispatches_background_worker_when_celery_disabled(self):
+        with patch("we_rss.services.feed_service.dispatch_we_rss_task", create=True) as mock_dispatch:
+            with patch(
+                "we_rss.tasks.run_feed_sync_task.delay",
+                side_effect=AssertionError("feed sync task should not run inline"),
+            ):
+                task = FeedService.sync_feed(feed=self.feed, created_by=self.member)
+
+        mock_dispatch.assert_called_once()
+        self.assertEqual(task.status, "pending")
 
     def test_feed_sync_returns_existing_running_task(self):
         existing = WechatSyncTask.objects.create(
@@ -282,6 +313,23 @@ class WeRssTaskWorkflowTests(TestCase):
         self.assertEqual(task.status, "success")
         self.assertEqual(task.task_type, "article_import")
         self.assertEqual(article.title, "Imported Async Article")
+        self.assertEqual(article.article_type, "newspic")
+
+    @override_settings(CELERY_ENABLED=False, CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+    def test_article_import_dispatches_background_worker_when_celery_disabled(self):
+        with patch("we_rss.services.article_service.dispatch_we_rss_task", create=True) as mock_dispatch:
+            with patch(
+                "we_rss.tasks.run_article_import_task.delay",
+                side_effect=AssertionError("article import task should not run inline"),
+            ):
+                task = ArticleService.import_article_by_url(
+                    tenant=self.tenant,
+                    created_by=self.member,
+                    url="https://mp.weixin.qq.com/s/import-disabled",
+                )
+
+        mock_dispatch.assert_called_once()
+        self.assertEqual(task.status, "pending")
 
     @patch("we_rss.tasks.get_article_gateway", return_value=FakeDeletedImportArticleGateway())
     def test_article_import_task_fails_for_deleted_article_payload(self, _mock_gateway):
@@ -329,7 +377,28 @@ class WeRssTaskWorkflowTests(TestCase):
         self.assertEqual(task.status, "success")
         self.assertEqual(task.task_type, "article_refresh")
         self.assertEqual(article.title, "Tenant Article Updated")
+        self.assertEqual(article.article_type, "newspic")
         self.assertEqual(article.read_num, 88)
+
+    @override_settings(CELERY_ENABLED=False, CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+    def test_article_refresh_dispatches_background_worker_when_celery_disabled(self):
+        article = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-disabled-refresh-1",
+            title="Tenant Article",
+            url="https://mp.weixin.qq.com/s/article-disabled-refresh-1",
+        )
+
+        with patch("we_rss.services.article_service.dispatch_we_rss_task", create=True) as mock_dispatch:
+            with patch(
+                "we_rss.tasks.run_article_refresh_task.delay",
+                side_effect=AssertionError("article refresh task should not run inline"),
+            ):
+                task = ArticleService.refresh_article(article=article, created_by=self.member)
+
+        mock_dispatch.assert_called_once()
+        self.assertEqual(task.status, "pending")
 
     def test_article_refresh_returns_existing_running_task(self):
         article = WechatArticle.objects.create(

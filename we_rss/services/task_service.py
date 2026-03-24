@@ -1,6 +1,40 @@
+import logging
+from concurrent.futures import ThreadPoolExecutor
+
+from django.conf import settings
+from django.db import close_old_connections
 from django.utils import timezone
 
 from we_rss.models import WechatSyncTask
+
+
+logger = logging.getLogger(__name__)
+_task_executor = ThreadPoolExecutor(max_workers=4)
+
+
+def _run_task_in_background(task_func, *args, **kwargs):
+    close_old_connections()
+    try:
+        if hasattr(task_func, "apply"):
+            task_func.apply(args=args, kwargs=kwargs)
+            return
+        if hasattr(task_func, "run"):
+            task_func.run(*args, **kwargs)
+            return
+        task_func(*args, **kwargs)
+    except Exception:
+        logger.exception("We RSS background task execution failed.")
+    finally:
+        close_old_connections()
+
+
+def dispatch_we_rss_task(task_func, *args, **kwargs):
+    if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+        _run_task_in_background(task_func, *args, **kwargs)
+        return None
+    if getattr(settings, "CELERY_ENABLED", True):
+        return task_func.delay(*args, **kwargs)
+    return _task_executor.submit(_run_task_in_background, task_func, *args, **kwargs)
 
 
 class TaskService:

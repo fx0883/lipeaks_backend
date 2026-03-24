@@ -15,10 +15,12 @@ class WeRssUrlRegistrationTest(SimpleTestCase):
     def test_we_rss_json_endpoints_resolve_to_viewsets(self):
         credential_match = resolve("/api/v1/we-rss/credentials/")
         feed_match = resolve("/api/v1/we-rss/feeds/")
+        feed_articles_match = resolve("/api/v1/we-rss/feeds/1/articles/")
         article_match = resolve("/api/v1/we-rss/articles/")
 
         self.assertEqual(credential_match.func.cls.__name__, "CredentialViewSet")
         self.assertEqual(feed_match.func.cls.__name__, "FeedViewSet")
+        self.assertEqual(feed_articles_match.func.cls.__name__, "FeedViewSet")
         self.assertEqual(article_match.func.cls.__name__, "ArticleViewSet")
 
 

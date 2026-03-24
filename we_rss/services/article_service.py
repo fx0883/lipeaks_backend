@@ -7,17 +7,19 @@ from rest_framework.exceptions import ValidationError
 
 from we_rss.models import WechatArticle, WechatFeed, WechatSyncTask
 from we_rss.services.feed_service import FeedService
-from we_rss.services.task_service import TaskService
+from we_rss.services.task_service import TaskService, dispatch_we_rss_task
 from we_rss.services.wechat_gateway import (
     build_wechat_session,
     extract_source_id_from_url,
     load_credential_cookies,
+    normalize_wechat_article_url,
     parse_wechat_article_html,
 )
 
 
 ARTICLE_PAYLOAD_FIELDS = [
     "source_id",
+    "article_type",
     "title",
     "description",
     "content",
@@ -47,8 +49,15 @@ class WechatArticleGateway:
         load_credential_cookies(session, credential.cookie)
         response = session.get(url, timeout=15)
         response.raise_for_status()
-        payload = parse_wechat_article_html(response.text, response.url or url)
-        payload["source_id"] = payload.get("source_id") or extract_source_id_from_url(response.url or url)
+        normalized_request_url = normalize_wechat_article_url(url) or str(url or "").strip()
+        normalized_response_url = normalize_wechat_article_url(response.url or normalized_request_url) or normalized_request_url
+        payload = parse_wechat_article_html(response.text, normalized_response_url)
+        payload["source_id"] = (
+            payload.get("source_id")
+            or extract_source_id_from_url(normalized_response_url)
+            or extract_source_id_from_url(normalized_request_url)
+        )
+        payload["url"] = normalized_request_url or normalized_response_url
         payload["status"] = payload.get("status", "active")
         return payload
 
@@ -66,6 +75,9 @@ class ArticleService:
 
     @staticmethod
     def _normalize_task_url(url):
+        normalized_url = normalize_wechat_article_url(url)
+        if normalized_url:
+            return normalized_url
         return str(url or "").strip()
 
     @staticmethod
@@ -121,7 +133,7 @@ class ArticleService:
         )
         from we_rss.tasks import run_article_import_task
 
-        run_article_import_task.delay(task.id)
+        dispatch_we_rss_task(run_article_import_task, task.id)
         return task
 
     @staticmethod
@@ -175,7 +187,7 @@ class ArticleService:
         )
         from we_rss.tasks import run_article_refresh_task
 
-        run_article_refresh_task.delay(task.id)
+        dispatch_we_rss_task(run_article_refresh_task, task.id)
         return task
 
     @staticmethod

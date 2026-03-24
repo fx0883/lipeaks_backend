@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 from common.authentication.jwt_auth import generate_jwt_token
 from tenants.models import Tenant
 from users.models import Member
-from we_rss.models import WechatCredential, WechatFeed, WechatSyncTask
+from we_rss.models import WechatArticle, WechatCredential, WechatFeed, WechatSyncTask
 from we_rss.services.feed_service import WechatFeedGateway
 
 
@@ -177,6 +177,7 @@ class FeedGatewayTests(TestCase):
         self.assertEqual(payload["articles"][0]["title"], "Synced Article")
         self.assertEqual(payload["articles"][0]["content"], "<p>Synced content</p>")
         self.assertEqual(payload["articles"][0]["biz"], "Qkl6")
+        self.assertEqual(payload["articles"][0]["article_type"], "newspic")
 
     @patch("we_rss.services.feed_service.requests.Session")
     def test_sync_feed_uses_source_id_when_faker_id_is_blank(self, mock_session_cls):
@@ -325,6 +326,65 @@ class FeedGatewayTests(TestCase):
 
         self.assertEqual([item["source_id"] for item in payload["articles"]], ["article-main", "article-sub"])
         self.assertEqual([item["title"] for item in payload["articles"]], ["Main Article", "Sub Article"])
+        self.assertEqual([item["article_type"] for item in payload["articles"]], ["news", "newspic"])
+
+    @patch("we_rss.services.feed_service.requests.Session")
+    def test_sync_feed_keeps_public_article_url_when_detail_redirect_contains_token(self, mock_session_cls):
+        session = mock_session_cls.return_value
+        public_url = "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc"
+        redirected_url = f"{public_url}&token=123456"
+        session.get.side_effect = [
+            FakeGatewayResponse(
+                json_data={
+                    "base_resp": {"ret": 0},
+                    "publish_page": json.dumps(
+                        {
+                            "publish_list": [
+                                {
+                                    "publish_info": json.dumps(
+                                        {
+                                            "appmsg": {
+                                                "aid": "article-1",
+                                                "title": "Stable URL Article",
+                                                "link": public_url,
+                                                "digest": "Stable URL description",
+                                                "cover": "https://example.com/article-cover.png",
+                                                "create_time": 1710000000,
+                                            }
+                                        }
+                                    )
+                                }
+                            ]
+                        }
+                    ),
+                }
+            ),
+            FakeGatewayResponse(
+                text="""
+                <html>
+                  <head>
+                    <meta property="og:title" content="Stable URL Article" />
+                  </head>
+                  <body>
+                    <div id="js_content"><p>Stable URL content</p></div>
+                  </body>
+                </html>
+                """,
+                headers={"Content-Type": "text/html"},
+                url=redirected_url,
+            ),
+            FakeGatewayResponse(
+                json_data={
+                    "base_resp": {"ret": 0},
+                    "publish_page": json.dumps({"publish_list": []}),
+                }
+            ),
+        ]
+
+        payload = WechatFeedGateway().sync_feed(self.feed, self.credential)
+
+        self.assertEqual(payload["articles"][0]["url"], public_url)
+        self.assertNotIn("token=", payload["articles"][0]["url"])
 
     @patch("we_rss.services.feed_service.requests.Session")
     def test_sync_feed_extracts_feed_metadata_from_article_detail(self, mock_session_cls):
@@ -512,3 +572,86 @@ class FeedApiTests(APITestCase):
         self.assertEqual(task.status, "success")
         self.assertEqual(task.task_type, "feed_sync")
         self.assertIsNotNone(feed.last_synced_at)
+
+    def test_member_can_clear_all_articles_under_a_feed(self):
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Tenant Feed",
+            source_id="feed-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        other_feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Other Feed",
+            source_id="feed-2",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        other_member = Member.objects.create(
+            username="other_feed_member",
+            email="other-feed-member@example.com",
+            tenant=self.other_tenant,
+        )
+        other_tenant_feed = WechatFeed.objects.create(
+            tenant=self.other_tenant,
+            mp_name="Other Tenant Feed",
+            source_id="feed-3",
+            created_by=other_member,
+            updated_by=other_member,
+        )
+
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=feed,
+            source_id="article-1",
+            title="Article 1",
+        )
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=feed,
+            source_id="article-2",
+            title="Article 2",
+        )
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=other_feed,
+            source_id="article-3",
+            title="Article 3",
+        )
+        WechatArticle.objects.create(
+            tenant=self.other_tenant,
+            feed=other_tenant_feed,
+            source_id="article-4",
+            title="Article 4",
+        )
+
+        response = self.client.delete(f"/api/v1/we-rss/feeds/{feed.id}/articles/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["feed_id"], feed.id)
+        self.assertEqual(response.data["data"]["deleted_count"], 2)
+        self.assertFalse(
+            WechatArticle.original_objects.filter(tenant=self.tenant, feed=feed).exists()
+        )
+        self.assertTrue(
+            WechatArticle.original_objects.filter(tenant=self.tenant, feed=other_feed).exists()
+        )
+        self.assertTrue(
+            WechatArticle.original_objects.filter(tenant=self.other_tenant, feed=other_tenant_feed).exists()
+        )
+
+    def test_clear_feed_articles_returns_zero_when_feed_has_no_articles(self):
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Empty Feed",
+            source_id="feed-empty",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+
+        response = self.client.delete(f"/api/v1/we-rss/feeds/{feed.id}/articles/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["feed_id"], feed.id)
+        self.assertEqual(response.data["data"]["deleted_count"], 0)

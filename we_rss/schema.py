@@ -202,6 +202,16 @@ KEYWORD_PARAMETER = OpenApiParameter(
 )
 
 
+ARTICLE_TYPE_PARAMETER = OpenApiParameter(
+    name="article_type",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="Filter articles by article type. Supported values: `news`, `newspic`.",
+    examples=[OpenApiExample("Article type example", value="newspic")],
+)
+
+
 CREDENTIAL_EXAMPLE = {
     "id": 1,
     "name": "Default Credential",
@@ -260,6 +270,11 @@ FEED_SEARCH_EXAMPLE = {
     "mp_name": "AI Weekly",
     "mp_cover": "https://example.com/search-cover.png",
     "mp_intro": "Weekly insights about AI products.",
+}
+
+FEED_ARTICLE_CLEAR_EXAMPLE = {
+    "feed_id": 1,
+    "deleted_count": 12,
 }
 
 FEED_SYNC_TASK_EXAMPLE = {
@@ -436,6 +451,7 @@ ARTICLE_EXAMPLE = {
     "id": 1,
     "feed_id": 1,
     "source_id": "article-1",
+    "article_type": "news",
     "title": "Imported Article",
     "description": "Imported description",
     "content": "<p>Imported content</p>",

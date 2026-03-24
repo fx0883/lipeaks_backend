@@ -14,6 +14,7 @@ class FakeArticleGateway:
     def import_article_by_url(self, url, credential):
         return {
             "source_id": "article-imported-1",
+            "article_type": "news",
             "title": "Imported Article",
             "description": "Imported description",
             "content": "<p>Imported content</p>",
@@ -32,6 +33,7 @@ class FakeArticleGateway:
 
     def refresh_article(self, article, credential):
         return {
+            "article_type": "newspic",
             "title": f"{article.title} Refreshed",
             "description": "Refreshed description",
             "content": "<p>Refreshed content</p>",
@@ -133,6 +135,37 @@ class ArticleGatewayTests(TestCase):
         self.assertEqual(payload["content"], "<p>Imported content</p>")
         self.assertEqual(payload["biz"], "Qkl6")
         self.assertEqual(payload["source_id"], "article-1")
+        self.assertEqual(payload["article_type"], "news")
+
+    @patch("we_rss.services.article_service.requests.Session")
+    def test_import_article_by_url_marks_non_first_idx_as_newspic(self, mock_session_cls):
+        mock_session_cls.return_value.get.return_value = GatewayArticleResponse(
+            text=self.ARTICLE_HTML,
+            headers={"Content-Type": "text/html"},
+            url="https://mp.weixin.qq.com/s/article-2?__biz=Qkl6&mid=1&idx=2&sn=abc",
+        )
+
+        payload = WechatArticleGateway().import_article_by_url(
+            "https://mp.weixin.qq.com/s/article-2?__biz=Qkl6&mid=1&idx=2&sn=abc",
+            self.credential,
+        )
+
+        self.assertEqual(payload["article_type"], "newspic")
+
+    @patch("we_rss.services.article_service.requests.Session")
+    def test_import_article_by_url_keeps_public_url_when_response_redirect_contains_token(self, mock_session_cls):
+        public_url = "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc"
+        mock_session_cls.return_value.get.return_value = GatewayArticleResponse(
+            text=self.ARTICLE_HTML,
+            headers={"Content-Type": "text/html"},
+            url=f"{public_url}&token=123456",
+        )
+
+        payload = WechatArticleGateway().import_article_by_url(public_url, self.credential)
+
+        self.assertEqual(payload["url"], public_url)
+        self.assertEqual(payload["source_id"], "article-1")
+        self.assertNotIn("token=", payload["url"])
 
     @patch("we_rss.services.article_service.requests.Session")
     def test_refresh_article_returns_updated_public_article_fields(self, mock_session_cls):
@@ -148,6 +181,22 @@ class ArticleGatewayTests(TestCase):
         self.assertEqual(payload["description"], "Imported description")
         self.assertEqual(payload["content"], "<p>Imported content</p>")
         self.assertEqual(payload["biz"], "Qkl6")
+
+    @patch("we_rss.services.article_service.requests.Session")
+    def test_refresh_article_keeps_stored_public_url_when_response_redirect_contains_token(self, mock_session_cls):
+        public_url = "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc"
+        self.article.url = public_url
+        self.article.save(update_fields=["url", "updated_at"])
+        mock_session_cls.return_value.get.return_value = GatewayArticleResponse(
+            text=self.ARTICLE_HTML.replace("Imported Article", "Refreshed Article"),
+            headers={"Content-Type": "text/html"},
+            url=f"{public_url}&token=123456",
+        )
+
+        payload = WechatArticleGateway().refresh_article(self.article, self.credential)
+
+        self.assertEqual(payload["url"], public_url)
+        self.assertNotIn("token=", payload["url"])
 
     @patch("we_rss.services.article_service.requests.Session")
     def test_import_article_by_url_builds_summary_and_parses_chinese_publish_time(self, mock_session_cls):
@@ -293,6 +342,30 @@ class ArticleApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["data"]), 1)
         self.assertEqual(response.data["data"][0]["title"], "Tenant Article")
+        self.assertEqual(response.data["data"][0]["article_type"], "news")
+
+    def test_member_can_filter_articles_by_article_type(self):
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-news",
+            title="News Article",
+            article_type="news",
+        )
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-newspic",
+            title="Newspic Article",
+            article_type="newspic",
+        )
+
+        response = self.client.get("/api/v1/we-rss/articles/?article_type=newspic")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["data"]), 1)
+        self.assertEqual(response.data["data"][0]["source_id"], "article-newspic")
+        self.assertEqual(response.data["data"][0]["article_type"], "newspic")
 
     def test_member_can_get_and_delete_article(self):
         article = WechatArticle.objects.create(
@@ -328,7 +401,30 @@ class ArticleApiTests(APITestCase):
         self.assertTrue(featured_feed.is_featured)
         self.assertEqual(featured_feed.tenant, self.tenant)
         self.assertEqual(article.title, "Imported Article")
+        self.assertEqual(article.article_type, "news")
         self.assertEqual(article.comment_total_count, 11)
+
+    @patch("we_rss.tasks.get_article_gateway", return_value=FakeArticleGateway())
+    def test_import_by_url_normalizes_task_key_and_request_url(self, _mock_gateway):
+        tokenized_url = "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc&token=123456"
+
+        response = self.client.post(
+            "/api/v1/we-rss/articles/import-by-url/",
+            {"url": tokenized_url},
+            format="json",
+        )
+
+        task = WechatSyncTask.objects.get(id=response.data["data"]["id"])
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            task.task_key,
+            "article_import:https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc",
+        )
+        self.assertEqual(
+            task.request_payload["url"],
+            "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc",
+        )
 
     @patch("we_rss.tasks.get_article_gateway", return_value=FakeArticleGateway())
     def test_refresh_updates_statistics_snapshot(self, _mock_gateway):
@@ -352,6 +448,7 @@ class ArticleApiTests(APITestCase):
         self.assertEqual(article.comment_total_count, 15)
         self.assertIsNotNone(article.last_refreshed_at)
         self.assertEqual(article.title, "Tenant Article Refreshed")
+        self.assertEqual(article.article_type, "newspic")
 
     def test_member_can_get_task_detail(self):
         task = WechatSyncTask.objects.create(

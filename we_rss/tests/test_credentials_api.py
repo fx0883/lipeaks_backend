@@ -1,7 +1,7 @@
 import json
 from unittest.mock import Mock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
@@ -9,7 +9,7 @@ from common.authentication.jwt_auth import generate_jwt_token
 from we_rss.models import WechatCredential
 from we_rss.serializers import CredentialUpdateSerializer
 from we_rss.services.credential_service import CredentialService, WechatCredentialGateway
-from we_rss.models import WechatCredentialLoginSession
+from we_rss.models import WechatCredentialLoginSession, WechatSyncTask
 from tenants.models import Tenant
 from users.models import Member
 
@@ -86,6 +86,26 @@ class CredentialServiceTests(TestCase):
             session.cookie_snapshot,
             json.dumps({"uuid": "session-123", "fingerprint": "fingerprint-123"}),
         )
+
+    @override_settings(CELERY_ENABLED=False, CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+    @patch("we_rss.tasks.get_credential_gateway", return_value=FakeCredentialGateway())
+    def test_create_login_session_dispatches_background_worker_when_celery_disabled(self, _mock_task_gateway):
+        with patch("we_rss.services.credential_service.dispatch_we_rss_task", create=True) as mock_dispatch:
+            with patch(
+                "we_rss.tasks.run_credential_login_task.delay",
+                side_effect=AssertionError("login task should not run inline"),
+            ):
+                session = CredentialService.create_login_session(
+                    tenant=self.tenant,
+                    created_by=self.member,
+                    gateway=FakeCredentialGateway(),
+                )
+
+        task = WechatSyncTask.objects.get(task_type="credential_login", target_id=session.id)
+
+        mock_dispatch.assert_called_once()
+        self.assertEqual(session.status, "pending")
+        self.assertEqual(task.status, "pending")
 
     def test_set_default_unsets_previous_default(self):
         first = WechatCredential.objects.create(

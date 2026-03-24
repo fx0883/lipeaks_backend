@@ -1,31 +1,72 @@
 # we_rss 公众号文章 API
 
-这份文档覆盖公众号文章的列表、详情、导入、刷新、已读和收藏接口。前端
-接入时，文章模块通常依赖公众号同步任务的结果，也可以独立使用“按 URL
-导入文章”能力。
+这份文档覆盖 `WechatArticle` 相关接口，也就是当前 tenant 下的公众号文章列表、
+文章详情、按 URL 导入、单篇刷新、已读、收藏和删除能力。
 
-这里的“文章”对应 `WechatArticle`，和项目现有的 `cms.Article`
-完全没有关系，前端不要混用字段和接口。
+这里的文章是 `WechatArticle`，与项目中的 `cms.Article` 不是同一个概念。前端
+页面、类型定义、状态管理都不要直接复用 `cms.Article` 的字段假设。
+
+## 通用请求头
+
+```http
+Authorization: Bearer <member_access_token>
+X-Tenant-ID: <current_member_tenant_id>
+```
 
 ## 数据结构说明
 
-文章对象字段如下。
+### 1. WechatArticle 模型字段
+
+`WechatArticle` 继承 `BaseModel` 后，模型层字段如下：
+
+| 字段 | 来源 | 说明 |
+| --- | --- | --- |
+| `tenant` | `BaseModel` | 所属租户 |
+| `created_at` | `BaseModel` | 创建时间 |
+| `updated_at` | `BaseModel` | 更新时间 |
+| `is_deleted` | `BaseModel` | 软删除标记 |
+| `feed` | 业务字段 | 所属公众号，可为空 |
+| `source_id` | 业务字段 | 微信文章来源 ID |
+| `article_type` | 业务字段 | 微信文章类型，取值为 `news` 或 `newspic` |
+| `title` | 业务字段 | 标题 |
+| `description` | 业务字段 | 摘要 |
+| `content` | 业务字段 | 正文 HTML |
+| `url` | 业务字段 | 归一化后的公开文章 URL，不保存抓取跳转过程里的 `token` |
+| `pic_url` | 业务字段 | 封面图 URL |
+| `publish_time` | 业务字段 | 发布时间 |
+| `status` | 业务字段 | 文章状态，常见为 `active` 或 `deleted` |
+| `is_read` | 业务字段 | 是否已读 |
+| `is_favorite` | 业务字段 | 是否收藏 |
+| `last_refreshed_at` | 业务字段 | 最近刷新时间 |
+| `read_num` | 业务字段 | 阅读数 |
+| `like_num` | 业务字段 | 点赞数 |
+| `old_like_num` | 业务字段 | 在看数 |
+| `share_num` | 业务字段 | 分享数 |
+| `collect_num` | 业务字段 | 收藏数 |
+| `comment_count` | 业务字段 | 评论数 |
+| `comment_reply_count` | 业务字段 | 评论回复数 |
+| `comment_total_count` | 业务字段 | 评论总数 |
+
+### 2. 文章接口返回字段
+
+列表和详情接口当前返回下列字段：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | `number` | 文章 ID |
 | `feed_id` | `number \| null` | 所属公众号 ID |
 | `source_id` | `string` | 微信文章来源 ID |
+| `article_type` | `string` | 微信文章类型，取值为 `news` 或 `newspic` |
 | `title` | `string` | 标题 |
 | `description` | `string` | 摘要 |
-| `content` | `string` | 正文 HTML 字符串 |
-| `url` | `string` | 原始微信文章 URL |
-| `pic_url` | `string` | 封面图 URL |
+| `content` | `string` | 正文 HTML |
+| `url` | `string` | 归一化后的公开文章 URL，不保存抓取跳转过程里的 `token` |
+| `pic_url` | `string` | 封面 URL |
 | `publish_time` | `string \| null` | 发布时间 |
 | `status` | `string` | 文章状态 |
 | `is_read` | `boolean` | 是否已读 |
 | `is_favorite` | `boolean` | 是否收藏 |
-| `last_refreshed_at` | `string \| null` | 最近一次刷新时间 |
+| `last_refreshed_at` | `string \| null` | 最近刷新时间 |
 | `read_num` | `number` | 阅读数 |
 | `like_num` | `number` | 点赞数 |
 | `old_like_num` | `number` | 在看数 |
@@ -37,280 +78,25 @@
 | `created_at` | `string` | 创建时间 |
 | `updated_at` | `string` | 更新时间 |
 
-`status` 常见值如下。
+不会直接返回给前端的字段包括：
 
-| 值 | 含义 |
-| --- | --- |
-| `active` | 当前可正常使用 |
-| `deleted` | 微信侧已删除或不可读 |
+- `tenant`
+- `feed` 原对象
+- `is_deleted`
 
-## 通用请求头
+### 3. 文章接口可写字段
 
-这组接口都要求带成员 token 和租户头。
+文章当前没有一个“任意字段编辑接口”。前端只能通过下面三类动作修改文章状态。
 
-```http
-Authorization: Bearer <member_access_token>
-X-Tenant-ID: <current_member_tenant_id>
-```
-
-## 1. 获取文章列表
-
-这个接口返回当前 tenant 下已经保存的全部公众号文章，当前不分页，
-默认按发布时间倒序。
-
-### 请求信息
-
-```http
-GET /api/v1/we-rss/articles/
-```
-
-### 成功响应示例
+#### 按 URL 导入
 
 ```json
 {
-  "success": true,
-  "code": 2000,
-  "message": "操作成功",
-  "data": [
-    {
-      "id": 1,
-      "feed_id": 1,
-      "source_id": "article-1",
-      "title": "Imported Article",
-      "description": "Imported description",
-      "content": "<p>Imported content</p>",
-      "url": "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc",
-      "pic_url": "https://example.com/article-cover.png",
-      "publish_time": "2026-03-20T12:00:00Z",
-      "status": "active",
-      "is_read": false,
-      "is_favorite": false,
-      "last_refreshed_at": "2026-03-21T09:30:00Z",
-      "read_num": 101,
-      "like_num": 51,
-      "old_like_num": 21,
-      "share_num": 11,
-      "collect_num": 9,
-      "comment_count": 7,
-      "comment_reply_count": 8,
-      "comment_total_count": 15,
-      "created_at": "2026-03-20T12:00:00Z",
-      "updated_at": "2026-03-21T09:30:00Z"
-    }
-  ]
+  "url": "https://mp.weixin.qq.com/s/..."
 }
 ```
 
-### 前端调用示例
-
-```ts
-const res = await weRssRequest<Array<any>>("/articles/");
-const articles = res.data;
-```
-
-## 2. 获取文章详情
-
-这个接口适合文章详情页。返回字段和文章列表中的单项一致，但更适合
-按单篇读取。
-
-### 请求信息
-
-```http
-GET /api/v1/we-rss/articles/{id}/
-```
-
-### 路径参数
-
-| 参数 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `number` | 是 | 文章 ID |
-
-### 前端调用示例
-
-```ts
-const res = await weRssRequest<any>("/articles/1/");
-const article = res.data;
-```
-
-## 3. 删除文章
-
-这个接口会删除本地文章记录。它不会去删除微信平台上的原始文章。
-
-### 请求信息
-
-```http
-DELETE /api/v1/we-rss/articles/{id}/
-```
-
-### 路径参数
-
-| 参数 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `number` | 是 | 文章 ID |
-
-### 成功响应
-
-成功时返回 `204 No Content`。
-
-## 4. 按微信文章 URL 导入文章
-
-这个接口会创建一个后台 `article_import` 任务。前端不应该期待它马上把
-文章内容直接返回，而是应该去轮询任务详情。
-
-### 请求信息
-
-```http
-POST /api/v1/we-rss/articles/import-by-url/
-Content-Type: application/json
-```
-
-### 请求体
-
-```json
-{
-  "url": "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc"
-}
-```
-
-### 请求字段说明
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `url` | `string` | 是 | 微信文章 URL |
-
-### 成功响应示例
-
-```json
-{
-  "success": true,
-  "code": 2000,
-  "message": "操作成功",
-  "data": {
-    "id": 103,
-    "task_type": "article_import",
-    "status": "success",
-    "task_key": "article_import:https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc",
-    "target_type": "article",
-    "target_id": 1,
-    "message": "Article import complete",
-    "request_payload": {
-      "url": "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc"
-    },
-    "result_payload": {
-      "article_id": 1,
-      "feed_id": 1,
-      "message": "Article import complete"
-    },
-    "celery_task_id": "52f577bc-1be3-423f-a79f-f48db2d938df",
-    "started_at": "2026-03-21T09:30:00Z",
-    "finished_at": "2026-03-21T09:30:03Z",
-    "created_at": "2026-03-21T09:30:00Z",
-    "updated_at": "2026-03-21T09:30:03Z"
-  }
-}
-```
-
-### 行为说明
-
-这个接口有几个前端需要提前知道的行为。
-
-| 行为 | 说明 |
-| --- | --- |
-| 自动绑定 featured feed | 后端会把导入结果绑定到当前 tenant 的 featured feed |
-| 异步执行 | 需要轮询任务 |
-| URL 去重 | 同 URL 的运行中任务可能直接复用已有任务 |
-
-### 前端调用示例
-
-```ts
-const res = await weRssRequest<any>("/articles/import-by-url/", {
-  method: "POST",
-  body: JSON.stringify({
-    url: articleUrl,
-  }),
-});
-
-const task = res.data;
-```
-
-## 5. 刷新文章正文和统计
-
-这个接口会创建 `article_refresh` 任务，用于重新抓取正文、发布时间和
-统计字段。
-
-### 请求信息
-
-```http
-POST /api/v1/we-rss/articles/{id}/refresh/
-```
-
-### 路径参数
-
-| 参数 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `number` | 是 | 文章 ID |
-
-### 成功响应示例
-
-```json
-{
-  "success": true,
-  "code": 2000,
-  "message": "操作成功",
-  "data": {
-    "id": 104,
-    "task_type": "article_refresh",
-    "status": "success",
-    "task_key": "article_refresh:1",
-    "target_type": "article",
-    "target_id": 1,
-    "message": "Article refresh complete",
-    "request_payload": {
-      "article_id": 1
-    },
-    "result_payload": {
-      "article_id": 1,
-      "message": "Article refresh complete",
-      "read_num": 101,
-      "comment_total_count": 15
-    },
-    "celery_task_id": "23173654-7d9a-4b62-a916-251c17f7ff7b",
-    "started_at": "2026-03-21T09:35:00Z",
-    "finished_at": "2026-03-21T09:35:04Z",
-    "created_at": "2026-03-21T09:35:00Z",
-    "updated_at": "2026-03-21T09:35:04Z"
-  }
-}
-```
-
-### 前端调用示例
-
-```ts
-const res = await weRssRequest<any>("/articles/1/refresh/", {
-  method: "POST",
-});
-
-const task = res.data;
-```
-
-## 6. 更新文章已读状态
-
-这个接口是同步接口，不会返回任务对象，而是直接返回更新后的文章对象。
-
-### 请求信息
-
-```http
-PUT /api/v1/we-rss/articles/{id}/read/
-Content-Type: application/json
-```
-
-### 路径参数
-
-| 参数 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `number` | 是 | 文章 ID |
-
-### 请求体
+#### 更新已读状态
 
 ```json
 {
@@ -318,78 +104,7 @@ Content-Type: application/json
 }
 ```
 
-### 请求字段说明
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `is_read` | `boolean` | 是 | 是否标记为已读 |
-
-### 成功响应示例
-
-```json
-{
-  "success": true,
-  "code": 2000,
-  "message": "操作成功",
-  "data": {
-    "id": 1,
-    "feed_id": 1,
-    "source_id": "article-1",
-    "title": "Imported Article",
-    "description": "Imported description",
-    "content": "<p>Imported content</p>",
-    "url": "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc",
-    "pic_url": "https://example.com/article-cover.png",
-    "publish_time": "2026-03-20T12:00:00Z",
-    "status": "active",
-    "is_read": true,
-    "is_favorite": false,
-    "last_refreshed_at": "2026-03-21T09:30:00Z",
-    "read_num": 101,
-    "like_num": 51,
-    "old_like_num": 21,
-    "share_num": 11,
-    "collect_num": 9,
-    "comment_count": 7,
-    "comment_reply_count": 8,
-    "comment_total_count": 15,
-    "created_at": "2026-03-20T12:00:00Z",
-    "updated_at": "2026-03-21T09:30:00Z"
-  }
-}
-```
-
-### 前端调用示例
-
-```ts
-const res = await weRssRequest<any>("/articles/1/read/", {
-  method: "PUT",
-  body: JSON.stringify({
-    is_read: true,
-  }),
-});
-
-const article = res.data;
-```
-
-## 7. 更新文章收藏状态
-
-这个接口和“更新已读状态”类似，也是同步接口。
-
-### 请求信息
-
-```http
-PUT /api/v1/we-rss/articles/{id}/favorite/
-Content-Type: application/json
-```
-
-### 路径参数
-
-| 参数 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `number` | 是 | 文章 ID |
-
-### 请求体
+#### 更新收藏状态
 
 ```json
 {
@@ -397,39 +112,221 @@ Content-Type: application/json
 }
 ```
 
-### 请求字段说明
+## 接口一览
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `is_favorite` | `boolean` | 是 | 是否标记为收藏 |
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/v1/we-rss/articles/` | 获取文章列表 |
+| `GET` | `/api/v1/we-rss/articles/{id}/` | 获取文章详情 |
+| `DELETE` | `/api/v1/we-rss/articles/{id}/` | 软删除文章 |
+| `POST` | `/api/v1/we-rss/articles/import-by-url/` | 按微信文章 URL 导入文章 |
+| `POST` | `/api/v1/we-rss/articles/{id}/refresh/` | 刷新单篇文章 |
+| `PUT` | `/api/v1/we-rss/articles/{id}/read/` | 更新已读状态 |
+| `PUT` | `/api/v1/we-rss/articles/{id}/favorite/` | 更新收藏状态 |
 
-### 前端调用示例
+## 1. 获取文章列表
 
-```ts
-const res = await weRssRequest<any>("/articles/1/favorite/", {
-  method: "PUT",
-  body: JSON.stringify({
-    is_favorite: true,
-  }),
-});
+这个接口返回当前 tenant 下全部未软删除文章，不分页。
 
-const article = res.data;
+```http
+GET /api/v1/we-rss/articles/
 ```
 
-## 页面建议
+当前接口支持一个服务端过滤参数：
 
-文章模块通常适合按下面方式实现页面。
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `article_type` | `string` | 可选，支持 `news` 或 `newspic` |
 
-1. 文章列表页，调用 `GET /articles/`。
-2. 文章详情页，调用 `GET /articles/{id}/`。
-3. 粘贴 URL 导入弹窗，调用 `POST /articles/import-by-url/`。
-4. 刷新按钮，调用 `POST /articles/{id}/refresh/`。
-5. 已读和收藏按钮，调用 `PUT /articles/{id}/read/` 和
-   `PUT /articles/{id}/favorite/`。
+例如：
+
+```http
+GET /api/v1/we-rss/articles/?article_type=newspic
+```
+
+除 `article_type` 之外，当前接口还没有下面这些服务端能力：
+
+- 分页
+- 关键字搜索
+- 按 `feed_id` 过滤
+- 仅收藏过滤
+- 仅未读过滤
+
+所以如果页面需要这些筛选，当前版本建议在前端本地完成。
+
+## 2. 获取文章详情
+
+这个接口返回单篇文章完整对外字段，适合详情页或阅读抽屉。
+
+```http
+GET /api/v1/we-rss/articles/{id}/
+```
+
+路径参数：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | `number` | 文章 ID |
+
+## 3. 删除文章
+
+```http
+DELETE /api/v1/we-rss/articles/{id}/
+```
+
+当前删除语义是软删除：
+
+- 返回 `204 No Content`
+- 数据标记为 `is_deleted = true`
+- 后续默认列表中不再出现
+
+它不会去删除微信原始文章，只会删除本地记录。
+
+## 4. 按 URL 导入文章
+
+这个接口根据微信文章 URL 创建一个后台 `article_import` 任务。
+
+```http
+POST /api/v1/we-rss/articles/import-by-url/
+Content-Type: application/json
+```
+
+请求体：
+
+```json
+{
+  "url": "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc"
+}
+```
+
+补充说明：
+
+- 后端会先把文章 URL 归一化，再用于任务去重与最终入库。
+- 归一化后的 URL 会保留公开访问所需的稳定参数，例如 `__biz`、`mid`、`idx`、`sn`、`chksm`。
+- 抓取过程中微信跳转 URL 里出现的 `token` 等临时参数不会写入 `WechatArticle.url`。
+
+官方参考：
+- 微信订阅号草稿接口 `api_draft_add` 使用字段名 `article_type`
+- 文章类型支持 `news` 和 `newspic`
+- 文档地址：
+  `https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_add.html`
+
+当前导入规则非常关键：
+
+- 这是异步接口，返回的是任务对象，不是最终文章对象。
+- 任务去重键是 `article_import:<normalized_url>`。
+- 如果同一 URL 已经存在 `pending` 或 `running` 任务，会直接返回现有任务。
+- 导入时会使用当前 tenant 的有效凭证。如果当前 tenant 没有有效凭证，会失败。
+- 导入结果会自动绑定到当前 tenant 的精选 feed。
+- 如果当前 tenant 还没有任何 `is_featured = true` 的 feed，会自动创建一条
+  `mp_name = "Imported Articles"` 的 feed。
+- 如果精选 feed 已存在但没有凭证，会自动补上当前导入所用凭证。
+- 如果文章被删除、不可用，或者抓到的正文为空，会直接失败。
+- 导入最终会按 `tenant + source_id` 执行 `update_or_create`，所以重复导入同一篇
+  文章通常是更新现有记录，不是无限新增重复记录。
+
+任务成功时，`result_payload` 常见字段如下：
+
+| 字段 | 说明 |
+| --- | --- |
+| `article_id` | 导入后的文章 ID |
+| `feed_id` | 自动绑定的 feed ID |
+| `source_id` | 文章来源 ID |
+| `message` | 结果说明 |
+
+## 5. 刷新单篇文章
+
+这个接口创建一个 `article_refresh` 任务，用于重新抓取当前文章内容与统计字段。
+
+```http
+POST /api/v1/we-rss/articles/{id}/refresh/
+```
+
+补充说明：
+
+- 刷新后的 `url` 仍然保持归一化后的公开文章 URL，不会被带 `token` 的跳转地址覆盖。
+
+当前刷新规则如下：
+
+- 同一篇文章如果已经存在 `pending` 或 `running` 的刷新任务，会直接返回现有任务。
+- 刷新时优先使用 `article.feed.credential`。
+- 如果文章所属 feed 没绑定凭证，会回退到当前 tenant 的默认有效凭证或第一条
+  有效凭证。
+- 成功后会更新文章正文、摘要、封面、发布时间、统计字段，并刷新
+  `last_refreshed_at`。
+
+刷新成功时，`result_payload` 常见字段如下：
+
+| 字段 | 说明 |
+| --- | --- |
+| `article_id` | 当前文章 ID |
+| `title` | 刷新后的标题 |
+| `updated_by_id` | 触发该刷新的成员 ID |
+| `message` | 结果说明 |
+
+## 6. 更新已读状态
+
+这个接口是同步接口，不走后台任务。
+
+```http
+PUT /api/v1/we-rss/articles/{id}/read/
+Content-Type: application/json
+```
+
+请求体：
+
+```json
+{
+  "is_read": true
+}
+```
+
+成功后直接返回更新后的文章对象。当前只有一个可写字段：`is_read`。
+
+## 7. 更新收藏状态
+
+这个接口同样是同步接口。
+
+```http
+PUT /api/v1/we-rss/articles/{id}/favorite/
+Content-Type: application/json
+```
+
+请求体：
+
+```json
+{
+  "is_favorite": true
+}
+```
+
+成功后直接返回更新后的文章对象。当前只有一个可写字段：`is_favorite`。
+
+## 前端接入建议
+
+文章列表和详情页建议按下面方式组织：
+
+- 列表页直接使用 `GET /articles/` 全量拉取。
+- 如果要区分图文消息和图片消息，直接读取 `article_type`，或者使用
+  `GET /articles/?article_type=newspic`。
+- 按公众号、按关键字、按收藏这些能力先走前端本地过滤。
+- 已读、收藏直接调用同步接口并就地刷新当前条目。
+- 刷新正文时走任务轮询。
+- 详情页如果只是展示文章内容，通常直接用文章详情里的 `content` 就够了。
+- 如果你要做 RSS 阅读器式渲染，再考虑接正文 HTML 输出接口。
+
+## 容易踩坑的点
+
+- 当前没有文章“通用编辑接口”，不要设计成可改标题或正文。
+- `import-by-url` 返回的是任务，不是文章详情。
+- 导入文章会自动创建或复用精选 feed，这个行为不是前端自己完成的。
+- 刷新文章优先走 feed 绑定凭证，不一定总是 tenant 默认凭证。
+- 删除文章是软删除。
+- 文章列表目前没有后端分页和服务端搜索。
 
 ## 下一步
 
-如果你要处理导入和刷新后的任务轮询，请继续看任务文档。
+建议继续看：
 
-- [04_同步任务API.md](./04_%E5%90%8C%E6%AD%A5%E4%BB%BB%E5%8A%A1API.md)
-- [05_RSS与正文输出API.md](./05_RSS%E4%B8%8E%E6%AD%A3%E6%96%87%E8%BE%93%E5%87%BAAPI.md)
+- [04_同步任务API.md](./04_同步任务API.md)
+- [05_RSS与正文输出API.md](./05_RSS与正文输出API.md)

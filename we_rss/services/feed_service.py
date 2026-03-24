@@ -1,27 +1,36 @@
+import time
+
 import requests
 
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from we_rss.models import WechatArticle, WechatCredential, WechatFeed, WechatSyncTask
-from we_rss.services.task_service import TaskService
+from we_rss.services.task_service import TaskService, dispatch_we_rss_task
 from we_rss.services.wechat_gateway import (
     build_wechat_session,
     load_credential_cookies,
+    normalize_wechat_article_url,
     parse_publish_page_articles,
     parse_wechat_article_html,
 )
 
 
 class WechatFeedGateway:
-    def __init__(self, *, session_factory=None, page_size=5, max_pages=3, timeout=15):
+    def __init__(self, *, session_factory=None, page_size=5, max_pages=None, timeout=15, sleep_seconds=0.5, sleep_func=None):
         self.session_factory = session_factory or requests.Session
         self.page_size = page_size
         self.max_pages = max_pages
         self.timeout = timeout
+        self.sleep_seconds = sleep_seconds
+        self.sleep_func = sleep_func or time.sleep
 
     def _resolve_fakeid(self, feed):
         return feed.faker_id or feed.source_id or ""
+
+    def _throttle(self):
+        if self.sleep_seconds and self.sleep_seconds > 0:
+            self.sleep_func(self.sleep_seconds)
 
     def search_feeds(self, keyword, credential):
         session = build_wechat_session(self.session_factory)
@@ -63,7 +72,11 @@ class WechatFeedGateway:
         seen_source_ids = set()
         feed_payload = {}
         sync_errors = []
-        for page_index in range(self.max_pages):
+        page_index = 0
+        has_requested_article_detail = False
+        while self.max_pages is None or page_index < self.max_pages:
+            if page_index > 0:
+                self._throttle()
             response = session.get(
                 "https://mp.weixin.qq.com/cgi-bin/appmsgpublish",
                 params={
@@ -93,13 +106,17 @@ class WechatFeedGateway:
                 if source_id and source_id in seen_source_ids:
                     continue
                 article_url = item.get("link", "")
+                stable_article_url = normalize_wechat_article_url(article_url) or article_url
                 parsed_article = {}
-                resolved_article_url = article_url
+                parse_article_url = stable_article_url
                 try:
+                    if has_requested_article_detail:
+                        self._throttle()
+                    has_requested_article_detail = True
                     article_response = session.get(article_url, timeout=self.timeout)
                     article_response.raise_for_status()
-                    resolved_article_url = article_response.url or article_url
-                    parsed_article = parse_wechat_article_html(article_response.text, resolved_article_url)
+                    parse_article_url = normalize_wechat_article_url(article_response.url or stable_article_url) or stable_article_url
+                    parsed_article = parse_wechat_article_html(article_response.text, parse_article_url)
                     if not feed_payload:
                         feed_payload = {
                             "biz": parsed_article.get("biz", ""),
@@ -110,7 +127,7 @@ class WechatFeedGateway:
                     sync_errors.append(
                         {
                             "source_id": source_id or "",
-                            "url": article_url,
+                            "url": stable_article_url,
                             "error": str(exc),
                         }
                     )
@@ -118,10 +135,12 @@ class WechatFeedGateway:
                 articles.append(
                     {
                         "source_id": source_id or parsed_article.get("source_id") or "",
+                        "article_type": item.get("article_type")
+                        or parsed_article.get("article_type", WechatArticle.ArticleType.NEWS),
                         "title": parsed_article.get("title") or item.get("title") or "",
                         "description": parsed_article.get("description") or item.get("digest") or "",
                         "content": parsed_article.get("content", ""),
-                        "url": resolved_article_url,
+                        "url": stable_article_url or parse_article_url,
                         "pic_url": parsed_article.get("pic_url") or item.get("cover") or "",
                         "publish_time": parsed_article.get("publish_time") or timezone.datetime.fromtimestamp(
                             item.get("create_time", 0),
@@ -141,6 +160,7 @@ class WechatFeedGateway:
                 )
                 if source_id:
                     seen_source_ids.add(source_id)
+            page_index += 1
 
         return {
             "message": "Feed sync complete",
@@ -196,6 +216,17 @@ class FeedService:
         return gateway.search_feeds(keyword, credential)
 
     @staticmethod
+    def clear_articles(*, feed):
+        deleted_count, _detail = WechatArticle.original_objects.filter(
+            tenant=feed.tenant,
+            feed=feed,
+        ).delete()
+        return {
+            "feed_id": feed.id,
+            "deleted_count": deleted_count,
+        }
+
+    @staticmethod
     def sync_feed(*, feed, created_by):
         active_task = TaskService.find_active_task(
             tenant=feed.tenant,
@@ -217,7 +248,7 @@ class FeedService:
         )
         from we_rss.tasks import run_feed_sync_task
 
-        run_feed_sync_task.delay(task.id)
+        dispatch_we_rss_task(run_feed_sync_task, task.id)
         return task
 
     @staticmethod
@@ -229,6 +260,7 @@ class FeedService:
                 source_id=payload.get("source_id", ""),
                 defaults={
                     "feed": feed,
+                    "article_type": payload.get("article_type", WechatArticle.ArticleType.NEWS),
                     "title": payload.get("title", ""),
                     "description": payload.get("description", ""),
                     "content": payload.get("content", ""),

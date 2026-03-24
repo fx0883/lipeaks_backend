@@ -25,6 +25,7 @@ urlpatterns = [
     path("feeds/", FeedViewSet.as_view({"get": "list", "post": "create"}), name="feed-list"),
     path("feeds/search/", FeedViewSet.as_view({"get": "search"}), name="feed-search"),
     path("feeds/<int:pk>/", FeedViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}), name="feed-detail"),
+    path("feeds/<int:pk>/articles/", FeedViewSet.as_view({"delete": "clear_articles"}), name="feed-clear-articles"),
     path("feeds/<int:pk>/sync/", FeedViewSet.as_view({"post": "sync"}), name="feed-sync"),
     path("articles/", ArticleViewSet.as_view({"get": "list"}), name="article-list"),
     path("articles/import-by-url/", ArticleViewSet.as_view({"post": "import_by_url"}), name="article-import-by-url"),

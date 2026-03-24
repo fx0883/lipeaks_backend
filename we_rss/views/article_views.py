@@ -1,6 +1,7 @@
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from common.schema.responses import common_error_responses
@@ -12,6 +13,7 @@ from we_rss.schema import (
     ARTICLE_IMPORT_TASK_EXAMPLE,
     ARTICLE_REFRESH_TASK_FAILED_EXAMPLE,
     ARTICLE_REFRESH_TASK_EXAMPLE,
+    ARTICLE_TYPE_PARAMETER,
     CREDENTIAL_LOGIN_TASK_FAILED_EXAMPLE,
     FEED_SYNC_TASK_EXAMPLE,
     FEED_SYNC_TASK_FAILED_EXAMPLE,
@@ -49,7 +51,14 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
     serializer_class = WechatArticleSerializer
 
     def get_queryset(self):
-        return super().get_queryset().select_related("feed").order_by("-publish_time", "-id")
+        queryset = super().get_queryset().select_related("feed").order_by("-publish_time", "-id")
+        article_type = self.request.query_params.get("article_type", "").strip()
+        if article_type:
+            valid_types = {WechatArticle.ArticleType.NEWS, WechatArticle.ArticleType.NEWSPIC}
+            if article_type not in valid_types:
+                raise ValidationError({"article_type": ["Supported values are: news, newspic."]})
+            queryset = queryset.filter(article_type=article_type)
+        return queryset
 
     def get_serializer_class(self):
         if self.action == "import_by_url":
@@ -67,7 +76,7 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
         tags=[WE_RSS_TAG],
         summary="列出当前租户的公众号文章",
         description=f"返回当前 tenant 下已保存的公众号文章列表。{WE_RSS_AUTH_DESCRIPTION}",
-        parameters=with_tenant_header(),
+        parameters=with_tenant_header(ARTICLE_TYPE_PARAMETER),
         responses={
             200: json_response(
                 WechatArticleSerializer(many=True),

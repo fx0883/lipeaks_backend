@@ -1,25 +1,27 @@
 # we_rss 前端完整 API 文档
 
-这份文档是给前端直接使用的单文件汇总版，覆盖当前 `we_rss` 已提供的
-全部接口。你可以只看这一份，就完成凭证管理、扫码登录、公众号管理、
-文章管理、任务轮询，以及 RSS / HTML 输出的接入。
+这是一份给前端直接使用的单文件总文档。它基于当前仓库中 `we_rss` 的真实代码
+重新整理，覆盖了全部已开放接口、最新数据结构变化、字段说明、任务行为和
+联调建议。你如果只想保留一份文档给前端，优先发这一份就可以。
 
-如果你后续想按模块深入看细节，可以再回到拆分文档：
-[README.md](./README.md)。
+这次文档更新最重要的一点不是多了哪些接口，而是 `we_rss` 下全部核心模型都已
+经继承 `BaseModel`。这使得数据库模型层字段、接口层返回字段、接口层可写字段
+之间出现了明显差异。前端如果继续沿用“model 有什么字段，接口就会返回什么”
+的思路，很容易踩坑。
 
-## 1. 接口范围
+## 1. 模块范围
 
-`we_rss` 是当前 Django 项目中的独立 app，只负责下面这类能力：
+`we_rss` 当前覆盖下面几类能力：
 
-- 微信抓取凭证
-- 微信扫码登录会话
-- 微信公众号管理
-- 微信公众号文章管理
-- 后台异步同步任务
-- 需要鉴权的 RSS / 正文输出
+- 微信凭证管理
+- 微信扫码登录
+- 公众号搜索、保存、编辑、删除
+- 公众号同步
+- 公众号文章列表、详情、导入、刷新、已读、收藏、删除
+- 异步同步任务查询
+- tenant RSS、feed RSS、正文 HTML 输出
 
-这里的文章是 `WechatArticle`，和项目现有 `cms.Article` 完全分离，前端
-不要混用接口和字段。
+这里的文章模型是 `WechatArticle`，不是项目中的 `cms.Article`。
 
 ## 2. 基础地址
 
@@ -27,45 +29,32 @@
 /api/v1/we-rss/
 ```
 
-本地开发环境通常类似：
+本地开发通常是：
 
 ```text
 http://localhost:8000/api/v1/we-rss/
 ```
 
-## 3. 鉴权与租户头
+## 3. 鉴权与 tenant 规则
 
-所有 `we_rss` 接口都必须使用当前项目已有的 `Member JWT`，并且每个请求
-都必须带 `X-Tenant-ID`。
+所有 `we_rss` 接口都要求成员鉴权，并且必须带租户头。
 
 ```http
 Authorization: Bearer <member_access_token>
 X-Tenant-ID: <current_member_tenant_id>
 ```
 
-### 3.1 `X-Tenant-ID` 规则
+必须牢记下面几条规则：
 
-- 必填，所有 `we_rss` 接口都要传
-- 必须等于当前登录成员绑定的 `member.tenant.id`
-- 不能跨租户访问
-- `member` 没有 tenant 时，后端会直接拒绝访问
-
-### 3.2 数据隔离规则
-
-`we_rss` 数据是 tenant 共享，不是 member 私有。
-
-也就是说：
-
-- A 成员创建的微信凭证
-- 只要 B 成员属于同一个 tenant
-- B 也能看到并使用这份数据
-
-前端 UI 建议使用“当前租户的凭证 / 当前租户的公众号 / 当前租户的文章”
-这样的语义，不要写成“我的凭证 / 我的文章”。
+- 只有成员可以访问 `we_rss`。
+- 成员必须有 tenant。
+- `X-Tenant-ID` 必须等于当前成员绑定的 tenant。
+- 所有数据都是 tenant 共享，不是 member 私有。
+- RSS / HTML 接口也要求鉴权，不是公开链接。
 
 ## 4. 标准返回格式
 
-### 4.1 JSON 接口成功格式
+普通 JSON 接口统一使用包装结构：
 
 ```json
 {
@@ -76,45 +65,621 @@ X-Tenant-ID: <current_member_tenant_id>
 }
 ```
 
-字段说明：
+非 JSON 接口如下：
+
+| 接口 | Content-Type | 前端读取方式 |
+| --- | --- | --- |
+| 普通业务接口 | `application/json` | `response.json()` |
+| RSS 接口 | `application/xml` | `response.text()` |
+| 正文 HTML 接口 | `text/html` | `response.text()` |
+
+## 5. 最新数据结构变化
+
+### 5.1 所有核心模型都继承 BaseModel
+
+当前五个核心模型都已经继承 `BaseModel`：
+
+- `WechatCredential`
+- `WechatCredentialLoginSession`
+- `WechatFeed`
+- `WechatArticle`
+- `WechatSyncTask`
+
+统一新增或统一对齐的模型能力如下：
+
+| 字段或能力 | 说明 |
+| --- | --- |
+| `tenant` | 归属租户 |
+| `created_at` | 创建时间 |
+| `updated_at` | 更新时间 |
+| `is_deleted` | 软删除标记 |
+| `objects` | 默认只查当前 tenant 且过滤已软删数据 |
+| `original_objects` | 原始 manager |
+| `soft_delete()` | 软删除方法 |
+
+### 5.2 接口字段不等于模型字段
+
+这次变化里，前端最需要注意的是：
+
+- 模型层现在字段更多。
+- serializer 仍然只暴露部分字段。
+- 某些字段虽然在 serializer 中出现，但作用是显式拒绝写入。
+
+比如：
+
+- `WechatCredential` 模型里有 `token`、`cookie`、`tenant`、`is_deleted`。
+- 但凭证 API 根本不会把 `token` 和 `cookie` 返回给前端。
+- 更新凭证接口里即便出现了 `token` 和 `cookie`，传入也会直接报错。
+
+### 5.3 DELETE 统一按软删除理解
+
+由于这些模型都继承了 `BaseModel`，并且删除流程优先调用 `soft_delete()`，
+所以 `we_rss` 下的 `DELETE` 接口现在都应该按“软删除”理解：
+
+- 成功返回 `204 No Content`
+- 记录被标记为 `is_deleted = true`
+- 后续默认列表中消失
+
+## 6. 接口总表
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/v1/we-rss/credentials/` | 获取凭证列表 |
+| `GET` | `/api/v1/we-rss/credentials/{id}/` | 获取凭证详情 |
+| `PUT` | `/api/v1/we-rss/credentials/{id}/` | 更新凭证名称 |
+| `DELETE` | `/api/v1/we-rss/credentials/{id}/` | 软删除凭证 |
+| `POST` | `/api/v1/we-rss/credentials/{id}/check/` | 检查凭证有效性 |
+| `POST` | `/api/v1/we-rss/credentials/{id}/set-default/` | 设置默认凭证 |
+| `POST` | `/api/v1/we-rss/credentials/login-sessions/` | 创建扫码登录会话 |
+| `GET` | `/api/v1/we-rss/credentials/login-sessions/{session_id}/` | 查询扫码登录会话 |
+| `GET` | `/api/v1/we-rss/feeds/` | 获取公众号列表 |
+| `POST` | `/api/v1/we-rss/feeds/` | 创建公众号记录 |
+| `GET` | `/api/v1/we-rss/feeds/search/?keyword=...` | 搜索微信平台公众号 |
+| `GET` | `/api/v1/we-rss/feeds/{id}/` | 获取公众号详情 |
+| `PUT` | `/api/v1/we-rss/feeds/{id}/` | 更新公众号 |
+| `DELETE` | `/api/v1/we-rss/feeds/{id}/` | 软删除公众号 |
+| `DELETE` | `/api/v1/we-rss/feeds/{id}/articles/` | 永久清空该公众号下全部文章记录 |
+| `POST` | `/api/v1/we-rss/feeds/{id}/sync/` | 触发公众号同步 |
+| `GET` | `/api/v1/we-rss/articles/` | 获取文章列表 |
+| `GET` | `/api/v1/we-rss/articles/{id}/` | 获取文章详情 |
+| `DELETE` | `/api/v1/we-rss/articles/{id}/` | 软删除文章 |
+| `POST` | `/api/v1/we-rss/articles/import-by-url/` | 按 URL 导入文章 |
+| `POST` | `/api/v1/we-rss/articles/{id}/refresh/` | 刷新文章 |
+| `PUT` | `/api/v1/we-rss/articles/{id}/read/` | 更新已读状态 |
+| `PUT` | `/api/v1/we-rss/articles/{id}/favorite/` | 更新收藏状态 |
+| `GET` | `/api/v1/we-rss/tasks/` | 获取任务列表 |
+| `GET` | `/api/v1/we-rss/tasks/{task_id}/` | 获取任务详情 |
+| `GET` | `/api/v1/we-rss/rss/` | 当前 tenant 聚合 RSS |
+| `GET` | `/api/v1/we-rss/rss/{feed_id}/` | 单个公众号 RSS |
+| `GET` | `/api/v1/we-rss/rss/content/{article_id}/` | 文章正文 HTML |
+
+## 7. 对象结构总览
+
+### 7.1 凭证对象
+
+接口返回字段：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `success` | `boolean` | 是否成功 |
-| `code` | `number` | 业务码，成功通常为 `2000` |
-| `message` | `string` | 结果说明 |
-| `data` | `object \| array \| null` | 真实业务数据 |
+| `id` | `number` | 凭证 ID |
+| `name` | `string` | 名称 |
+| `status` | `string` | `pending / active / expired / invalid / disabled` |
+| `expires_at` | `string \| null` | 过期时间 |
+| `last_login_at` | `string \| null` | 最近登录时间 |
+| `last_check_at` | `string \| null` | 最近检查时间 |
+| `last_error` | `string` | 最近错误 |
+| `is_default` | `boolean` | 是否默认 |
+| `created_at` | `string` | 创建时间 |
+| `updated_at` | `string` | 更新时间 |
 
-### 4.2 常见错误格式
+模型存在但不返回的字段：
+
+- `tenant`
+- `token`
+- `cookie`
+- `created_by`
+- `updated_by`
+- `is_deleted`
+
+更新接口可写字段：
+
+- `name`
+
+更新接口显式拒绝字段：
+
+- `token`
+- `cookie`
+
+### 7.2 登录会话对象
+
+接口返回字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `session_id` | `string` | 会话 ID |
+| `status` | `string` | `pending / scanned / confirmed / success / failed / expired` |
+| `qr_code_url` | `string` | 二维码地址 |
+| `qr_code_image` | `string` | Data URL 图片 |
+| `scan_status` | `string` | 当前扫描阶段 |
+| `error_message` | `string` | 失败信息 |
+| `expired_at` | `string \| null` | 过期时间 |
+| `credential_id` | `number \| null` | 成功后凭证 ID |
+| `task_id` | `number \| null` | 后台任务 ID |
+| `created_at` | `string` | 创建时间 |
+| `updated_at` | `string` | 更新时间 |
+
+模型存在但不返回的字段：
+
+- `tenant`
+- `is_deleted`
+- `token_snapshot`
+- `cookie_snapshot`
+- `created_by`
+
+### 7.3 公众号对象
+
+接口返回字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | `number` | 公众号 ID |
+| `credential_id` | `number \| null` | 绑定凭证 ID |
+| `source_id` | `string` | 微信来源 ID |
+| `faker_id` | `string` | fakeid / faker_id |
+| `biz` | `string` | 微信 biz |
+| `mp_name` | `string` | 名称 |
+| `mp_cover` | `string` | 头像 |
+| `mp_intro` | `string` | 简介 |
+| `status` | `string` | 当前状态 |
+| `sync_time` | `string \| null` | 最近同步时间 |
+| `update_time` | `string \| null` | 最近更新时间 |
+| `last_synced_at` | `string \| null` | 最近同步完成时间 |
+| `is_featured` | `boolean` | 是否精选 |
+| `created_at` | `string` | 创建时间 |
+| `updated_at` | `string` | 更新时间 |
+
+创建 / 更新可写字段：
+
+- `credential_id`
+- `source_id`
+- `faker_id`
+- `biz`
+- `mp_name`
+- `mp_cover`
+- `mp_intro`
+- `status`
+- `is_featured`
+
+### 7.4 文章对象
+
+接口返回字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | `number` | 文章 ID |
+| `feed_id` | `number \| null` | 所属公众号 ID |
+| `source_id` | `string` | 文章来源 ID |
+| `title` | `string` | 标题 |
+| `description` | `string` | 摘要 |
+| `content` | `string` | 正文 HTML |
+| `url` | `string` | 原始 URL |
+| `article_type` | `string` | 文章类型，支持 `news` 和 `newspic` |
+| `pic_url` | `string` | 封面 URL |
+| `publish_time` | `string \| null` | 发布时间 |
+| `status` | `string` | `active` 或 `deleted` 等 |
+| `is_read` | `boolean` | 是否已读 |
+| `is_favorite` | `boolean` | 是否收藏 |
+| `last_refreshed_at` | `string \| null` | 最近刷新时间 |
+| `read_num` | `number` | 阅读数 |
+| `like_num` | `number` | 点赞数 |
+| `old_like_num` | `number` | 在看数 |
+| `share_num` | `number` | 分享数 |
+| `collect_num` | `number` | 收藏数 |
+| `comment_count` | `number` | 评论数 |
+| `comment_reply_count` | `number` | 评论回复数 |
+| `comment_total_count` | `number` | 评论总数 |
+| `created_at` | `string` | 创建时间 |
+| `updated_at` | `string` | 更新时间 |
+
+文章可写动作当前只有三类：
+
+- 按 URL 导入：`{ "url": "..." }`
+- 已读状态：`{ "is_read": true }`
+- 收藏状态：`{ "is_favorite": true }`
+
+### 7.5 任务对象
+
+接口返回字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | `number` | 任务 ID |
+| `task_type` | `string` | 任务类型 |
+| `status` | `string` | `pending / running / success / failed` |
+| `task_key` | `string` | 去重键 |
+| `target_type` | `string` | 目标类型 |
+| `target_id` | `number \| null` | 目标 ID |
+| `message` | `string` | 当前消息 |
+| `request_payload` | `object \| null` | 请求快照 |
+| `result_payload` | `object \| null` | 结果快照 |
+| `celery_task_id` | `string` | Celery ID |
+| `started_at` | `string \| null` | 开始时间 |
+| `finished_at` | `string \| null` | 完成时间 |
+| `created_at` | `string` | 创建时间 |
+| `updated_at` | `string` | 更新时间 |
+
+## 8. 凭证与扫码登录接口
+
+### 8.1 获取凭证列表
+
+```http
+GET /api/v1/we-rss/credentials/
+```
+
+返回当前 tenant 全部凭证，不分页。
+
+### 8.2 获取凭证详情
+
+```http
+GET /api/v1/we-rss/credentials/{id}/
+```
+
+### 8.3 更新凭证
+
+```http
+PUT /api/v1/we-rss/credentials/{id}/
+```
+
+请求体只推荐传：
 
 ```json
 {
-  "success": false,
-  "code": 4003,
-  "message": "没有权限执行该操作",
-  "data": null
+  "name": "运营默认凭证"
 }
 ```
 
-常见状态码：
+当前行为说明：
 
-| HTTP 状态码 | 含义 | 常见原因 |
+- 只允许更新 `name`
+- 传 `token` 会报错
+- 传 `cookie` 会报错
+
+### 8.4 删除凭证
+
+```http
+DELETE /api/v1/we-rss/credentials/{id}/
+```
+
+当前是软删除。
+
+### 8.5 检查凭证状态
+
+```http
+POST /api/v1/we-rss/credentials/{id}/check/
+```
+
+返回结构：
+
+```json
+{
+  "valid": true,
+  "status": "active",
+  "message": ""
+}
+```
+
+同时会回写 `status`、`last_error`、`last_check_at`。
+
+### 8.6 设置默认凭证
+
+```http
+POST /api/v1/we-rss/credentials/{id}/set-default/
+```
+
+当前 tenant 内最终只会保留一个默认凭证。
+
+### 8.7 创建扫码登录会话
+
+```http
+POST /api/v1/we-rss/credentials/login-sessions/
+```
+
+请求体：
+
+```json
+{}
+```
+
+会自动创建一个 `credential_login` 任务。
+
+### 8.8 查询扫码登录会话
+
+```http
+GET /api/v1/we-rss/credentials/login-sessions/{session_id}/
+```
+
+终态判断建议：
+
+- `success`：刷新凭证列表
+- `failed`：展示 `error_message`
+- `expired`：提示重新生成二维码
+
+## 9. 公众号接口
+
+### 9.1 获取公众号列表
+
+```http
+GET /api/v1/we-rss/feeds/
+```
+
+当前没有分页和服务端过滤。
+
+### 9.2 创建公众号
+
+```http
+POST /api/v1/we-rss/feeds/
+```
+
+请求体示例：
+
+```json
+{
+  "credential_id": 1,
+  "source_id": "gh_abcdef123456",
+  "faker_id": "MzA5NzQ1Mjg2NA==",
+  "biz": "MzA5NzQ1Mjg2NA==",
+  "mp_name": "AI Daily",
+  "mp_cover": "https://example.com/feed-cover.png",
+  "mp_intro": "Daily updates from the AI team.",
+  "status": "active",
+  "is_featured": false
+}
+```
+
+关键规则：
+
+- `mp_name` 必填
+- `credential_id` 可为空
+- `credential_id` 如果不属于当前 tenant，最终不会绑定成功
+
+### 9.3 搜索公众号
+
+```http
+GET /api/v1/we-rss/feeds/search/?keyword=AI
+```
+
+关键规则：
+
+- 搜索微信平台，不是查本地库
+- 需要有效凭证
+- 优先使用默认有效凭证，否则回退到第一条有效凭证
+
+### 9.4 获取公众号详情
+
+```http
+GET /api/v1/we-rss/feeds/{id}/
+```
+
+### 9.5 更新公众号
+
+```http
+PUT /api/v1/we-rss/feeds/{id}/
+```
+
+请求体结构和创建相同。
+
+### 9.6 删除公众号
+
+```http
+DELETE /api/v1/we-rss/feeds/{id}/
+```
+
+当前是软删除。
+
+### 9.7 同步公众号
+
+```http
+POST /api/v1/we-rss/feeds/{id}/sync/
+```
+
+关键规则：
+
+- 返回的是 `feed_sync` 任务
+- 同一 feed 的运行中任务会去重复用
+- 微信网关默认每页抓取 `5` 篇文章
+- 同步会持续翻页，直到微信返回空页
+- 请求下一页文章列表前会等待 `0.5` 秒
+- 请求下一篇文章详情前也会等待 `0.5` 秒
+- 同步按 `tenant + source_id` upsert 文章
+- 单篇文章详情抓取失败不会中断整次同步，会记录到任务结果里
+- 同步会回写 feed 的 `biz`、`mp_name`、`mp_cover`、同步时间字段
+
+### 9.8 清空某个公众号下全部文章
+
+```http
+DELETE /api/v1/we-rss/feeds/{id}/articles/
+```
+
+这个接口会永久删除当前 tenant 下该公众号关联的全部文章数据库记录，并返回：
+
+```json
+{
+  "feed_id": 1,
+  "deleted_count": 12
+}
+```
+
+关键规则：
+
+- 只影响当前 `feed_id`
+- 是永久删除，不是软删除
+- 不删除 feed 本身
+- 没有文章时也会成功返回，`deleted_count` 为 `0`
+
+## 10. 文章接口
+
+### 10.1 获取文章列表
+
+```http
+GET /api/v1/we-rss/articles/
+```
+
+当前接口支持一个服务端过滤参数：
+
+| 参数 | 类型 | 说明 |
 | --- | --- | --- |
-| `400` | 参数错误 | 缺字段、字段类型错误、URL 非法 |
-| `401` | 未认证 | 没带 token、token 过期 |
-| `403` | 无权限 | `X-Tenant-ID` 不匹配、member 无 tenant |
-| `404` | 资源不存在 | 当前 tenant 内找不到该资源 |
-| `500` | 服务端异常 | 微信抓取链路异常、未知错误 |
+| `article_type` | `string` | 可选，支持 `news` 或 `newspic` |
 
-### 4.3 非 JSON 接口
+例如：
 
-| 接口类型 | 返回类型 | 前端读取方式 |
+```http
+GET /api/v1/we-rss/articles/?article_type=newspic
+```
+
+除 `article_type` 之外，当前还没有分页、关键字搜索、按 `feed_id` 过滤、
+仅收藏过滤等服务端能力。
+
+### 10.2 获取文章详情
+
+```http
+GET /api/v1/we-rss/articles/{id}/
+```
+
+### 10.3 删除文章
+
+```http
+DELETE /api/v1/we-rss/articles/{id}/
+```
+
+当前是软删除。
+
+### 10.4 按 URL 导入文章
+
+```http
+POST /api/v1/we-rss/articles/import-by-url/
+```
+
+请求体：
+
+```json
+{
+  "url": "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc"
+}
+```
+
+关键规则：
+
+- 返回的是 `article_import` 任务
+- 同一 URL 的运行中任务会按 `task_key` 去重复用
+- 导入会自动绑定到精选 feed
+- 没有精选 feed 时自动创建 `Imported Articles`
+- 文章被删除或正文为空时会失败
+- 最终按 `tenant + source_id` 做 upsert
+- 文章类型字段名和微信官方文档保持一致，返回字段是 `article_type`，
+  取值为 `news` 或 `newspic`
+
+### 10.5 刷新文章
+
+```http
+POST /api/v1/we-rss/articles/{id}/refresh/
+```
+
+关键规则：
+
+- 返回的是 `article_refresh` 任务
+- 同一文章运行中任务会去重复用
+- 优先使用 `article.feed.credential`
+- 没有 feed 凭证时回退到 tenant 有效凭证
+
+### 10.6 更新已读状态
+
+```http
+PUT /api/v1/we-rss/articles/{id}/read/
+```
+
+请求体：
+
+```json
+{
+  "is_read": true
+}
+```
+
+### 10.7 更新收藏状态
+
+```http
+PUT /api/v1/we-rss/articles/{id}/favorite/
+```
+
+请求体：
+
+```json
+{
+  "is_favorite": true
+}
+```
+
+## 11. 任务接口
+
+### 11.1 获取任务列表
+
+```http
+GET /api/v1/we-rss/tasks/
+```
+
+支持过滤参数：
+
+- `task_type`
+- `status`
+- `target_type`
+- `target_id`
+
+### 11.2 获取任务详情
+
+```http
+GET /api/v1/we-rss/tasks/{task_id}/
+```
+
+`result_payload` 的结构会随任务类型变化：
+
+| `task_type` | 成功时常见字段 | 失败时常见字段 |
 | --- | --- | --- |
-| 普通业务接口 | `application/json` | `response.json()` |
-| RSS 输出 | `application/xml` | `response.text()` |
-| 正文 HTML 输出 | `text/html` | `response.text()` |
+| `credential_login` | `credential_id`、`session_id` | `task_type`、`session_id`、`status`、`error` |
+| `feed_sync` | `feed_id`、`article_ids`、`article_count`、`detail_success_count`、`detail_failed_count`、`failed_articles`、`result_payload.fetched_count` | `task_type`、`feed_id`、`error` |
+| `article_import` | `article_id`、`feed_id`、`source_id` | `task_type`、`url`、`error` |
+| `article_refresh` | `article_id`、`title`、`updated_by_id` | `task_type`、`article_id`、`error` |
 
-## 5. 推荐前端请求封装
+## 12. RSS 与正文输出接口
+
+### 12.1 当前 tenant 聚合 RSS
+
+```http
+GET /api/v1/we-rss/rss/
+```
+
+返回 `application/xml`。
+
+### 12.2 单个公众号 RSS
+
+```http
+GET /api/v1/we-rss/rss/{feed_id}/
+```
+
+返回 `application/xml`。
+
+### 12.3 单篇文章正文 HTML
+
+```http
+GET /api/v1/we-rss/rss/content/{article_id}/
+```
+
+返回 `text/html`。
+
+这三个接口都要用 `response.text()` 读取，而且仍然需要带鉴权头。
+
+## 13. 推荐前端封装
+
+推荐至少拆成两个请求方法：
 
 ```ts
 type ApiEnvelope<T> = {
@@ -143,11 +708,7 @@ async function weRssRequest<T>(
 
   return response.json();
 }
-```
 
-如果是 RSS / HTML 接口：
-
-```ts
 async function weRssTextRequest(path: string): Promise<string> {
   const token = localStorage.getItem("member_access_token");
   const tenantId = localStorage.getItem("member_tenant_id");
@@ -163,689 +724,31 @@ async function weRssTextRequest(path: string): Promise<string> {
 }
 ```
 
-## 6. 接口总表
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| `GET` | `/api/v1/we-rss/credentials/` | 获取凭证列表 |
-| `GET` | `/api/v1/we-rss/credentials/{id}/` | 获取凭证详情 |
-| `PUT` | `/api/v1/we-rss/credentials/{id}/` | 更新凭证名称 |
-| `DELETE` | `/api/v1/we-rss/credentials/{id}/` | 删除凭证 |
-| `POST` | `/api/v1/we-rss/credentials/{id}/check/` | 校验凭证可用性 |
-| `POST` | `/api/v1/we-rss/credentials/{id}/set-default/` | 设置默认凭证 |
-| `POST` | `/api/v1/we-rss/credentials/login-sessions/` | 创建扫码登录会话 |
-| `GET` | `/api/v1/we-rss/credentials/login-sessions/{session_id}/` | 查询扫码登录会话 |
-| `GET` | `/api/v1/we-rss/feeds/` | 获取公众号列表 |
-| `POST` | `/api/v1/we-rss/feeds/` | 创建公众号 |
-| `GET` | `/api/v1/we-rss/feeds/{id}/` | 获取公众号详情 |
-| `PUT` | `/api/v1/we-rss/feeds/{id}/` | 更新公众号 |
-| `DELETE` | `/api/v1/we-rss/feeds/{id}/` | 删除公众号 |
-| `GET` | `/api/v1/we-rss/feeds/search/?keyword=关键词` | 搜索公众号 |
-| `POST` | `/api/v1/we-rss/feeds/{id}/sync/` | 触发公众号文章同步 |
-| `GET` | `/api/v1/we-rss/articles/` | 获取文章列表 |
-| `POST` | `/api/v1/we-rss/articles/import-by-url/` | 按 URL 导入文章 |
-| `GET` | `/api/v1/we-rss/articles/{id}/` | 获取文章详情 |
-| `DELETE` | `/api/v1/we-rss/articles/{id}/` | 删除文章 |
-| `POST` | `/api/v1/we-rss/articles/{id}/refresh/` | 刷新文章 |
-| `PUT` | `/api/v1/we-rss/articles/{id}/read/` | 更新已读状态 |
-| `PUT` | `/api/v1/we-rss/articles/{id}/favorite/` | 更新收藏状态 |
-| `GET` | `/api/v1/we-rss/tasks/` | 获取任务列表 |
-| `GET` | `/api/v1/we-rss/tasks/{task_id}/` | 获取任务详情 |
-| `GET` | `/api/v1/we-rss/rss/` | 获取 tenant RSS |
-| `GET` | `/api/v1/we-rss/rss/{feed_id}/` | 获取单公众号 RSS |
-| `GET` | `/api/v1/we-rss/rss/content/{article_id}/` | 获取文章正文 HTML |
-
-## 7. 对象结构
-
-### 7.1 微信凭证对象
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | `number` | 凭证主键 |
-| `name` | `string` | 凭证名称 |
-| `status` | `string` | `pending / active / expired / invalid / disabled` |
-| `expires_at` | `string \| null` | 过期时间 |
-| `last_login_at` | `string \| null` | 最近登录时间 |
-| `last_check_at` | `string \| null` | 最近检查时间 |
-| `last_error` | `string` | 最近一次错误 |
-| `is_default` | `boolean` | 是否默认凭证 |
-| `created_at` | `string` | 创建时间 |
-| `updated_at` | `string` | 更新时间 |
-
-### 7.2 登录会话对象
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `session_id` | `string` | 会话 ID |
-| `status` | `string` | `pending / scanned / confirmed / success / failed / expired` |
-| `qr_code_url` | `string` | 二维码 URL |
-| `qr_code_image` | `string` | 二维码 Base64 图片 |
-| `scan_status` | `string` | 扫码阶段状态，比如 `waiting / scanned / confirmed / expired` |
-| `error_message` | `string` | 错误信息 |
-| `expired_at` | `string \| null` | 过期时间 |
-| `credential_id` | `number \| null` | 登录成功后生成的凭证 ID |
-| `task_id` | `number \| null` | 对应后台任务 ID |
-| `created_at` | `string` | 创建时间 |
-| `updated_at` | `string` | 更新时间 |
-
-### 7.3 公众号对象
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | `number` | 公众号 ID |
-| `credential_id` | `number \| null` | 绑定凭证 ID |
-| `source_id` | `string` | 微信来源 ID |
-| `faker_id` | `string` | 微信 faker_id |
-| `biz` | `string` | 微信 biz |
-| `mp_name` | `string` | 公众号名称 |
-| `mp_cover` | `string` | 公众号头像 |
-| `mp_intro` | `string` | 公众号简介 |
-| `status` | `string` | 当前状态，默认 `active` |
-| `sync_time` | `string \| null` | 最近同步时间 |
-| `update_time` | `string \| null` | 最近更新时间 |
-| `last_synced_at` | `string \| null` | 最近同步完成时间 |
-| `is_featured` | `boolean` | 是否 featured |
-| `created_at` | `string` | 创建时间 |
-| `updated_at` | `string` | 更新时间 |
-
-### 7.4 公众号文章对象
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | `number` | 文章 ID |
-| `feed_id` | `number \| null` | 所属公众号 ID |
-| `source_id` | `string` | 微信文章来源 ID |
-| `title` | `string` | 标题 |
-| `description` | `string` | 摘要 |
-| `content` | `string` | 正文 HTML |
-| `url` | `string` | 微信文章 URL |
-| `pic_url` | `string` | 封面图 URL |
-| `publish_time` | `string \| null` | 发布时间 |
-| `status` | `string` | 文章状态，通常为 `active` |
-| `is_read` | `boolean` | 是否已读 |
-| `is_favorite` | `boolean` | 是否收藏 |
-| `last_refreshed_at` | `string \| null` | 最近刷新时间 |
-| `read_num` | `number` | 阅读数 |
-| `like_num` | `number` | 点赞数 |
-| `old_like_num` | `number` | 在看数 |
-| `share_num` | `number` | 分享数 |
-| `collect_num` | `number` | 收藏数 |
-| `comment_count` | `number` | 评论数 |
-| `comment_reply_count` | `number` | 评论回复数 |
-| `comment_total_count` | `number` | 评论总数 |
-| `created_at` | `string` | 创建时间 |
-| `updated_at` | `string` | 更新时间 |
-
-### 7.5 同步任务对象
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | `number` | 任务 ID |
-| `task_type` | `string` | `credential_login / feed_sync / article_import / article_refresh` |
-| `status` | `string` | `pending / running / success / failed` |
-| `task_key` | `string` | 任务去重键 |
-| `target_type` | `string` | 目标类型，如 `login_session / feed / article` |
-| `target_id` | `number \| null` | 目标 ID |
-| `message` | `string` | 当前任务描述 |
-| `request_payload` | `object \| null` | 请求快照 |
-| `result_payload` | `object \| null` | 执行结果 |
-| `celery_task_id` | `string` | Celery 任务 ID |
-| `started_at` | `string \| null` | 开始时间 |
-| `finished_at` | `string \| null` | 结束时间 |
-| `created_at` | `string` | 创建时间 |
-| `updated_at` | `string` | 更新时间 |
-
-## 8. 凭证与扫码登录 API
-
-### 8.1 获取凭证列表
-
-```http
-GET /api/v1/we-rss/credentials/
-```
-
-请求参数：无。
-
-返回：当前 tenant 下全部微信凭证数组。
-
-示例：
-
-```ts
-const res = await weRssRequest<Array<any>>("/credentials/");
-const credentials = res.data;
-```
-
-### 8.2 获取凭证详情
-
-```http
-GET /api/v1/we-rss/credentials/{id}/
-```
-
-路径参数：
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | `number` | 凭证 ID |
-
-示例：
-
-```ts
-const res = await weRssRequest<any>("/credentials/1/");
-```
-
-### 8.3 更新凭证名称
-
-```http
-PUT /api/v1/we-rss/credentials/{id}/
-Content-Type: application/json
-```
-
-请求体：
-
-```json
-{
-  "name": "业务线默认凭证"
-}
-```
-
-说明：
-
-- 只允许更新 `name`
-- 不支持手动改 `token`
-- 不支持手动改 `cookie`
-
-示例：
-
-```ts
-await weRssRequest("/credentials/1/", {
-  method: "PUT",
-  body: JSON.stringify({ name: "业务线默认凭证" }),
-});
-```
-
-### 8.4 删除凭证
-
-```http
-DELETE /api/v1/we-rss/credentials/{id}/
-```
-
-成功时返回 `204 No Content`。
-
-### 8.5 校验凭证可用性
-
-```http
-POST /api/v1/we-rss/credentials/{id}/check/
-```
-
-返回示例：
-
-```json
-{
-  "success": true,
-  "code": 2000,
-  "message": "操作成功",
-  "data": {
-    "valid": true,
-    "status": "active",
-    "message": ""
-  }
-}
-```
-
-### 8.6 设置默认凭证
-
-```http
-POST /api/v1/we-rss/credentials/{id}/set-default/
-```
-
-返回：更新后的凭证对象。
-
-### 8.7 创建扫码登录会话
-
-```http
-POST /api/v1/we-rss/credentials/login-sessions/
-Content-Type: application/json
-```
-
-请求体：
-
-```json
-{}
-```
-
-返回重点字段：
-
-- `session_id`
-- `qr_code_url`
-- `qr_code_image`
-- `task_id`
-
-示例：
-
-```ts
-const res = await weRssRequest<any>("/credentials/login-sessions/", {
-  method: "POST",
-  body: JSON.stringify({}),
-});
-
-setQrCodeSrc(res.data.qr_code_image);
-setCurrentSessionId(res.data.session_id);
-```
-
-### 8.8 查询扫码登录会话
-
-```http
-GET /api/v1/we-rss/credentials/login-sessions/{session_id}/
-```
-
-路径参数：
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `session_id` | `string` | 登录会话 ID |
-
-轮询终止条件：
-
-- `status === "success"`，拿到 `credential_id`
-- `status === "failed"`，展示失败原因
-- `status === "expired"`，提示重新生成二维码
-
-示例：
-
-```ts
-async function pollLoginSession(sessionId: string) {
-  const timer = window.setInterval(async () => {
-    const res = await weRssRequest<any>(
-      `/credentials/login-sessions/${sessionId}/`,
-    );
-
-    const session = res.data;
-
-    if (session.status === "success") {
-      clearInterval(timer);
-    }
-
-    if (session.status === "failed" || session.status === "expired") {
-      clearInterval(timer);
-    }
-  }, 3000);
-}
-```
-
-## 9. 公众号 API
-
-### 9.1 获取公众号列表
-
-```http
-GET /api/v1/we-rss/feeds/
-```
-
-返回：当前 tenant 下全部公众号列表，不分页。
-
-### 9.2 创建公众号
-
-```http
-POST /api/v1/we-rss/feeds/
-Content-Type: application/json
-```
-
-请求体示例：
-
-```json
-{
-  "credential_id": 1,
-  "source_id": "gh_abcdef123456",
-  "faker_id": "MzA5NzQ1Mjg2NA==",
-  "biz": "MzA5NzQ1Mjg2NA==",
-  "mp_name": "AI Daily",
-  "mp_cover": "https://example.com/feed-cover.png",
-  "mp_intro": "Daily updates from the AI team.",
-  "status": "active",
-  "is_featured": false
-}
-```
-
-必填字段：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `mp_name` | `string` | 公众号名称 |
-
-### 9.3 获取公众号详情
-
-```http
-GET /api/v1/we-rss/feeds/{id}/
-```
-
-### 9.4 更新公众号
-
-```http
-PUT /api/v1/we-rss/feeds/{id}/
-Content-Type: application/json
-```
-
-请求体格式与创建接口一致。
-
-### 9.5 删除公众号
-
-```http
-DELETE /api/v1/we-rss/feeds/{id}/
-```
-
-成功返回 `204 No Content`。
-
-### 9.6 搜索公众号
-
-```http
-GET /api/v1/we-rss/feeds/search/?keyword=AI
-```
-
-查询参数：
-
-| 参数 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `keyword` | `string` | 是 | 搜索关键词 |
-
-返回结果字段：
-
-- `source_id`
-- `faker_id`
-- `biz`
-- `mp_name`
-- `mp_cover`
-- `mp_intro`
-
-说明：
-
-- 依赖当前 tenant 的默认有效凭证
-- 没有默认凭证时，接口会失败
-
-### 9.7 同步公众号文章
-
-```http
-POST /api/v1/we-rss/feeds/{id}/sync/
-```
-
-说明：
-
-- 这是异步接口
-- 返回的是 `feed_sync` 任务对象
-- 如果已有同类运行中任务，可能会直接复用已有任务
-
-示例：
-
-```ts
-const res = await weRssRequest<any>("/feeds/1/sync/", {
-  method: "POST",
-});
-
-const task = res.data;
-await pollTask(task.id);
-```
-
-## 10. 公众号文章 API
-
-### 10.1 获取文章列表
-
-```http
-GET /api/v1/we-rss/articles/
-```
-
-返回：当前 tenant 下全部文章列表，不分页，默认按发布时间倒序。
-
-### 10.2 获取文章详情
-
-```http
-GET /api/v1/we-rss/articles/{id}/
-```
-
-### 10.3 删除文章
-
-```http
-DELETE /api/v1/we-rss/articles/{id}/
-```
-
-成功返回 `204 No Content`。
-
-### 10.4 按 URL 导入文章
-
-```http
-POST /api/v1/we-rss/articles/import-by-url/
-Content-Type: application/json
-```
-
-请求体：
-
-```json
-{
-  "url": "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc"
-}
-```
-
-说明：
-
-- 这是异步接口
-- 返回 `article_import` 任务对象
-- 后端会自动绑定到当前 tenant 的 featured feed
-- 相同 URL 的运行中任务可能会直接复用
-
-### 10.5 刷新文章
-
-```http
-POST /api/v1/we-rss/articles/{id}/refresh/
-```
-
-说明：
-
-- 这是异步接口
-- 返回 `article_refresh` 任务对象
-- 后台会重新抓取正文和统计字段
-
-### 10.6 更新已读状态
-
-```http
-PUT /api/v1/we-rss/articles/{id}/read/
-Content-Type: application/json
-```
-
-请求体：
-
-```json
-{
-  "is_read": true
-}
-```
-
-返回：更新后的文章对象。
-
-### 10.7 更新收藏状态
-
-```http
-PUT /api/v1/we-rss/articles/{id}/favorite/
-Content-Type: application/json
-```
-
-请求体：
-
-```json
-{
-  "is_favorite": true
-}
-```
-
-返回：更新后的文章对象。
-
-## 11. 同步任务 API
-
-### 11.1 获取任务列表
-
-```http
-GET /api/v1/we-rss/tasks/
-```
-
-可选查询参数：
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `task_type` | `string` | 按任务类型过滤 |
-| `status` | `string` | 按任务状态过滤 |
-| `target_type` | `string` | 按目标类型过滤 |
-| `target_id` | `number` | 按目标 ID 过滤 |
-
-示例：
-
-```http
-GET /api/v1/we-rss/tasks/?task_type=feed_sync&status=success
-```
-
-### 11.2 获取任务详情
-
-```http
-GET /api/v1/we-rss/tasks/{task_id}/
-```
-
-这是前端轮询任务的核心接口。
-
-`result_payload` 会随 `task_type` 不同而变化，前端不要按固定结构硬编码。
-
-建议按下面方式解析：
-
-| `task_type` | 常见结果字段 |
-| --- | --- |
-| `credential_login` | `session_id`、`status`、`error` |
-| `feed_sync` | `fetched_count`、`detail_success_count`、`detail_failed_count`、`errors` |
-| `article_import` | `article_id`、`feed_id`、`message` 或 `error` |
-| `article_refresh` | `article_id`、`read_num`、`comment_total_count` 或 `error` |
-
-通用轮询示例：
-
-```ts
-async function pollTask(taskId: number) {
-  const timer = window.setInterval(async () => {
-    const res = await weRssRequest<any>(`/tasks/${taskId}/`);
-    const task = res.data;
-
-    if (task.status === "success") {
-      clearInterval(timer);
-      console.log(task.result_payload);
-    }
-
-    if (task.status === "failed") {
-      clearInterval(timer);
-      console.error(task.result_payload?.error || task.message);
-    }
-  }, 2000);
-}
-```
-
-## 12. RSS 与正文输出 API
-
-### 12.1 获取当前 tenant 聚合 RSS
-
-```http
-GET /api/v1/we-rss/rss/
-```
-
-返回类型：`application/xml`
-
-前端示例：
-
-```ts
-const xml = await weRssTextRequest("/rss/");
-```
-
-### 12.2 获取单公众号 RSS
-
-```http
-GET /api/v1/we-rss/rss/{feed_id}/
-```
-
-路径参数：
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `feed_id` | `number` | 公众号 ID |
-
-返回类型：`application/xml`
-
-### 12.3 获取文章正文 HTML
-
-```http
-GET /api/v1/we-rss/rss/content/{article_id}/
-```
-
-路径参数：
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `article_id` | `number` | 文章 ID |
-
-返回类型：`text/html`
-
-前端示例：
-
-```ts
-const html = await weRssTextRequest("/rss/content/1/");
-document.getElementById("article-container")!.innerHTML = html;
-```
-
-注意：
-
-- 这不是公开接口，仍然必须带 token 和 `X-Tenant-ID`
-- 不要调用 `response.json()`
-- 如果要插入 DOM，要结合前端安全策略处理
-
-## 13. 推荐接入顺序
-
-如果前端要从零开始接完整链路，建议按下面顺序做：
-
-1. 先接通 `Member JWT` 和 `X-Tenant-ID`
-2. 接“创建扫码登录会话”和“查询扫码登录会话”
-3. 接凭证列表和默认凭证设置
-4. 接公众号搜索、创建、同步
-5. 接任务轮询
-6. 接文章列表、详情、已读、收藏、刷新
-7. 最后接 RSS 和正文 HTML 输出
-
-## 14. 典型完整调用链路
-
-### 14.1 扫码登录链路
-
-1. 调用 `POST /credentials/login-sessions/`
-2. 显示二维码
-3. 轮询 `GET /credentials/login-sessions/{session_id}/`
-4. 成功后拿到 `credential_id`
-5. 刷新凭证列表
-
-### 14.2 搜索公众号并同步文章
-
-1. 调用 `GET /feeds/search/?keyword=...`
-2. 用户选中结果
-3. 调用 `POST /feeds/`
-4. 调用 `POST /feeds/{id}/sync/`
-5. 轮询 `GET /tasks/{task_id}/`
-6. 成功后刷新文章列表
-
-### 14.3 按 URL 导入文章
-
-1. 调用 `POST /articles/import-by-url/`
-2. 拿到任务 ID
-3. 轮询 `GET /tasks/{task_id}/`
-4. 从 `result_payload.article_id` 进入文章详情页
-
-## 15. 交付建议
-
-如果你是发给前端开发同学，建议这样使用这套文档：
-
-- 日常开发先看本文件
-- 需要拆模块细看时，再跳到 `docs/we_rss` 下的分模块文档
-- 联调时同时打开 OpenAPI 页面和这份文档，对照字段和示例
-
-## 16. 相关文档
+## 14. 推荐接入顺序
+
+1. 先完成统一请求层。
+2. 再接扫码登录和凭证管理。
+3. 再接公众号搜索、创建、编辑和同步。
+4. 再接统一任务轮询。
+5. 再接文章列表、详情、已读、收藏、刷新。
+6. 最后接 RSS 和正文 HTML。
+
+## 15. 最容易踩坑的点
+
+- `we_rss` 是 tenant 共享，不是 member 私有。
+- 模型字段不等于接口字段。
+- `DELETE` 统一按软删除理解。
+- `result_payload` 不能用一个固定类型覆盖全部任务。
+- RSS / HTML 接口不是匿名公共 URL。
+- 公众号列表当前没有分页和服务端过滤。
+- 文章列表支持 `article_type` 过滤，但还没有分页、搜索和其它服务端过滤。
+
+## 16. 关联文档
 
 - [README.md](./README.md)
-- [00_总览与对接说明.md](./00_%E6%80%BB%E8%A7%88%E4%B8%8E%E5%AF%B9%E6%8E%A5%E8%AF%B4%E6%98%8E.md)
-- [01_凭证与扫码登录API.md](./01_%E5%87%AD%E8%AF%81%E4%B8%8E%E6%89%AB%E7%A0%81%E7%99%BB%E5%BD%95API.md)
-- [02_公众号API.md](./02_%E5%85%AC%E4%BC%97%E5%8F%B7API.md)
-- [03_公众号文章API.md](./03_%E5%85%AC%E4%BC%97%E5%8F%B7%E6%96%87%E7%AB%A0API.md)
-- [04_同步任务API.md](./04_%E5%90%8C%E6%AD%A5%E4%BB%BB%E5%8A%A1API.md)
-- [05_RSS与正文输出API.md](./05_RSS%E4%B8%8E%E6%AD%A3%E6%96%87%E8%BE%93%E5%87%BAAPI.md)
+- [00_总览与对接说明.md](./00_总览与对接说明.md)
+- [01_凭证与扫码登录API.md](./01_凭证与扫码登录API.md)
+- [02_公众号API.md](./02_公众号API.md)
+- [03_公众号文章API.md](./03_公众号文章API.md)
+- [04_同步任务API.md](./04_同步任务API.md)
+- [05_RSS与正文输出API.md](./05_RSS与正文输出API.md)
