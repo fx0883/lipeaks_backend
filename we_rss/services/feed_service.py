@@ -5,7 +5,14 @@ import requests
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from we_rss.models import WechatArticle, WechatCredential, WechatFeed, WechatSyncTask
+from we_rss.models import (
+    MemberFeedSubscription,
+    MemberFeedTagRelation,
+    WechatArticle,
+    WechatCredential,
+    WechatFeed,
+    WechatSyncTask,
+)
 from we_rss.services.task_service import TaskService, dispatch_we_rss_task
 from we_rss.services.wechat_gateway import (
     build_wechat_session,
@@ -177,6 +184,30 @@ class WechatFeedGateway:
 
 class FeedService:
     @staticmethod
+    def _find_existing_feed(*, tenant, data):
+        for field in ("source_id", "faker_id", "biz"):
+            value = str(data.get(field) or "").strip()
+            if value:
+                existing = WechatFeed.objects.filter(tenant=tenant, **{field: value}).first()
+                if existing is not None:
+                    return existing
+        return None
+
+    @staticmethod
+    def _apply_subscription_feed_data(*, feed, member, data):
+        changed = False
+        for field in ("source_id", "faker_id", "biz", "mp_name", "mp_cover", "mp_intro"):
+            value = str(data.get(field) or "").strip()
+            if value and getattr(feed, field) != value:
+                setattr(feed, field, value)
+                changed = True
+
+        if changed:
+            feed.updated_by = member
+            feed.save()
+        return feed
+
+    @staticmethod
     def get_active_credential(*, tenant, credential_id=None):
         queryset = WechatCredential.objects.filter(tenant=tenant, status=WechatCredential.Status.ACTIVE)
         if credential_id is not None:
@@ -214,6 +245,47 @@ class FeedService:
         if credential is None:
             raise ValidationError("Active credential required.")
         return gateway.search_feeds(keyword, credential)
+
+    @staticmethod
+    def subscribe_member(*, tenant, member, data):
+        feed = FeedService._find_existing_feed(tenant=tenant, data=data)
+        if feed is None:
+            feed = WechatFeed.objects.create(
+                tenant=tenant,
+                source_id=str(data.get("source_id") or "").strip(),
+                faker_id=str(data.get("faker_id") or "").strip(),
+                biz=str(data.get("biz") or "").strip(),
+                mp_name=str(data.get("mp_name") or "").strip(),
+                mp_cover=str(data.get("mp_cover") or "").strip(),
+                mp_intro=str(data.get("mp_intro") or "").strip(),
+                created_by=member,
+                updated_by=member,
+            )
+        else:
+            feed = FeedService._apply_subscription_feed_data(feed=feed, member=member, data=data)
+
+        MemberFeedSubscription.objects.get_or_create(
+            tenant=tenant,
+            member=member,
+            feed=feed,
+        )
+        feed.is_subscribed = True
+        return feed
+
+    @staticmethod
+    def unsubscribe_member(*, feed, member):
+        MemberFeedTagRelation.objects.filter(
+            tenant=feed.tenant,
+            member=member,
+            feed=feed,
+        ).delete()
+        MemberFeedSubscription.objects.filter(
+            tenant=feed.tenant,
+            member=member,
+            feed=feed,
+        ).delete()
+        feed.is_subscribed = False
+        return feed
 
     @staticmethod
     def clear_articles(*, feed):

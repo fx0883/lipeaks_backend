@@ -7,7 +7,15 @@ from rest_framework.test import APITestCase
 from common.authentication.jwt_auth import generate_jwt_token
 from tenants.models import Tenant
 from users.models import Member
-from we_rss.models import WechatArticle, WechatCredential, WechatFeed, WechatSyncTask
+from we_rss.models import (
+    MemberFeedSubscription,
+    MemberFeedTagRelation,
+    MemberTag,
+    WechatArticle,
+    WechatCredential,
+    WechatFeed,
+    WechatSyncTask,
+)
 from we_rss.services.feed_service import WechatFeedGateway
 
 
@@ -495,6 +503,115 @@ class FeedApiTests(APITestCase):
         self.assertEqual(len(response.data["data"]), 1)
         self.assertEqual(response.data["data"][0]["mp_name"], "Tenant Feed")
 
+    def test_member_can_subscribe_to_feed_without_affecting_other_members(self):
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Tenant Feed",
+            source_id="feed-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        other_member = Member.objects.create(
+            username="other_member_same_tenant",
+            email="other-member-same-tenant@example.com",
+            tenant=self.tenant,
+        )
+
+        subscribe_response = self.client.post(
+            "/api/v1/we-rss/feeds/subscribe/",
+            {
+                "source_id": feed.source_id,
+                "mp_name": feed.mp_name,
+            },
+            format="json",
+        )
+        list_response = self.client.get("/api/v1/we-rss/feeds/")
+
+        self.assertEqual(subscribe_response.status_code, 200)
+        self.assertTrue(list_response.data["data"][0]["is_subscribed"])
+
+        other_token = generate_jwt_token(other_member)["access_token"]
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {other_token}",
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+        other_list_response = self.client.get("/api/v1/we-rss/feeds/")
+
+        self.assertEqual(other_list_response.status_code, 200)
+        self.assertFalse(other_list_response.data["data"][0]["is_subscribed"])
+
+    def test_member_can_subscribe_from_search_payload_when_feed_not_yet_saved(self):
+        response = self.client.post(
+            "/api/v1/we-rss/feeds/subscribe/",
+            {
+                "source_id": "feed-search-1",
+                "faker_id": "faker-search-1",
+                "biz": "biz-search-1",
+                "mp_name": "Search Feed",
+                "mp_cover": "https://example.com/search-feed.png",
+                "mp_intro": "Search intro",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["mp_name"], "Search Feed")
+        self.assertTrue(response.data["data"]["is_subscribed"])
+        self.assertTrue(WechatFeed.objects.filter(tenant=self.tenant, source_id="feed-search-1").exists())
+
+    def test_member_can_filter_feeds_by_subscribed_only(self):
+        subscribed_feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Subscribed Feed",
+            source_id="feed-subscribed",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Unsubscribed Feed",
+            source_id="feed-unsubscribed",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+
+        subscribe_response = self.client.post(
+            "/api/v1/we-rss/feeds/subscribe/",
+            {
+                "source_id": subscribed_feed.source_id,
+                "mp_name": subscribed_feed.mp_name,
+            },
+            format="json",
+        )
+        filtered_response = self.client.get("/api/v1/we-rss/feeds/?subscribed_only=true")
+
+        self.assertEqual(subscribe_response.status_code, 200)
+        self.assertEqual(filtered_response.status_code, 200)
+        self.assertEqual([item["source_id"] for item in filtered_response.data["data"]], ["feed-subscribed"])
+
+    def test_member_can_unsubscribe_feed(self):
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Tenant Feed",
+            source_id="feed-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        self.client.post(
+            "/api/v1/we-rss/feeds/subscribe/",
+            {
+                "source_id": feed.source_id,
+                "mp_name": feed.mp_name,
+            },
+            format="json",
+        )
+
+        unsubscribe_response = self.client.delete(f"/api/v1/we-rss/feeds/{feed.id}/subscribe/")
+        list_response = self.client.get("/api/v1/we-rss/feeds/")
+
+        self.assertEqual(unsubscribe_response.status_code, 204)
+        self.assertFalse(list_response.data["data"][0]["is_subscribed"])
+
     def test_member_can_create_and_update_feed(self):
         response = self.client.post(
             "/api/v1/we-rss/feeds/",
@@ -655,3 +772,114 @@ class FeedApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["feed_id"], feed.id)
         self.assertEqual(response.data["data"]["deleted_count"], 0)
+
+
+class FeedTagFilterApiTests(APITestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Tenant A", code="tenant_a")
+        self.member = Member.objects.create(
+            username="tenant_member",
+            email="tenant-member@example.com",
+            tenant=self.tenant,
+        )
+        self.other_member = Member.objects.create(
+            username="other_member",
+            email="other-member@example.com",
+            tenant=self.tenant,
+        )
+        token = generate_jwt_token(self.member)["access_token"]
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+        self.feed_with_both_tags = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Feed With Both Tags",
+            source_id="feed-both",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        self.feed_with_one_tag = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Feed With One Tag",
+            source_id="feed-one",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        self.feed_with_other_member_tag = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Other Member Tagged Feed",
+            source_id="feed-other",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        for feed in (
+            self.feed_with_both_tags,
+            self.feed_with_one_tag,
+            self.feed_with_other_member_tag,
+        ):
+            MemberFeedSubscription.objects.create(
+                tenant=self.tenant,
+                member=self.member,
+                feed=feed,
+            )
+
+        self.tag_one = MemberTag.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            name="AI",
+        )
+        self.tag_two = MemberTag.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            name="Digest",
+        )
+        other_member_tag = MemberTag.objects.create(
+            tenant=self.tenant,
+            member=self.other_member,
+            name="Other Member Tag",
+        )
+        MemberFeedTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=self.tag_one,
+            feed=self.feed_with_both_tags,
+        )
+        MemberFeedTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=self.tag_two,
+            feed=self.feed_with_both_tags,
+        )
+        MemberFeedTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=self.tag_one,
+            feed=self.feed_with_one_tag,
+        )
+        MemberFeedTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.other_member,
+            tag=other_member_tag,
+            feed=self.feed_with_other_member_tag,
+        )
+
+    def test_feed_list_filters_by_all_requested_tag_ids(self):
+        response = self.client.get(
+            f"/api/v1/we-rss/feeds/?tag_ids={self.tag_one.id},{self.tag_two.id}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in response.data["data"]],
+            [self.feed_with_both_tags.id],
+        )
+
+    def test_feed_list_tag_filter_only_uses_current_member_relations(self):
+        response = self.client.get(f"/api/v1/we-rss/feeds/?tag_ids={self.tag_one.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {item["id"] for item in response.data["data"]},
+            {self.feed_with_both_tags.id, self.feed_with_one_tag.id},
+        )

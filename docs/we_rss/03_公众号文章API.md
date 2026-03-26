@@ -1,10 +1,14 @@
 # we_rss 公众号文章 API
 
 这份文档覆盖 `WechatArticle` 相关接口，也就是当前 tenant 下的公众号文章列表、
-文章详情、按 URL 导入、单篇刷新、已读、收藏和删除能力。
+文章详情、按 URL 导入、单篇刷新、收藏、标签和删除能力。
 
-这里的文章是 `WechatArticle`，与项目中的 `cms.Article` 不是同一个概念。前端
-页面、类型定义、状态管理都不要直接复用 `cms.Article` 的字段假设。
+这里最重要的口径是：文章主数据仍然 tenant 共享，所有 member 默认都能看
+当前 tenant 的全部文章；但收藏状态是 member 维度。当前接口没有已读状态，
+也没有 `is_read` 字段。
+
+标签能力同样是 member 私有能力。文章标签不会直接内嵌进
+`WechatArticle` 主响应，而是通过独立对象标签接口查询和维护。
 
 ## 通用请求头
 
@@ -17,7 +21,7 @@ X-Tenant-ID: <current_member_tenant_id>
 
 ### 1. WechatArticle 模型字段
 
-`WechatArticle` 继承 `BaseModel` 后，模型层字段如下：
+`WechatArticle` 继承 `BaseModel` 后，模型层真实字段如下：
 
 | 字段 | 来源 | 说明 |
 | --- | --- | --- |
@@ -31,12 +35,10 @@ X-Tenant-ID: <current_member_tenant_id>
 | `title` | 业务字段 | 标题 |
 | `description` | 业务字段 | 摘要 |
 | `content` | 业务字段 | 正文 HTML |
-| `url` | 业务字段 | 归一化后的公开文章 URL，不保存抓取跳转过程里的 `token` |
+| `url` | 业务字段 | 归一化后的公开文章 URL |
 | `pic_url` | 业务字段 | 封面图 URL |
 | `publish_time` | 业务字段 | 发布时间 |
-| `status` | 业务字段 | 文章状态，常见为 `active` 或 `deleted` |
-| `is_read` | 业务字段 | 是否已读 |
-| `is_favorite` | 业务字段 | 是否收藏 |
+| `status` | 业务字段 | 文章状态 |
 | `last_refreshed_at` | 业务字段 | 最近刷新时间 |
 | `read_num` | 业务字段 | 阅读数 |
 | `like_num` | 业务字段 | 点赞数 |
@@ -46,6 +48,11 @@ X-Tenant-ID: <current_member_tenant_id>
 | `comment_count` | 业务字段 | 评论数 |
 | `comment_reply_count` | 业务字段 | 评论回复数 |
 | `comment_total_count` | 业务字段 | 评论总数 |
+
+模型层已经没有下面两个旧字段：
+
+- `is_read`
+- `is_favorite`
 
 ### 2. 文章接口返回字段
 
@@ -60,12 +67,11 @@ X-Tenant-ID: <current_member_tenant_id>
 | `title` | `string` | 标题 |
 | `description` | `string` | 摘要 |
 | `content` | `string` | 正文 HTML |
-| `url` | `string` | 归一化后的公开文章 URL，不保存抓取跳转过程里的 `token` |
+| `url` | `string` | 归一化后的公开文章 URL |
 | `pic_url` | `string` | 封面 URL |
 | `publish_time` | `string \| null` | 发布时间 |
 | `status` | `string` | 文章状态 |
-| `is_read` | `boolean` | 是否已读 |
-| `is_favorite` | `boolean` | 是否收藏 |
+| `is_favorite` | `boolean` | 当前 member 是否收藏 |
 | `last_refreshed_at` | `string \| null` | 最近刷新时间 |
 | `read_num` | `number` | 阅读数 |
 | `like_num` | `number` | 点赞数 |
@@ -84,23 +90,15 @@ X-Tenant-ID: <current_member_tenant_id>
 - `feed` 原对象
 - `is_deleted`
 
-### 3. 文章接口可写字段
+### 3. 可写动作字段
 
-文章当前没有一个“任意字段编辑接口”。前端只能通过下面三类动作修改文章状态。
+文章当前没有通用编辑接口。前端只能通过下面两类动作修改状态：
 
 #### 按 URL 导入
 
 ```json
 {
   "url": "https://mp.weixin.qq.com/s/..."
-}
-```
-
-#### 更新已读状态
-
-```json
-{
-  "is_read": true
 }
 ```
 
@@ -121,8 +119,10 @@ X-Tenant-ID: <current_member_tenant_id>
 | `DELETE` | `/api/v1/we-rss/articles/{id}/` | 软删除文章 |
 | `POST` | `/api/v1/we-rss/articles/import-by-url/` | 按微信文章 URL 导入文章 |
 | `POST` | `/api/v1/we-rss/articles/{id}/refresh/` | 刷新单篇文章 |
-| `PUT` | `/api/v1/we-rss/articles/{id}/read/` | 更新已读状态 |
-| `PUT` | `/api/v1/we-rss/articles/{id}/favorite/` | 更新收藏状态 |
+| `PUT` | `/api/v1/we-rss/articles/{id}/favorite/` | 更新当前 member 收藏状态 |
+| `GET` | `/api/v1/we-rss/articles/{id}/tags/` | 获取当前 member 在该文章上的标签 |
+| `POST` | `/api/v1/we-rss/articles/{id}/tags/attach/` | 给该文章增量绑定标签 |
+| `POST` | `/api/v1/we-rss/articles/{id}/tags/detach/` | 给该文章增量解绑标签 |
 
 ## 1. 获取文章列表
 
@@ -132,41 +132,45 @@ X-Tenant-ID: <current_member_tenant_id>
 GET /api/v1/we-rss/articles/
 ```
 
-当前接口支持一个服务端过滤参数：
+当前支持的服务端过滤参数如下：
 
 | 参数 | 类型 | 说明 |
 | --- | --- | --- |
 | `article_type` | `string` | 可选，支持 `news` 或 `newspic` |
+| `search` | `string` | 可选，只按标题搜索 |
+| `favorite_only` | `boolean` | 可选。为 `true` 时，只返回当前 member 已收藏文章 |
+| `tag_ids` | `string` | 可选。逗号分隔的标签 ID，例如 `1,2,3`，多个标签使用 AND 语义 |
 
-例如：
+示例如下：
 
 ```http
 GET /api/v1/we-rss/articles/?article_type=newspic
+GET /api/v1/we-rss/articles/?search=AI
+GET /api/v1/we-rss/articles/?favorite_only=true
+GET /api/v1/we-rss/articles/?search=Alpha|Beta-Gamma
 ```
 
-除 `article_type` 之外，当前接口还没有下面这些服务端能力：
+`search` 的规则和 `we-mp-rss-main` 保持一致：
 
-- 分页
-- 关键字搜索
-- 按 `feed_id` 过滤
-- 仅收藏过滤
-- 仅未读过滤
+- 只搜 `title`
+- 会先把 `-` 和 `|` 替换为空格
+- 再按空格拆词
+- 多个词按 OR 匹配
 
-所以如果页面需要这些筛选，当前版本建议在前端本地完成。
+补充说明如下：
+
+- 返回里的 `is_favorite` 是当前 member 的状态，不是全局字段。
+- 当前没有 `is_read`，也没有只看未读的过滤。
+- 传 `tag_ids` 时，只会匹配当前 member 自己在文章上的标签关系。
+- 当前没有分页、按 `feed_id` 过滤等其它服务端能力。
 
 ## 2. 获取文章详情
 
-这个接口返回单篇文章完整对外字段，适合详情页或阅读抽屉。
+这个接口返回单篇文章完整对外字段，适合详情页或阅读抽屉：
 
 ```http
 GET /api/v1/we-rss/articles/{id}/
 ```
-
-路径参数：
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | `number` | 文章 ID |
 
 ## 3. 删除文章
 
@@ -179,19 +183,18 @@ DELETE /api/v1/we-rss/articles/{id}/
 - 返回 `204 No Content`
 - 数据标记为 `is_deleted = true`
 - 后续默认列表中不再出现
-
-它不会去删除微信原始文章，只会删除本地记录。
+- 当前文章上的标签关系会随删除自动清理
 
 ## 4. 按 URL 导入文章
 
-这个接口根据微信文章 URL 创建一个后台 `article_import` 任务。
+这个接口根据微信文章 URL 创建一个后台 `article_import` 任务：
 
 ```http
 POST /api/v1/we-rss/articles/import-by-url/
 Content-Type: application/json
 ```
 
-请求体：
+请求体如下：
 
 ```json
 {
@@ -199,100 +202,44 @@ Content-Type: application/json
 }
 ```
 
-补充说明：
+补充说明如下：
 
 - 后端会先把文章 URL 归一化，再用于任务去重与最终入库。
-- 归一化后的 URL 会保留公开访问所需的稳定参数，例如 `__biz`、`mid`、`idx`、`sn`、`chksm`。
-- 抓取过程中微信跳转 URL 里出现的 `token` 等临时参数不会写入 `WechatArticle.url`。
-
-官方参考：
-- 微信订阅号草稿接口 `api_draft_add` 使用字段名 `article_type`
-- 文章类型支持 `news` 和 `newspic`
-- 文档地址：
-  `https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_add.html`
-
-当前导入规则非常关键：
-
+- `WechatArticle.url` 保存的是稳定公开链接，不会保留抓取过程中的临时
+  `token` 参数。
 - 这是异步接口，返回的是任务对象，不是最终文章对象。
 - 任务去重键是 `article_import:<normalized_url>`。
-- 如果同一 URL 已经存在 `pending` 或 `running` 任务，会直接返回现有任务。
-- 导入时会使用当前 tenant 的有效凭证。如果当前 tenant 没有有效凭证，会失败。
-- 导入结果会自动绑定到当前 tenant 的精选 feed。
+- 导入会自动绑定到当前 tenant 的精选 feed。
 - 如果当前 tenant 还没有任何 `is_featured = true` 的 feed，会自动创建一条
   `mp_name = "Imported Articles"` 的 feed。
-- 如果精选 feed 已存在但没有凭证，会自动补上当前导入所用凭证。
-- 如果文章被删除、不可用，或者抓到的正文为空，会直接失败。
-- 导入最终会按 `tenant + source_id` 执行 `update_or_create`，所以重复导入同一篇
-  文章通常是更新现有记录，不是无限新增重复记录。
-
-任务成功时，`result_payload` 常见字段如下：
-
-| 字段 | 说明 |
-| --- | --- |
-| `article_id` | 导入后的文章 ID |
-| `feed_id` | 自动绑定的 feed ID |
-| `source_id` | 文章来源 ID |
-| `message` | 结果说明 |
 
 ## 5. 刷新单篇文章
 
-这个接口创建一个 `article_refresh` 任务，用于重新抓取当前文章内容与统计字段。
+这个接口创建一个 `article_refresh` 任务，用于重新抓取当前文章内容与统计字段：
 
 ```http
 POST /api/v1/we-rss/articles/{id}/refresh/
 ```
 
-补充说明：
-
-- 刷新后的 `url` 仍然保持归一化后的公开文章 URL，不会被带 `token` 的跳转地址覆盖。
-
 当前刷新规则如下：
 
-- 同一篇文章如果已经存在 `pending` 或 `running` 的刷新任务，会直接返回现有任务。
+- 同一篇文章如果已经存在 `pending` 或 `running` 的刷新任务，会直接返回
+  现有任务。
 - 刷新时优先使用 `article.feed.credential`。
-- 如果文章所属 feed 没绑定凭证，会回退到当前 tenant 的默认有效凭证或第一条
-  有效凭证。
-- 成功后会更新文章正文、摘要、封面、发布时间、统计字段，并刷新
-  `last_refreshed_at`。
+- 如果文章所属 feed 没有绑定凭证，会回退到当前 tenant 的默认有效凭证或第
+  一条有效凭证。
+- 成功后会更新正文、摘要、封面、发布时间、统计字段和 `last_refreshed_at`。
 
-刷新成功时，`result_payload` 常见字段如下：
+## 6. 更新收藏状态
 
-| 字段 | 说明 |
-| --- | --- |
-| `article_id` | 当前文章 ID |
-| `title` | 刷新后的标题 |
-| `updated_by_id` | 触发该刷新的成员 ID |
-| `message` | 结果说明 |
-
-## 6. 更新已读状态
-
-这个接口是同步接口，不走后台任务。
-
-```http
-PUT /api/v1/we-rss/articles/{id}/read/
-Content-Type: application/json
-```
-
-请求体：
-
-```json
-{
-  "is_read": true
-}
-```
-
-成功后直接返回更新后的文章对象。当前只有一个可写字段：`is_read`。
-
-## 7. 更新收藏状态
-
-这个接口同样是同步接口。
+这个接口是同步接口，不走后台任务：
 
 ```http
 PUT /api/v1/we-rss/articles/{id}/favorite/
 Content-Type: application/json
 ```
 
-请求体：
+请求体如下：
 
 ```json
 {
@@ -300,29 +247,101 @@ Content-Type: application/json
 }
 ```
 
-成功后直接返回更新后的文章对象。当前只有一个可写字段：`is_favorite`。
+补充说明如下：
+
+- 这里更新的是“当前 member 对这篇文章的收藏关系”。
+- 成功后直接返回更新后的文章对象。
+- 同一篇文章可以被同一 tenant 下多个 member 分别收藏。
+- 其他 member 的收藏状态不会受影响。
+
+## 7. 文章标签接口
+
+文章标签接口处理的是“当前 member 对当前 article 的私有标签关系”。标签本
+身必须先在 `/tags/` 下创建，这里不会自动创建标签。
+
+### 7.1 获取当前文章标签
+
+这个接口返回当前 member 绑定到指定文章的标签列表：
+
+```http
+GET /api/v1/we-rss/articles/{id}/tags/
+```
+
+### 7.2 增量绑定文章标签
+
+这个接口把已有标签增量绑定到当前文章：
+
+```http
+POST /api/v1/we-rss/articles/{id}/tags/attach/
+Content-Type: application/json
+```
+
+请求体如下：
+
+```json
+{
+  "tag_ids": [1, 2, 3]
+}
+```
+
+绑定规则如下：
+
+- 一次可以传多个 `tag_ids`。
+- 这是增量操作，不是全量覆盖。
+- 只能使用当前 member 自己的标签。
+- 只要文章在当前 tenant 中存在，就允许绑定，不要求当前 member 已订阅对应
+  feed。
+- 已存在的绑定关系会被自动忽略，不会重复创建。
+
+### 7.3 增量解绑文章标签
+
+这个接口从当前文章上解绑已有标签：
+
+```http
+POST /api/v1/we-rss/articles/{id}/tags/detach/
+Content-Type: application/json
+```
+
+请求体同样是：
+
+```json
+{
+  "tag_ids": [1, 2, 3]
+}
+```
+
+解绑规则如下：
+
+- 一次可以传多个 `tag_ids`。
+- 这是增量解绑，不是全量覆盖。
+- 不存在的绑定关系会被直接忽略。
+- 成功后返回解绑后的当前文章标签列表。
 
 ## 前端接入建议
 
 文章列表和详情页建议按下面方式组织：
 
 - 列表页直接使用 `GET /articles/` 全量拉取。
-- 如果要区分图文消息和图片消息，直接读取 `article_type`，或者使用
+- 如果要做标题搜索，直接使用服务端 `search`。
+- 如果要只看收藏，直接使用服务端 `favorite_only=true`。
+- 如果要按标签筛选，使用 `tag_ids=1,2,3`，多个标签是 AND 语义。
+- 如果要区分图文消息和图片消息，读取 `article_type`，或者使用
   `GET /articles/?article_type=newspic`。
-- 按公众号、按关键字、按收藏这些能力先走前端本地过滤。
-- 已读、收藏直接调用同步接口并就地刷新当前条目。
+- 收藏操作直接调用 `PUT /articles/{id}/favorite/` 并就地刷新当前条目。
+- 文章标签操作走独立 `/articles/{id}/tags/*` 接口，不要改造主文章响应结构。
 - 刷新正文时走任务轮询。
-- 详情页如果只是展示文章内容，通常直接用文章详情里的 `content` 就够了。
-- 如果你要做 RSS 阅读器式渲染，再考虑接正文 HTML 输出接口。
 
 ## 容易踩坑的点
 
-- 当前没有文章“通用编辑接口”，不要设计成可改标题或正文。
+- 当前没有文章 `read` 接口，也没有 `is_read` 字段。
+- `is_favorite` 是当前 member 的状态，不是全局字段。
+- 文章标签不会内嵌到 `GET /articles/` 或 `GET /articles/{id}/` 响应里。
+- 文章列表已经支持服务端标题搜索，不要再写成“只做前端本地搜索”。
+- `search` 只搜 `title`，不要误搜摘要或正文。
+- 文章标签不要求先订阅对应 feed，只要求文章在当前 tenant 中存在。
 - `import-by-url` 返回的是任务，不是文章详情。
-- 导入文章会自动创建或复用精选 feed，这个行为不是前端自己完成的。
-- 刷新文章优先走 feed 绑定凭证，不一定总是 tenant 默认凭证。
+- 导入文章会自动创建或复用精选 feed，这不是前端自己完成的。
 - 删除文章是软删除。
-- 文章列表目前没有后端分页和服务端搜索。
 
 ## 下一步
 

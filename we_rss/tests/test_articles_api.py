@@ -6,7 +6,14 @@ from rest_framework.test import APITestCase
 from common.authentication.jwt_auth import generate_jwt_token
 from tenants.models import Tenant
 from users.models import Member
-from we_rss.models import WechatArticle, WechatCredential, WechatFeed, WechatSyncTask
+from we_rss.models import (
+    MemberArticleTagRelation,
+    MemberTag,
+    WechatArticle,
+    WechatCredential,
+    WechatFeed,
+    WechatSyncTask,
+)
 from we_rss.services.article_service import WechatArticleGateway
 
 
@@ -367,6 +374,55 @@ class ArticleApiTests(APITestCase):
         self.assertEqual(response.data["data"][0]["source_id"], "article-newspic")
         self.assertEqual(response.data["data"][0]["article_type"], "newspic")
 
+    def test_member_can_search_articles_by_title_only(self):
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-title-match",
+            title="Alpha Launch Brief",
+            description="Unrelated description",
+        )
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-description-only",
+            title="Different Title",
+            description="Alpha appears only in description",
+        )
+
+        response = self.client.get("/api/v1/we-rss/articles/?search=Alpha")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["source_id"] for item in response.data["data"]], ["article-title-match"])
+
+    def test_member_article_search_uses_we_mp_rss_keyword_split_rules(self):
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-alpha",
+            title="Alpha Launch Brief",
+        )
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-beta",
+            title="Beta Launch Brief",
+        )
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-gamma",
+            title="Gamma Launch Brief",
+        )
+
+        response = self.client.get("/api/v1/we-rss/articles/?search=Alpha|Beta-Gamma")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {item["source_id"] for item in response.data["data"]},
+            {"article-alpha", "article-beta", "article-gamma"},
+        )
+
     def test_member_can_get_and_delete_article(self):
         article = WechatArticle.objects.create(
             tenant=self.tenant,
@@ -489,28 +545,163 @@ class ArticleApiTests(APITestCase):
         self.assertEqual(len(response.data["data"]), 1)
         self.assertEqual(response.data["data"][0]["id"], success_task.id)
 
-    def test_member_can_mark_article_read_and_favorite(self):
+    def test_member_can_favorite_article_without_affecting_other_members(self):
         article = WechatArticle.objects.create(
             tenant=self.tenant,
             feed=self.feed,
             source_id="article-1",
             title="Tenant Article",
         )
-
-        read_response = self.client.put(
-            f"/api/v1/we-rss/articles/{article.id}/read/",
-            {"is_read": True},
-            format="json",
+        other_member = Member.objects.create(
+            username="second_member",
+            email="second-member@example.com",
+            tenant=self.tenant,
         )
+
         favorite_response = self.client.put(
             f"/api/v1/we-rss/articles/{article.id}/favorite/",
             {"is_favorite": True},
             format="json",
         )
 
-        article.refresh_from_db()
-
-        self.assertEqual(read_response.status_code, 200)
         self.assertEqual(favorite_response.status_code, 200)
-        self.assertTrue(article.is_read)
-        self.assertTrue(article.is_favorite)
+        self.assertTrue(favorite_response.data["data"]["is_favorite"])
+
+        other_token = generate_jwt_token(other_member)["access_token"]
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {other_token}",
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+        other_member_response = self.client.get("/api/v1/we-rss/articles/")
+
+        self.assertEqual(other_member_response.status_code, 200)
+        self.assertFalse(other_member_response.data["data"][0]["is_favorite"])
+
+    def test_member_can_filter_articles_by_favorite_only(self):
+        first_article = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-favorite",
+            title="Favorite Article",
+        )
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-regular",
+            title="Regular Article",
+        )
+
+        favorite_response = self.client.put(
+            f"/api/v1/we-rss/articles/{first_article.id}/favorite/",
+            {"is_favorite": True},
+            format="json",
+        )
+        filtered_response = self.client.get("/api/v1/we-rss/articles/?favorite_only=true")
+
+        self.assertEqual(favorite_response.status_code, 200)
+        self.assertEqual(filtered_response.status_code, 200)
+        self.assertEqual([item["source_id"] for item in filtered_response.data["data"]], ["article-favorite"])
+
+
+class ArticleTagFilterApiTests(APITestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Tenant A", code="tenant_a")
+        self.member = Member.objects.create(
+            username="tenant_member",
+            email="tenant-member@example.com",
+            tenant=self.tenant,
+        )
+        self.other_member = Member.objects.create(
+            username="other_member",
+            email="other-member@example.com",
+            tenant=self.tenant,
+        )
+        token = generate_jwt_token(self.member)["access_token"]
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+        self.feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Tenant Feed",
+            source_id="feed-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        self.article_with_both_tags = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-both",
+            title="Article With Both Tags",
+        )
+        self.article_with_one_tag = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-one",
+            title="Article With One Tag",
+        )
+        self.article_with_other_member_tag = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-other",
+            title="Other Member Tagged Article",
+        )
+        self.tag_one = MemberTag.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            name="AI",
+        )
+        self.tag_two = MemberTag.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            name="Digest",
+        )
+        other_member_tag = MemberTag.objects.create(
+            tenant=self.tenant,
+            member=self.other_member,
+            name="Other Member Tag",
+        )
+        MemberArticleTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=self.tag_one,
+            article=self.article_with_both_tags,
+        )
+        MemberArticleTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=self.tag_two,
+            article=self.article_with_both_tags,
+        )
+        MemberArticleTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=self.tag_one,
+            article=self.article_with_one_tag,
+        )
+        MemberArticleTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.other_member,
+            tag=other_member_tag,
+            article=self.article_with_other_member_tag,
+        )
+
+    def test_article_list_filters_by_all_requested_tag_ids(self):
+        response = self.client.get(
+            f"/api/v1/we-rss/articles/?tag_ids={self.tag_one.id},{self.tag_two.id}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in response.data["data"]],
+            [self.article_with_both_tags.id],
+        )
+
+    def test_article_list_tag_filter_only_uses_current_member_relations(self):
+        response = self.client.get(f"/api/v1/we-rss/articles/?tag_ids={self.tag_one.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {item["id"] for item in response.data["data"]},
+            {self.article_with_both_tags.id, self.article_with_one_tag.id},
+        )

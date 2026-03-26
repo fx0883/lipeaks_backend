@@ -160,6 +160,8 @@ TASK_ID_PARAMETER = path_int_parameter("task_id", "异步同步任务 ID。", 10
 RSS_FEED_ID_PARAMETER = path_int_parameter("feed_id", "要生成 RSS 的公众号 ID。", 1)
 RSS_ARTICLE_ID_PARAMETER = path_int_parameter("article_id", "要渲染正文 HTML 的文章 ID。", 1)
 SESSION_ID_PARAMETER = path_str_parameter("session_id", "扫码登录会话 ID。", "session-123")
+TAG_ID_PARAMETER = path_int_parameter("id", "Member private tag ID.", 1)
+
 TASK_TYPE_PARAMETER = OpenApiParameter(
     name="task_type",
     type=OpenApiTypes.STR,
@@ -211,6 +213,42 @@ ARTICLE_TYPE_PARAMETER = OpenApiParameter(
     examples=[OpenApiExample("Article type example", value="newspic")],
 )
 
+ARTICLE_SEARCH_PARAMETER = OpenApiParameter(
+    name="search",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="Search article titles using the same splitting rules as we-mp-rss-main.",
+    examples=[OpenApiExample("Article search example", value="Alpha|Beta-Gamma")],
+)
+
+ARTICLE_FAVORITE_ONLY_PARAMETER = OpenApiParameter(
+    name="favorite_only",
+    type=OpenApiTypes.BOOL,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="When true, return only the current member's favorite articles.",
+    examples=[OpenApiExample("Article favorite only example", value=True)],
+)
+
+FEED_SUBSCRIBED_ONLY_PARAMETER = OpenApiParameter(
+    name="subscribed_only",
+    type=OpenApiTypes.BOOL,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="When true, return only the feeds subscribed by the current member.",
+    examples=[OpenApiExample("Feed subscribed only example", value=True)],
+)
+
+TAG_IDS_PARAMETER = OpenApiParameter(
+    name="tag_ids",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="Comma-separated member tag IDs. Multiple IDs use AND semantics.",
+    examples=[OpenApiExample("Tag ids example", value="1,2,3")],
+)
+
 
 CREDENTIAL_EXAMPLE = {
     "id": 1,
@@ -259,6 +297,7 @@ FEED_EXAMPLE = {
     "update_time": "2026-03-21T09:20:00Z",
     "last_synced_at": "2026-03-21T09:20:00Z",
     "is_featured": False,
+    "is_subscribed": False,
     "created_at": "2026-03-20T11:00:00Z",
     "updated_at": "2026-03-21T09:20:00Z",
 }
@@ -459,7 +498,6 @@ ARTICLE_EXAMPLE = {
     "pic_url": "https://example.com/article-cover.png",
     "publish_time": "2026-03-20T12:00:00Z",
     "status": "active",
-    "is_read": False,
     "is_favorite": False,
     "last_refreshed_at": "2026-03-21T09:30:00Z",
     "read_num": 101,
@@ -472,6 +510,23 @@ ARTICLE_EXAMPLE = {
     "comment_total_count": 15,
     "created_at": "2026-03-20T12:00:00Z",
     "updated_at": "2026-03-21T09:30:00Z",
+}
+
+MEMBER_TAG_EXAMPLE = {
+    "id": 1,
+    "name": "AI",
+    "color": "#008000",
+    "description": "Interesting reads",
+    "sort_order": 10,
+    "is_pinned": True,
+    "feed_count": 2,
+    "article_count": 3,
+    "created_at": "2026-03-20T12:00:00Z",
+    "updated_at": "2026-03-21T09:30:00Z",
+}
+
+TAG_RELATION_WRITE_EXAMPLE = {
+    "tag_ids": [1, 2, 3],
 }
 
 TENANT_RSS_XML_EXAMPLE = """<?xml version="1.0" encoding="UTF-8"?>

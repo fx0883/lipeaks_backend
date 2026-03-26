@@ -2,6 +2,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from we_rss.models import (
+    MemberTag,
     WechatArticle,
     WechatCredential,
     WechatCredentialLoginSession,
@@ -87,6 +88,7 @@ class CredentialCheckResponseSerializer(serializers.Serializer):
 
 class WechatFeedSerializer(serializers.ModelSerializer):
     credential_id = serializers.IntegerField(read_only=True)
+    is_subscribed = serializers.BooleanField(read_only=True, default=False)
 
     class Meta:
         model = WechatFeed
@@ -104,6 +106,7 @@ class WechatFeedSerializer(serializers.ModelSerializer):
             "update_time",
             "last_synced_at",
             "is_featured",
+            "is_subscribed",
             "created_at",
             "updated_at",
         ]
@@ -129,6 +132,15 @@ class FeedSearchResultSerializer(serializers.Serializer):
     mp_name = serializers.CharField()
     mp_cover = serializers.CharField(required=False, allow_blank=True)
     mp_intro = serializers.CharField(required=False, allow_blank=True)
+
+
+class FeedSubscriptionWriteSerializer(serializers.Serializer):
+    source_id = serializers.CharField(required=False, allow_blank=True, default="")
+    faker_id = serializers.CharField(required=False, allow_blank=True, default="")
+    biz = serializers.CharField(required=False, allow_blank=True, default="")
+    mp_name = serializers.CharField()
+    mp_cover = serializers.CharField(required=False, allow_blank=True, default="")
+    mp_intro = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class FeedArticleClearResponseSerializer(serializers.Serializer):
@@ -160,6 +172,7 @@ class WechatSyncTaskSerializer(serializers.ModelSerializer):
 
 class WechatArticleSerializer(serializers.ModelSerializer):
     feed_id = serializers.IntegerField(read_only=True)
+    is_favorite = serializers.BooleanField(read_only=True, default=False)
     url = serializers.URLField(
         read_only=True,
         help_text="Stable public WeChat article URL. Crawl-time parameters such as `token` are removed.",
@@ -179,7 +192,6 @@ class WechatArticleSerializer(serializers.ModelSerializer):
             "pic_url",
             "publish_time",
             "status",
-            "is_read",
             "is_favorite",
             "last_refreshed_at",
             "read_num",
@@ -205,9 +217,45 @@ class ArticleImportSerializer(serializers.Serializer):
     )
 
 
-class ArticleReadUpdateSerializer(serializers.Serializer):
-    is_read = serializers.BooleanField()
-
-
 class ArticleFavoriteUpdateSerializer(serializers.Serializer):
     is_favorite = serializers.BooleanField()
+
+
+class MemberTagSerializer(serializers.ModelSerializer):
+    feed_count = serializers.IntegerField(read_only=True)
+    article_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = MemberTag
+        fields = [
+            "id",
+            "name",
+            "color",
+            "description",
+            "sort_order",
+            "is_pinned",
+            "feed_count",
+            "article_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class MemberTagWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MemberTag
+        fields = ["name", "color", "description", "sort_order", "is_pinned"]
+
+    def validate_name(self, value):
+        value = str(value or "").strip()
+        if not value:
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+
+class TagRelationWriteSerializer(serializers.Serializer):
+    tag_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=True,
+    )

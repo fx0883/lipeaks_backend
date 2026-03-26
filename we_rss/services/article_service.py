@@ -1,11 +1,12 @@
 import requests
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import ValidationError
 
-from we_rss.models import WechatArticle, WechatFeed, WechatSyncTask
+from we_rss.models import MemberArticleFavorite, WechatArticle, WechatFeed, WechatSyncTask
 from we_rss.services.feed_service import FeedService
 from we_rss.services.task_service import TaskService, dispatch_we_rss_task
 from we_rss.services.wechat_gateway import (
@@ -63,6 +64,17 @@ class WechatArticleGateway:
 
 
 class ArticleService:
+    @staticmethod
+    def build_search_query(search):
+        words = str(search or "").replace("-", " ").replace("|", " ").split()
+        if not words:
+            return None
+
+        query = Q()
+        for word in words:
+            query |= Q(title__icontains=word)
+        return query
+
     @staticmethod
     def _normalize_payload(payload):
         normalized = {field: payload[field] for field in ARTICLE_PAYLOAD_FIELDS if field in payload}
@@ -209,13 +221,19 @@ class ArticleService:
         }
 
     @staticmethod
-    def set_read_status(*, article, is_read):
-        article.is_read = is_read
-        article.save(update_fields=["is_read", "updated_at"])
-        return article
-
-    @staticmethod
-    def set_favorite_status(*, article, is_favorite):
+    def set_favorite_status(*, article, member, is_favorite):
+        favorite_queryset = MemberArticleFavorite.objects.filter(
+            tenant=article.tenant,
+            member=member,
+            article=article,
+        )
+        if is_favorite:
+            MemberArticleFavorite.objects.get_or_create(
+                tenant=article.tenant,
+                member=member,
+                article=article,
+            )
+        else:
+            favorite_queryset.delete()
         article.is_favorite = is_favorite
-        article.save(update_fields=["is_favorite", "updated_at"])
         return article

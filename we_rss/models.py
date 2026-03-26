@@ -1,4 +1,5 @@
 from django.db import models, transaction
+from django.db.models.functions import Lower
 
 from common.models import BaseModel
 
@@ -141,8 +142,6 @@ class WechatArticle(BaseModel):
     pic_url = models.TextField(blank=True, default="")
     publish_time = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, default="active")
-    is_read = models.BooleanField(default=False)
-    is_favorite = models.BooleanField(default=False)
     last_refreshed_at = models.DateTimeField(null=True, blank=True)
     read_num = models.PositiveIntegerField(default=0)
     like_num = models.PositiveIntegerField(default=0)
@@ -155,6 +154,171 @@ class WechatArticle(BaseModel):
     class Meta:
         db_table = "we_rss_wechat_article"
         ordering = ["-publish_time", "-created_at"]
+
+
+class MemberFeedSubscription(models.Model):
+    tenant = models.ForeignKey(
+        "tenants.Tenant",
+        on_delete=models.CASCADE,
+        related_name="we_rss_member_feed_subscriptions",
+    )
+    member = models.ForeignKey(
+        "users.Member",
+        on_delete=models.CASCADE,
+        related_name="we_rss_feed_subscriptions",
+    )
+    feed = models.ForeignKey(
+        "we_rss.WechatFeed",
+        on_delete=models.CASCADE,
+        related_name="member_subscriptions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "we_rss_member_feed_subscription"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["member", "feed"], name="we_rss_member_feed_subscription_unique"),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "member"]),
+            models.Index(fields=["tenant", "feed"]),
+        ]
+
+
+class MemberArticleFavorite(models.Model):
+    tenant = models.ForeignKey(
+        "tenants.Tenant",
+        on_delete=models.CASCADE,
+        related_name="we_rss_member_article_favorites",
+    )
+    member = models.ForeignKey(
+        "users.Member",
+        on_delete=models.CASCADE,
+        related_name="we_rss_article_favorites",
+    )
+    article = models.ForeignKey(
+        "we_rss.WechatArticle",
+        on_delete=models.CASCADE,
+        related_name="member_favorites",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "we_rss_member_article_favorite"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["member", "article"], name="we_rss_member_article_favorite_unique"),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "member"]),
+            models.Index(fields=["tenant", "article"]),
+        ]
+
+
+class MemberTag(BaseModel):
+    member = models.ForeignKey(
+        "users.Member",
+        on_delete=models.CASCADE,
+        related_name="we_rss_member_tags",
+    )
+    name = models.CharField(max_length=100)
+    color = models.CharField(max_length=32, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    sort_order = models.IntegerField(default=0)
+    is_pinned = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "we_rss_member_tag"
+        ordering = ["-is_pinned", "sort_order", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                Lower("name"),
+                "member",
+                name="we_rss_member_tag_member_lower_name_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "member"]),
+        ]
+
+
+class MemberFeedTagRelation(models.Model):
+    tenant = models.ForeignKey(
+        "tenants.Tenant",
+        on_delete=models.CASCADE,
+        related_name="we_rss_member_feed_tag_relations",
+    )
+    member = models.ForeignKey(
+        "users.Member",
+        on_delete=models.CASCADE,
+        related_name="we_rss_feed_tag_relations",
+    )
+    tag = models.ForeignKey(
+        "we_rss.MemberTag",
+        on_delete=models.CASCADE,
+        related_name="feed_relations",
+    )
+    feed = models.ForeignKey(
+        "we_rss.WechatFeed",
+        on_delete=models.CASCADE,
+        related_name="member_tag_relations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "we_rss_member_feed_tag_relation"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["member", "tag", "feed"],
+                name="we_rss_member_feed_tag_relation_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "member"]),
+            models.Index(fields=["tenant", "feed"]),
+            models.Index(fields=["tenant", "tag"]),
+        ]
+
+
+class MemberArticleTagRelation(models.Model):
+    tenant = models.ForeignKey(
+        "tenants.Tenant",
+        on_delete=models.CASCADE,
+        related_name="we_rss_member_article_tag_relations",
+    )
+    member = models.ForeignKey(
+        "users.Member",
+        on_delete=models.CASCADE,
+        related_name="we_rss_article_tag_relations",
+    )
+    tag = models.ForeignKey(
+        "we_rss.MemberTag",
+        on_delete=models.CASCADE,
+        related_name="article_relations",
+    )
+    article = models.ForeignKey(
+        "we_rss.WechatArticle",
+        on_delete=models.CASCADE,
+        related_name="member_tag_relations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "we_rss_member_article_tag_relation"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["member", "tag", "article"],
+                name="we_rss_member_article_tag_relation_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "member"]),
+            models.Index(fields=["tenant", "article"]),
+            models.Index(fields=["tenant", "tag"]),
+        ]
 
 
 class WechatSyncTask(BaseModel):
