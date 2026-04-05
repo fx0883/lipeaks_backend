@@ -145,3 +145,4 @@ staticfiles/drf-yasg/
 staticfiles/drf-yasg
 staticfiles/drf-yasg/
 staticfiles/drf-yasg/
+.worktrees/
