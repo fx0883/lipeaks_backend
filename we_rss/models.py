@@ -216,6 +216,43 @@ class MemberArticleFavorite(models.Model):
         ]
 
 
+class MemberArticleState(models.Model):
+    tenant = models.ForeignKey(
+        "tenants.Tenant",
+        on_delete=models.CASCADE,
+        related_name="we_rss_member_article_states",
+    )
+    member = models.ForeignKey(
+        "users.Member",
+        on_delete=models.CASCADE,
+        related_name="we_rss_article_states",
+    )
+    article = models.ForeignKey(
+        "we_rss.WechatArticle",
+        on_delete=models.CASCADE,
+        related_name="member_states",
+    )
+    is_hidden = models.BooleanField(default=False)
+    is_favorite = models.BooleanField(default=False)
+    hidden_at = models.DateTimeField(null=True, blank=True)
+    favorited_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "we_rss_member_article_state"
+        ordering = ["-updated_at", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["member", "article"], name="we_rss_member_article_state_unique"),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "member", "article"]),
+            models.Index(fields=["tenant", "member", "is_hidden", "article"]),
+            models.Index(fields=["tenant", "member", "is_favorite", "article"]),
+            models.Index(fields=["tenant", "article"]),
+        ]
+
+
 class MemberTag(BaseModel):
     member = models.ForeignKey(
         "users.Member",
@@ -321,17 +358,88 @@ class MemberArticleTagRelation(models.Model):
         ]
 
 
+class MemberSeoKeyword(BaseModel):
+    member = models.ForeignKey(
+        "users.Member",
+        on_delete=models.CASCADE,
+        related_name="we_rss_seo_keywords",
+    )
+    keyword = models.CharField(max_length=255)
+    search_index = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "we_rss_member_seo_keyword"
+        ordering = ["-updated_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                Lower("keyword"),
+                "member",
+                name="we_rss_member_seo_keyword_member_lower_keyword_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "member"], name="we_rss_memb_tenant__a1adcc_idx"),
+            models.Index(fields=["tenant", "member", "search_index"], name="we_rss_memb_tenant__40fb9f_idx"),
+            models.Index(fields=["tenant", "member", "keyword"], name="we_rss_memb_tenant__1bedf6_idx"),
+        ]
+
+
+class MemberTagSeoKeywordRelation(models.Model):
+    tenant = models.ForeignKey(
+        "tenants.Tenant",
+        on_delete=models.CASCADE,
+        related_name="we_rss_member_tag_seo_keyword_relations",
+    )
+    member = models.ForeignKey(
+        "users.Member",
+        on_delete=models.CASCADE,
+        related_name="we_rss_tag_seo_keyword_relations",
+    )
+    tag = models.ForeignKey(
+        "we_rss.MemberTag",
+        on_delete=models.CASCADE,
+        related_name="seo_keyword_relations",
+    )
+    seo_keyword = models.ForeignKey(
+        "we_rss.MemberSeoKeyword",
+        on_delete=models.CASCADE,
+        related_name="keyword_tag_relations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "we_rss_member_tag_seo_keyword_relation"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["member", "tag", "seo_keyword"],
+                name="we_rss_member_tag_seo_keyword_relation_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "member"], name="we_rss_memb_tenant__bf5f23_idx"),
+            models.Index(fields=["tenant", "tag"], name="we_rss_memb_tenant__7ca45b_idx"),
+            models.Index(fields=["tenant", "seo_keyword"], name="we_rss_memb_tenant__c97fb7_idx"),
+        ]
+
+
 class WechatSyncTask(BaseModel):
     class TaskType(models.TextChoices):
         CREDENTIAL_LOGIN = "credential_login", "Credential Login"
         FEED_SYNC = "feed_sync", "Feed Sync"
+        FEED_SYNC_RUN = "feed_sync_run", "Feed Sync Run"
+        FEED_SYNC_BATCH = "feed_sync_batch", "Feed Sync Batch"
+        FEED_CONTENT_REFRESH = "feed_content_refresh", "Feed Content Refresh"
         ARTICLE_REFRESH = "article_refresh", "Article Refresh"
         ARTICLE_IMPORT = "article_import", "Article Import"
+        ARTICLE_STATS_REFRESH = "article_stats_refresh", "Article Stats Refresh"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
         RUNNING = "running", "Running"
         SUCCESS = "success", "Success"
+        PARTIAL_SUCCESS = "partial_success", "Partial Success"
+        TIMED_OUT = "timed_out", "Timed Out"
         FAILED = "failed", "Failed"
 
     task_type = models.CharField(max_length=30, choices=TaskType.choices)

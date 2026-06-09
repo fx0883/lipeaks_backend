@@ -5,10 +5,13 @@ from common.models import BaseModel
 from tenants.models import Tenant
 from users.models import Member
 from we_rss.models import (
+    MemberArticleState,
     MemberArticleTagRelation,
     MemberFeedSubscription,
     MemberFeedTagRelation,
+    MemberSeoKeyword,
     MemberTag,
+    MemberTagSeoKeywordRelation,
     WechatArticle,
     WechatCredential,
     WechatCredentialLoginSession,
@@ -216,6 +219,22 @@ class WeRssTagModelTests(TestCase):
 
         self.assertFalse(MemberArticleTagRelation.objects.filter(member=self.member).exists())
 
+    def test_member_article_state_is_unique_per_member_and_article(self):
+        MemberArticleState.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            article=self.article,
+            is_favorite=True,
+        )
+
+        with self.assertRaises(IntegrityError):
+            MemberArticleState.objects.create(
+                tenant=self.tenant,
+                member=self.member,
+                article=self.article,
+                is_hidden=True,
+            )
+
 
 class WeRssTagCleanupTests(TestCase):
     def setUp(self):
@@ -257,5 +276,102 @@ class WeRssTagCleanupTests(TestCase):
             MemberFeedTagRelation.objects.filter(
                 member=self.member,
                 feed=self.feed,
+            ).exists()
+        )
+
+
+class WeRssSeoKeywordModelTests(TestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Tenant A", code="tenant_a")
+        self.member = Member.objects.create(
+            username="tenant_member",
+            email="tenant-member@example.com",
+            tenant=self.tenant,
+        )
+        self.other_member = Member.objects.create(
+            username="other_member",
+            email="other-member@example.com",
+            tenant=self.tenant,
+        )
+        self.tag = MemberTag.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            name="Weight Loss",
+        )
+        self.keyword = MemberSeoKeyword.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            keyword="Weight Loss",
+            search_index=100,
+        )
+
+    def test_member_seo_keyword_is_case_insensitive_unique_per_member(self):
+        with self.assertRaises(IntegrityError):
+            MemberSeoKeyword.objects.create(
+                tenant=self.tenant,
+                member=self.member,
+                keyword="weight loss",
+                search_index=200,
+            )
+
+    def test_other_member_can_reuse_same_keyword(self):
+        keyword = MemberSeoKeyword.objects.create(
+            tenant=self.tenant,
+            member=self.other_member,
+            keyword="weight loss",
+            search_index=300,
+        )
+
+        self.assertEqual(keyword.member_id, self.other_member.id)
+
+
+class WeRssSeoKeywordRelationCleanupTests(TestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Tenant A", code="tenant_a")
+        self.member = Member.objects.create(
+            username="tenant_member",
+            email="tenant-member@example.com",
+            tenant=self.tenant,
+        )
+        self.tag = MemberTag.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            name="Weight Loss",
+        )
+        self.keyword = MemberSeoKeyword.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            keyword="Weight Loss Recipes",
+            search_index=100,
+        )
+
+    def test_deleting_keyword_cascades_keyword_tag_relations(self):
+        relation = MemberTagSeoKeywordRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=self.tag,
+            seo_keyword=self.keyword,
+        )
+
+        self.keyword.delete()
+
+        self.assertFalse(
+            MemberTagSeoKeywordRelation.objects.filter(id=relation.id).exists()
+        )
+
+    def test_deleting_tag_cascades_keyword_tag_relations_only(self):
+        MemberTagSeoKeywordRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=self.tag,
+            seo_keyword=self.keyword,
+        )
+
+        self.tag.delete()
+
+        self.assertTrue(MemberSeoKeyword.objects.filter(id=self.keyword.id).exists())
+        self.assertFalse(
+            MemberTagSeoKeywordRelation.objects.filter(
+                seo_keyword_id=self.keyword.id
             ).exists()
         )

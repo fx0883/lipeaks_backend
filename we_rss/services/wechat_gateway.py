@@ -1,4 +1,4 @@
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime, timedelta, timezone as dt_timezone
 import json
 import re
 from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
@@ -8,23 +8,31 @@ from bs4 import BeautifulSoup
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from requests.cookies import cookiejar_from_dict
+from urllib3.exceptions import InsecureRequestWarning
+
+
+requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 
 WECHAT_ARTICLE_STABLE_QUERY_KEYS = ("__biz", "mid", "idx", "sn", "chksm")
+WECHAT_ARTICLE_TIMEZONE = dt_timezone(timedelta(hours=8))
+WECHAT_MOBILE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 "
+        "MicroMessenger/8.0.42(0x18002a2a) NetType/WIFI Language/zh_CN"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Referer": "https://mp.weixin.qq.com/",
+}
 
 
 def build_wechat_session(session_factory=None):
     session = (session_factory or requests.Session)()
-    session.headers.update(
-        {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
-            ),
-            "Accept": "application/json, text/plain, */*",
-            "Referer": "https://mp.weixin.qq.com/",
-        }
-    )
+    session.headers.update(WECHAT_MOBILE_HEADERS)
+    session.verify = False
+    session.trust_env = False
     return session
 
 
@@ -49,6 +57,8 @@ def load_credential_cookies(session, cookie_string):
 def extract_source_id_from_url(url):
     parsed = urlparse(url or "")
     path_parts = [part for part in parsed.path.split("/") if part]
+    if path_parts == ["s"]:
+        return ""
     if path_parts:
         return path_parts[-1]
     return ""
@@ -99,7 +109,7 @@ def infer_article_type_from_item(item, default="news"):
     return default
 
 
-def normalize_publish_time(raw_value):
+def _legacy_normalize_publish_time(raw_value):
     if raw_value in (None, ""):
         return None
     if isinstance(raw_value, (int, float)):
@@ -131,6 +141,61 @@ def normalize_publish_time(raw_value):
             return aware
         except ValueError:
             continue
+    return None
+
+
+def normalize_publish_time(raw_value):
+    if raw_value in (None, ""):
+        return None
+    if isinstance(raw_value, (int, float)):
+        return timezone.datetime.fromtimestamp(raw_value, tz=dt_timezone.utc)
+
+    parsed = parse_datetime(str(raw_value))
+    if parsed is not None:
+        if timezone.is_naive(parsed):
+            return timezone.make_aware(parsed, WECHAT_ARTICLE_TIMEZONE)
+        return parsed
+
+    raw_text = str(raw_value).strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            parsed = datetime.strptime(raw_text, fmt)
+            return timezone.make_aware(parsed, WECHAT_ARTICLE_TIMEZONE)
+        except ValueError:
+            continue
+
+    return None
+
+
+def extract_script_publish_time(script_text):
+    text_patterns = [
+        r"var\s+createTime\s*=\s*'([^']+)'",
+        r'var\s+createTime\s*=\s*"([^"]+)"',
+        r"create_time:\s*JsDecode\('([^']+)'\)",
+    ]
+    for pattern in text_patterns:
+        match = re.search(pattern, script_text)
+        if not match:
+            continue
+        publish_time = normalize_publish_time(match.group(1))
+        if publish_time is not None:
+            return publish_time
+
+    timestamp_patterns = [
+        r"var\s+oriCreateTime\s*=\s*'(\d+)'",
+        r'var\s+create_time\s*=\s*"(\d+)"\s*\*\s*1',
+        r'var\s+ct\s*=\s*"(\d+)"',
+        r"ori_create_time:\s*'(\d+)'\s*\*\s*1",
+        r"create_timestamp:\s*'(\d+)'\s*\*\s*1",
+    ]
+    for pattern in timestamp_patterns:
+        match = re.search(pattern, script_text)
+        if not match:
+            continue
+        publish_time = normalize_publish_time(int(match.group(1)))
+        if publish_time is not None:
+            return publish_time
+
     return None
 
 
@@ -197,6 +262,8 @@ def parse_wechat_article_html(html, url):
         publish_time = normalize_publish_time(publish_node.get_text(strip=True))
 
     script_text = "\n".join(script.get_text(" ", strip=False) for script in soup.find_all("script"))
+    if publish_time is None:
+        publish_time = extract_script_publish_time(script_text)
     biz = ""
     biz_match = re.search(r'var\s+biz\s*=\s*"([^"]+)"', script_text)
     if biz_match:
@@ -253,15 +320,15 @@ def parse_wechat_article_html(html, url):
 
 
 def parse_publish_page_articles(payload):
-    publish_page = payload.get("publish_page")
-    if isinstance(publish_page, str):
-        publish_page = json.loads(publish_page)
-    publish_list = (publish_page or {}).get("publish_list") or []
+    publish_list = get_publish_page_records(payload)
     articles = []
     for item in publish_list:
         publish_info = item.get("publish_info")
         if isinstance(publish_info, str):
-            publish_info = json.loads(publish_info)
+            try:
+                publish_info = json.loads(publish_info)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
         publish_info = publish_info or {}
 
         appmsg = publish_info.get("appmsg")
@@ -282,3 +349,10 @@ def parse_publish_page_articles(payload):
                 for item in appmsgex
             )
     return articles
+
+
+def get_publish_page_records(payload):
+    publish_page = payload.get("publish_page")
+    if isinstance(publish_page, str):
+        publish_page = json.loads(publish_page)
+    return (publish_page or {}).get("publish_list") or []

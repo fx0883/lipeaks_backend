@@ -1,13 +1,17 @@
 import json
+from datetime import timezone as datetime_timezone
 from unittest.mock import patch
 
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from common.authentication.jwt_auth import generate_jwt_token
 from tenants.models import Tenant
 from users.models import Member
 from we_rss.models import (
+    MemberArticleState,
+    MemberArticleTagRelation,
     MemberFeedSubscription,
     MemberFeedTagRelation,
     MemberTag,
@@ -16,7 +20,7 @@ from we_rss.models import (
     WechatFeed,
     WechatSyncTask,
 )
-from we_rss.services.feed_service import WechatFeedGateway
+from we_rss.services.feed_service import FeedService, WechatFeedGateway
 
 
 class FakeFeedGateway:
@@ -188,6 +192,60 @@ class FeedGatewayTests(TestCase):
         self.assertEqual(payload["articles"][0]["article_type"], "newspic")
 
     @patch("we_rss.services.feed_service.requests.Session")
+    def test_collect_feed_batch_marks_deleted_articles_from_detail_page(self, mock_session_cls):
+        session = mock_session_cls.return_value
+        session.get.side_effect = [
+            FakeGatewayResponse(
+                json_data={
+                    "base_resp": {"ret": 0},
+                    "publish_page": json.dumps(
+                        {
+                            "publish_list": [
+                                {
+                                    "publish_info": json.dumps(
+                                        {
+                                            "appmsg": {
+                                                "aid": "article-deleted",
+                                                "title": "Deleted List Title",
+                                                "link": "https://mp.weixin.qq.com/s/article-deleted?__biz=Qkl6&mid=1&idx=1&sn=abc",
+                                                "digest": "Deleted list description",
+                                                "cover": "https://example.com/deleted-cover.png",
+                                                "create_time": 1710000000,
+                                            }
+                                        }
+                                    )
+                                }
+                            ]
+                        }
+                    ),
+                }
+            ),
+            FakeGatewayResponse(
+                text="<html><body>The content has been deleted by the author.</body></html>",
+                headers={"Content-Type": "text/html"},
+                url="https://mp.weixin.qq.com/s/article-deleted?__biz=Qkl6&mid=1&idx=1&sn=abc",
+            ),
+            FakeGatewayResponse(
+                json_data={
+                    "base_resp": {"ret": 0},
+                    "publish_page": json.dumps({"publish_list": []}),
+                }
+            ),
+        ]
+
+        payload = WechatFeedGateway().collect_feed_batch(
+            self.feed,
+            self.credential,
+            begin=0,
+            batch_size=20,
+        )
+
+        self.assertEqual(payload["articles"][0]["source_id"], "article-deleted")
+        self.assertEqual(payload["articles"][0]["title"], "Deleted List Title")
+        self.assertEqual(payload["articles"][0]["content"], "DELETED")
+        self.assertEqual(payload["articles"][0]["status"], "deleted")
+
+    @patch("we_rss.services.feed_service.requests.Session")
     def test_sync_feed_uses_source_id_when_faker_id_is_blank(self, mock_session_cls):
         session = mock_session_cls.return_value
         session.get.return_value = FakeGatewayResponse(
@@ -337,6 +395,70 @@ class FeedGatewayTests(TestCase):
         self.assertEqual([item["article_type"] for item in payload["articles"]], ["news", "newspic"])
 
     @patch("we_rss.services.feed_service.requests.Session")
+    def test_sync_feed_extracts_publish_time_from_article_script_when_publish_node_is_empty(self, mock_session_cls):
+        session = mock_session_cls.return_value
+        session.get.side_effect = [
+            FakeGatewayResponse(
+                json_data={
+                    "base_resp": {"ret": 0},
+                    "publish_page": json.dumps(
+                        {
+                            "publish_list": [
+                                {
+                                    "publish_info": json.dumps(
+                                        {
+                                            "appmsg": {
+                                                "aid": "article-1",
+                                                "title": "Script Publish Time Article",
+                                                "link": "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc",
+                                                "digest": "Script publish time description",
+                                                "cover": "https://example.com/article-cover.png",
+                                                "create_time": 1710000000,
+                                            }
+                                        }
+                                    )
+                                }
+                            ]
+                        }
+                    ),
+                }
+            ),
+            FakeGatewayResponse(
+                text="""
+                <html>
+                  <head>
+                    <meta property="og:title" content="Script Publish Time Article" />
+                  </head>
+                  <body>
+                    <div id="publish_time"></div>
+                    <div id="js_content"><p>Content</p></div>
+                    <script>
+                      var biz = "Qkl6";
+                      var oriCreateTime = '1775355233';
+                      var createTime = '2026-04-05 10:13';
+                    </script>
+                  </body>
+                </html>
+                """,
+                headers={"Content-Type": "text/html"},
+                url="https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc",
+            ),
+            FakeGatewayResponse(
+                json_data={
+                    "base_resp": {"ret": 0},
+                    "publish_page": json.dumps({"publish_list": []}),
+                }
+            ),
+        ]
+
+        payload = WechatFeedGateway().sync_feed(self.feed, self.credential)
+
+        self.assertEqual(
+            payload["articles"][0]["publish_time"].astimezone(datetime_timezone.utc).isoformat(),
+            "2026-04-05T02:13:00+00:00",
+        )
+
+    @patch("we_rss.services.feed_service.requests.Session")
     def test_sync_feed_keeps_public_article_url_when_detail_redirect_contains_token(self, mock_session_cls):
         session = mock_session_cls.return_value
         public_url = "https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc"
@@ -393,6 +515,64 @@ class FeedGatewayTests(TestCase):
 
         self.assertEqual(payload["articles"][0]["url"], public_url)
         self.assertNotIn("token=", payload["articles"][0]["url"])
+
+    @patch("we_rss.services.feed_service.requests.Session")
+    def test_sync_feed_prefers_canonical_detail_url_over_short_list_url(self, mock_session_cls):
+        session = mock_session_cls.return_value
+        short_url = "https://mp.weixin.qq.com/s/article-short"
+        canonical_url = "https://mp.weixin.qq.com/s?__biz=Qkl6&mid=1&idx=1&sn=abc"
+        session.get.side_effect = [
+            FakeGatewayResponse(
+                json_data={
+                    "base_resp": {"ret": 0},
+                    "publish_page": json.dumps(
+                        {
+                            "publish_list": [
+                                {
+                                    "publish_info": json.dumps(
+                                        {
+                                            "appmsg": {
+                                                "aid": "article-1",
+                                                "title": "Canonical URL Article",
+                                                "link": short_url,
+                                                "digest": "Canonical URL description",
+                                                "cover": "https://example.com/article-cover.png",
+                                                "create_time": 1710000000,
+                                            }
+                                        }
+                                    )
+                                }
+                            ]
+                        }
+                    ),
+                }
+            ),
+            FakeGatewayResponse(
+                text="""
+                <html>
+                  <head>
+                    <meta property="og:title" content="Canonical URL Article" />
+                  </head>
+                  <body>
+                    <div id="js_content"><p>Canonical URL content</p></div>
+                  </body>
+                </html>
+                """,
+                headers={"Content-Type": "text/html"},
+                url=canonical_url,
+            ),
+            FakeGatewayResponse(
+                json_data={
+                    "base_resp": {"ret": 0},
+                    "publish_page": json.dumps({"publish_list": []}),
+                }
+            ),
+        ]
+
+        payload = WechatFeedGateway().sync_feed(self.feed, self.credential)
+
+        self.assertEqual(payload["articles"][0]["url"], canonical_url)
+        self.assertEqual(payload["articles"][0]["source_id"], "article-1")
 
     @patch("we_rss.services.feed_service.requests.Session")
     def test_sync_feed_extracts_feed_metadata_from_article_detail(self, mock_session_cls):
@@ -636,6 +816,79 @@ class FeedApiTests(APITestCase):
         self.assertEqual(update_response.status_code, 200)
         self.assertEqual(update_response.data["data"]["mp_name"], "Updated Feed")
 
+    def test_delete_feed_removes_feed_articles_and_related_relations(self):
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Delete Feed",
+            source_id="feed-delete-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        other_feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            mp_name="Keep Feed",
+            source_id="feed-keep-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        self.client.post(
+            "/api/v1/we-rss/feeds/subscribe/",
+            {
+                "source_id": feed.source_id,
+                "mp_name": feed.mp_name,
+            },
+            format="json",
+        )
+        tag = MemberTag.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            name="Cleanup Tag",
+        )
+        MemberFeedTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=tag,
+            feed=feed,
+        )
+        target_article = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=feed,
+            source_id="delete-article-1",
+            title="Delete me",
+            url="https://mp.weixin.qq.com/s/delete-article-1",
+        )
+        other_article = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=other_feed,
+            source_id="keep-article-1",
+            title="Keep me",
+            url="https://mp.weixin.qq.com/s/keep-article-1",
+        )
+        MemberArticleState.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            article=target_article,
+            is_favorite=True,
+        )
+        MemberArticleTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=tag,
+            article=target_article,
+        )
+
+        response = self.client.delete(f"/api/v1/we-rss/feeds/{feed.id}/")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(WechatFeed.objects.filter(id=feed.id).exists())
+        self.assertFalse(WechatArticle.objects.filter(id=target_article.id).exists())
+        self.assertFalse(MemberArticleState.objects.filter(article_id=target_article.id).exists())
+        self.assertFalse(MemberArticleTagRelation.objects.filter(article_id=target_article.id).exists())
+        self.assertFalse(MemberFeedSubscription.objects.filter(feed_id=feed.id).exists())
+        self.assertFalse(MemberFeedTagRelation.objects.filter(feed_id=feed.id).exists())
+        self.assertTrue(WechatFeed.objects.filter(id=other_feed.id).exists())
+        self.assertTrue(WechatArticle.objects.filter(id=other_article.id).exists())
+
     def test_feed_search_requires_active_credential(self):
         response = self.client.get("/api/v1/we-rss/feeds/search/?keyword=test")
 
@@ -659,8 +912,49 @@ class FeedApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"][0]["mp_name"], "test Feed")
 
-    @patch("we_rss.tasks.get_feed_gateway", return_value=FakeFeedGateway())
-    def test_feed_sync_creates_task(self, _mock_gateway):
+    def _decode_stream(self, response):
+        return b"".join(response.streaming_content).decode("utf-8")
+
+    def _decode_sse_events(self, response):
+        body = self._decode_stream(response)
+        events = []
+        for chunk in body.split("\n\n"):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            event_name = ""
+            payload_lines = []
+            for line in chunk.splitlines():
+                if line.startswith("event:"):
+                    event_name = line.split(":", 1)[1].strip()
+                elif line.startswith("data:"):
+                    payload_lines.append(line.split(":", 1)[1].strip())
+            payload = json.loads("\n".join(payload_lines)) if payload_lines else None
+            events.append({"event": event_name, "data": payload})
+        return events
+
+    def _create_feed_sync_batch_feed(self, *, source_id, mp_name):
+        credential = WechatCredential.objects.create(
+            tenant=self.tenant,
+            name=f"Credential for {source_id}",
+            status="active",
+            token=f"token-{source_id}",
+            cookie=f"cookie-{source_id}",
+            is_default=False,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        return WechatFeed.objects.create(
+            tenant=self.tenant,
+            credential=credential,
+            mp_name=mp_name,
+            source_id=source_id,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+
+    @patch("we_rss.views.feed_views.FeedApiGatewayMixin.get_gateway")
+    def test_feed_sync_streams_batches(self, mock_gateway):
         credential = WechatCredential.objects.create(
             tenant=self.tenant,
             name="Default Credential",
@@ -679,16 +973,683 @@ class FeedApiTests(APITestCase):
             created_by=self.member,
             updated_by=self.member,
         )
+        mock_gateway.return_value.collect_feed_batch.return_value = {
+            "articles": [
+                {
+                    "source_id": "feed-stream-article-1",
+                    "article_type": "news",
+                    "title": "Feed Stream Article",
+                    "description": "Synced description",
+                    "content": "<p>Synced content</p>",
+                    "url": "https://mp.weixin.qq.com/s/feed-stream-article-1",
+                    "pic_url": "https://example.com/feed-stream-article-1.png",
+                    "status": "active",
+                }
+            ],
+            "feed_payload": {
+                "biz": "Qkl6",
+                "mp_name": "Synced Feed Name",
+                "mp_cover": "https://example.com/feed-avatar.png",
+            },
+            "failed_articles": [],
+            "has_more": False,
+            "next_begin": 1,
+            "detail_success_count": 1,
+            "detail_failed_count": 0,
+        }
 
-        response = self.client.post(f"/api/v1/we-rss/feeds/{feed.id}/sync/")
-
-        feed.refresh_from_db()
-        task = WechatSyncTask.objects.get(id=response.data["data"]["id"])
+        response = self.client.post(
+            f"/api/v1/we-rss/feeds/{feed.id}/sync/",
+            HTTP_ACCEPT="text/event-stream",
+        )
+        body = self._decode_stream(response)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(task.status, "success")
-        self.assertEqual(task.task_type, "feed_sync")
-        self.assertIsNotNone(feed.last_synced_at)
+        self.assertTrue(response.streaming)
+        self.assertIn("text/event-stream", response["Content-Type"])
+        self.assertIn("event: start", body)
+        self.assertIn("event: batch", body)
+        self.assertIn("event: done", body)
+        self.assertIn('"sync_scope": "full"', body)
+        self.assertIn('"articles_synced": 1', body)
+        self.assertIn('"source_id": "feed-stream-article-1"', body)
+        self.assertFalse(WechatSyncTask.objects.filter(task_type="feed_sync_run", target_id=feed.id).exists())
+        self.assertTrue(WechatArticle.objects.filter(feed=feed, source_id="feed-stream-article-1").exists())
+
+    @patch("we_rss.views.feed_views.FeedApiGatewayMixin.get_gateway")
+    def test_feed_sync_stream_excludes_deleted_articles_from_success_payload(self, mock_gateway):
+        credential = WechatCredential.objects.create(
+            tenant=self.tenant,
+            name="Default Credential",
+            status="active",
+            token="token-1",
+            cookie="cookie-1",
+            is_default=True,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            credential=credential,
+            mp_name="Tenant Feed",
+            source_id="feed-deleted-stream-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        mock_gateway.return_value.collect_feed_batch.return_value = {
+            "articles": [
+                {
+                    "source_id": "feed-stream-active-1",
+                    "article_type": "news",
+                    "title": "Feed Stream Active",
+                    "description": "Active description",
+                    "content": "<p>Active content</p>",
+                    "url": "https://mp.weixin.qq.com/s/feed-stream-active-1",
+                    "pic_url": "https://example.com/feed-stream-active-1.png",
+                    "status": "active",
+                },
+                {
+                    "source_id": "feed-stream-deleted-1",
+                    "article_type": "news",
+                    "title": "Feed Stream Deleted",
+                    "description": "Deleted description",
+                    "content": "DELETED",
+                    "url": "https://mp.weixin.qq.com/s/feed-stream-deleted-1",
+                    "pic_url": "https://example.com/feed-stream-deleted-1.png",
+                    "status": "deleted",
+                },
+            ],
+            "feed_payload": {},
+            "failed_articles": [],
+            "has_more": False,
+            "next_begin": 2,
+            "detail_success_count": 2,
+            "detail_failed_count": 0,
+        }
+
+        response = self.client.post(
+            f"/api/v1/we-rss/feeds/{feed.id}/sync/",
+            HTTP_ACCEPT="text/event-stream",
+        )
+        body = self._decode_stream(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"articles_synced": 1', body)
+        self.assertIn('"article_count": 1', body)
+        self.assertIn('"source_id": "feed-stream-active-1"', body)
+        self.assertIn('"failed_articles"', body)
+        self.assertIn("feed-stream-deleted-1", body)
+        self.assertIn("Wechat article is unavailable or has been deleted.", body)
+        self.assertTrue(WechatArticle.objects.filter(feed=feed, source_id="feed-stream-active-1").exists())
+        self.assertFalse(WechatArticle.objects.filter(feed=feed, source_id="feed-stream-deleted-1").exists())
+
+    @patch("we_rss.views.feed_views.FeedApiGatewayMixin.get_gateway")
+    def test_feed_sync_accepts_refresh_markdown_request(self, mock_gateway):
+        credential = WechatCredential.objects.create(
+            tenant=self.tenant,
+            name="Default Credential",
+            status="active",
+            token="token-1",
+            cookie="cookie-1",
+            is_default=True,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            credential=credential,
+            mp_name="Tenant Feed",
+            source_id="feed-refresh-markdown-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        mock_gateway.return_value.collect_feed_batch.return_value = {
+            "articles": [],
+            "feed_payload": {},
+            "failed_articles": [],
+            "has_more": False,
+            "next_begin": 0,
+            "detail_success_count": 0,
+            "detail_failed_count": 0,
+        }
+
+        response = self.client.post(
+            f"/api/v1/we-rss/feeds/{feed.id}/sync/",
+            {"refresh_markdown": True},
+            format="json",
+            HTTP_ACCEPT="text/event-stream",
+        )
+        body = self._decode_stream(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"refresh_markdown": true', body)
+
+    @patch("we_rss.views.feed_views.FeedApiGatewayMixin.get_gateway")
+    def test_feed_sync_accepts_latest_scope_request(self, mock_gateway):
+        credential = WechatCredential.objects.create(
+            tenant=self.tenant,
+            name="Default Credential",
+            status="active",
+            token="token-1",
+            cookie="cookie-1",
+            is_default=True,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            credential=credential,
+            mp_name="Tenant Feed",
+            source_id="feed-latest-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        mock_gateway.return_value.collect_feed_batch.return_value = {
+            "articles": [],
+            "feed_payload": {},
+            "failed_articles": [],
+            "has_more": False,
+            "next_begin": 0,
+            "detail_success_count": 0,
+            "detail_failed_count": 0,
+        }
+
+        response = self.client.post(
+            f"/api/v1/we-rss/feeds/{feed.id}/sync/",
+            {"sync_scope": "latest"},
+            format="json",
+            HTTP_ACCEPT="text/event-stream",
+        )
+        body = self._decode_stream(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"sync_scope": "latest"', body)
+        self.assertIn('"window_days": null', body)
+
+    @patch("we_rss.views.feed_views.FeedApiGatewayMixin.get_gateway")
+    def test_feed_sync_accepts_window_scope_request(self, mock_gateway):
+        credential = WechatCredential.objects.create(
+            tenant=self.tenant,
+            name="Default Credential",
+            status="active",
+            token="token-1",
+            cookie="cookie-1",
+            is_default=True,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            credential=credential,
+            mp_name="Tenant Feed",
+            source_id="feed-window-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        mock_gateway.return_value.collect_feed_batch.return_value = {
+            "articles": [],
+            "feed_payload": {},
+            "failed_articles": [],
+            "has_more": False,
+            "next_begin": 0,
+            "detail_success_count": 0,
+            "detail_failed_count": 0,
+        }
+
+        response = self.client.post(
+            f"/api/v1/we-rss/feeds/{feed.id}/sync/",
+            {"sync_scope": "window", "window_days": 7},
+            format="json",
+            HTTP_ACCEPT="text/event-stream",
+        )
+        body = self._decode_stream(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"sync_scope": "window"', body)
+        self.assertIn('"window_days": 7', body)
+        self.assertIn("event: batch", body)
+        self.assertIn("event: done", body)
+
+    def test_feed_content_refresh_streams_article_markdown_progress(self):
+        credential = WechatCredential.objects.create(
+            tenant=self.tenant,
+            name="Default Credential",
+            status="active",
+            token="token-1",
+            cookie="cookie-1",
+            is_default=True,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            credential=credential,
+            mp_name="Tenant Feed",
+            source_id="feed-content-refresh-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        first_article = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=feed,
+            source_id="feed-content-article-1",
+            title="First Article",
+            url="https://mp.weixin.qq.com/s/feed-content-article-1",
+        )
+        second_article = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=feed,
+            source_id="feed-content-article-2",
+            title="Second Article",
+            url="https://mp.weixin.qq.com/s/feed-content-article-2",
+        )
+
+        def markdown_side_effect(url):
+            if url.endswith("feed-content-article-2"):
+                raise RuntimeError("markdown blocked")
+            return f"# Markdown for {url}"
+
+        with patch("we_rss.views.feed_views.get_article_markdown_service") as service_factory:
+            service_factory.return_value.fetch_markdown_from_url.side_effect = markdown_side_effect
+            response = self.client.post(
+                f"/api/v1/we-rss/feeds/{feed.id}/refresh-content/",
+                HTTP_ACCEPT="text/event-stream",
+            )
+
+        body = self._decode_stream(response)
+        first_article.refresh_from_db()
+        second_article.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/event-stream", response["Content-Type"])
+        self.assertIn("event: start", body)
+        self.assertIn("event: progress", body)
+        self.assertIn("event: done", body)
+        self.assertIn('"total": 2', body)
+        self.assertIn('"success_count": 1', body)
+        self.assertIn('"failed_count": 1', body)
+        self.assertIn("markdown blocked", body)
+        self.assertEqual(first_article.content, "# Markdown for https://mp.weixin.qq.com/s/feed-content-article-1")
+        self.assertEqual(second_article.content, "")
+
+    def test_feed_sync_rejects_invalid_sync_scope(self):
+        credential = WechatCredential.objects.create(
+            tenant=self.tenant,
+            name="Default Credential",
+            status="active",
+            token="token-1",
+            cookie="cookie-1",
+            is_default=True,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            credential=credential,
+            mp_name="Tenant Feed",
+            source_id="feed-invalid-scope-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+
+        response = self.client.post(
+            f"/api/v1/we-rss/feeds/{feed.id}/sync/",
+            {"sync_scope": "invalid"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("sync_scope", response.data["data"])
+
+    def test_feed_sync_requires_window_days_for_window_scope(self):
+        credential = WechatCredential.objects.create(
+            tenant=self.tenant,
+            name="Default Credential",
+            status="active",
+            token="token-1",
+            cookie="cookie-1",
+            is_default=True,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            credential=credential,
+            mp_name="Tenant Feed",
+            source_id="feed-window-required-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+
+        response = self.client.post(
+            f"/api/v1/we-rss/feeds/{feed.id}/sync/",
+            {"sync_scope": "window"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("window_days", response.data["data"])
+
+    def test_feed_sync_rejects_window_days_out_of_range(self):
+        credential = WechatCredential.objects.create(
+            tenant=self.tenant,
+            name="Default Credential",
+            status="active",
+            token="token-1",
+            cookie="cookie-1",
+            is_default=True,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            credential=credential,
+            mp_name="Tenant Feed",
+            source_id="feed-window-range-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+
+        too_small_response = self.client.post(
+            f"/api/v1/we-rss/feeds/{feed.id}/sync/",
+            {"sync_scope": "window", "window_days": 0},
+            format="json",
+        )
+        too_large_response = self.client.post(
+            f"/api/v1/we-rss/feeds/{feed.id}/sync/",
+            {"sync_scope": "window", "window_days": 181},
+            format="json",
+        )
+
+        self.assertEqual(too_small_response.status_code, 400)
+        self.assertIn("window_days", too_small_response.data["data"])
+        self.assertEqual(too_large_response.status_code, 400)
+        self.assertIn("window_days", too_large_response.data["data"])
+
+    def test_feed_sync_rejects_window_days_for_non_window_scope(self):
+        credential = WechatCredential.objects.create(
+            tenant=self.tenant,
+            name="Default Credential",
+            status="active",
+            token="token-1",
+            cookie="cookie-1",
+            is_default=True,
+            created_by=self.member,
+            updated_by=self.member,
+        )
+        feed = WechatFeed.objects.create(
+            tenant=self.tenant,
+            credential=credential,
+            mp_name="Tenant Feed",
+            source_id="feed-window-extra-1",
+            created_by=self.member,
+            updated_by=self.member,
+        )
+
+        response = self.client.post(
+            f"/api/v1/we-rss/feeds/{feed.id}/sync/",
+            {"sync_scope": "latest", "window_days": 7},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("window_days", response.data["data"])
+
+    def test_feed_sync_batch_requires_feed_ids(self):
+        response = self.client.post(
+            "/api/v1/we-rss/feeds/sync-batch/",
+            {"sync_scope": "full"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("feed_ids", response.data["data"])
+
+    def test_feed_sync_batch_requires_window_days_for_window_scope(self):
+        response = self.client.post(
+            "/api/v1/we-rss/feeds/sync-batch/",
+            {"feed_ids": [1], "sync_scope": "window"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("window_days", response.data["data"])
+
+    def test_feed_sync_batch_rejects_more_than_200_feed_ids(self):
+        response = self.client.post(
+            "/api/v1/we-rss/feeds/sync-batch/",
+            {"feed_ids": list(range(1, 202)), "sync_scope": "full"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("feed_ids", response.data["data"])
+
+    @patch.object(FeedService, "execute_sync_batch_inline")
+    def test_feed_sync_batch_deduplicates_feed_ids_and_preserves_order(self, mock_execute_sync_batch_inline):
+        first_feed = self._create_feed_sync_batch_feed(source_id="batch-feed-1", mp_name="Batch Feed 1")
+        second_feed = self._create_feed_sync_batch_feed(source_id="batch-feed-2", mp_name="Batch Feed 2")
+        third_feed = self._create_feed_sync_batch_feed(source_id="batch-feed-3", mp_name="Batch Feed 3")
+        observed_feed_ids = []
+
+        def execute_side_effect(**kwargs):
+            observed_feed_ids.append(kwargs["feed"].id)
+            return {
+                "batch_no": kwargs["batch_no"],
+                "begin": kwargs["begin"],
+                "end": kwargs["begin"] + 1,
+                "has_more": False,
+                "next_begin": kwargs["begin"] + 1,
+                "article_count": 1,
+                "article_ids": [kwargs["feed"].id * 10],
+                "articles": [],
+                "failed_articles": [],
+                "detail_success_count": 1,
+                "detail_failed_count": 0,
+            }
+
+        mock_execute_sync_batch_inline.side_effect = execute_side_effect
+
+        response = self.client.post(
+            "/api/v1/we-rss/feeds/sync-batch/",
+            {
+                "feed_ids": [first_feed.id, second_feed.id, first_feed.id, third_feed.id],
+                "sync_scope": "window",
+                "window_days": 7,
+            },
+            format="json",
+            HTTP_ACCEPT="text/event-stream",
+        )
+        events = self._decode_sse_events(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.streaming)
+        self.assertEqual(observed_feed_ids, [first_feed.id, second_feed.id, third_feed.id])
+        self.assertEqual(events[0]["event"], "start")
+        self.assertEqual(events[0]["data"]["queued_feed_ids"], [first_feed.id, second_feed.id, third_feed.id])
+        self.assertEqual(events[-1]["event"], "done")
+        self.assertEqual(events[-1]["data"]["total_feeds"], 3)
+
+    @patch.object(FeedService, "execute_sync_batch_inline")
+    def test_feed_sync_batch_streams_events_in_serial_order(self, mock_execute_sync_batch_inline):
+        first_feed = self._create_feed_sync_batch_feed(source_id="serial-feed-1", mp_name="Serial Feed 1")
+        second_feed = self._create_feed_sync_batch_feed(source_id="serial-feed-2", mp_name="Serial Feed 2")
+
+        def execute_side_effect(**kwargs):
+            return {
+                "batch_no": kwargs["batch_no"],
+                "begin": kwargs["begin"],
+                "end": kwargs["begin"] + 1,
+                "has_more": False,
+                "next_begin": kwargs["begin"] + 1,
+                "article_count": 1,
+                "article_ids": [kwargs["feed"].id * 100],
+                "articles": [],
+                "failed_articles": [],
+                "detail_success_count": 1,
+                "detail_failed_count": 0,
+            }
+
+        mock_execute_sync_batch_inline.side_effect = execute_side_effect
+
+        response = self.client.post(
+            "/api/v1/we-rss/feeds/sync-batch/",
+            {"feed_ids": [first_feed.id, second_feed.id], "sync_scope": "full"},
+            format="json",
+            HTTP_ACCEPT="text/event-stream",
+        )
+        events = self._decode_sse_events(response)
+
+        self.assertEqual(
+            [event["event"] for event in events],
+            ["start", "feed_start", "feed_batch", "feed_done", "feed_start", "feed_batch", "feed_done", "done"],
+        )
+        self.assertEqual(events[1]["data"]["feed_id"], first_feed.id)
+        self.assertEqual(events[4]["data"]["feed_id"], second_feed.id)
+        self.assertEqual(events[-1]["data"]["completed_feeds"], 2)
+
+    @patch.object(FeedService, "execute_sync_batch_inline")
+    def test_feed_sync_batch_continues_after_single_feed_failure_and_reports_done_results(
+        self,
+        mock_execute_sync_batch_inline,
+    ):
+        first_feed = self._create_feed_sync_batch_feed(source_id="continue-feed-1", mp_name="Continue Feed 1")
+        third_feed = self._create_feed_sync_batch_feed(source_id="continue-feed-3", mp_name="Continue Feed 3")
+        missing_feed_id = 999999
+
+        def execute_side_effect(**kwargs):
+            if kwargs["feed"].id == first_feed.id:
+                return {
+                    "batch_no": 1,
+                    "begin": 0,
+                    "end": 10,
+                    "has_more": False,
+                    "next_begin": 10,
+                    "article_count": 2,
+                    "article_ids": [101, 102],
+                    "articles": [],
+                    "failed_articles": [],
+                    "detail_success_count": 2,
+                    "detail_failed_count": 1,
+                }
+            if kwargs["feed"].id == third_feed.id:
+                return {
+                    "batch_no": 1,
+                    "begin": 0,
+                    "end": 5,
+                    "has_more": False,
+                    "next_begin": 5,
+                    "article_count": 1,
+                    "article_ids": [301],
+                    "articles": [],
+                    "failed_articles": [],
+                    "detail_success_count": 1,
+                    "detail_failed_count": 0,
+                }
+            raise AssertionError("Unexpected feed execution")
+
+        mock_execute_sync_batch_inline.side_effect = execute_side_effect
+
+        response = self.client.post(
+            "/api/v1/we-rss/feeds/sync-batch/",
+            {
+                "feed_ids": [first_feed.id, missing_feed_id, third_feed.id],
+                "sync_scope": "window",
+                "window_days": 7,
+                "continue_on_error": True,
+            },
+            format="json",
+            HTTP_ACCEPT="text/event-stream",
+        )
+        events = self._decode_sse_events(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([event["event"] for event in events].count("feed_done"), 3)
+        failed_feed_done = [event for event in events if event["event"] == "feed_done" and event["data"]["feed_id"] == missing_feed_id][0]
+        self.assertEqual(failed_feed_done["data"]["status"], "failed")
+        self.assertEqual(failed_feed_done["data"]["error"], "feed not found")
+        self.assertEqual(events[-1]["event"], "done")
+        self.assertEqual(events[-1]["data"]["success_feeds"], 2)
+        self.assertEqual(events[-1]["data"]["failed_feeds"], 1)
+        self.assertEqual(
+            events[-1]["data"]["results"],
+            [
+                {"feed_id": first_feed.id, "status": "success", "articles_synced": 2, "articles_failed": 1},
+                {"feed_id": missing_feed_id, "status": "failed", "error": "feed not found"},
+                {"feed_id": third_feed.id, "status": "success", "articles_synced": 1, "articles_failed": 0},
+            ],
+        )
+
+    @patch.object(FeedService, "execute_sync_batch_inline")
+    def test_feed_sync_batch_stops_after_single_feed_failure_when_continue_on_error_false(
+        self,
+        mock_execute_sync_batch_inline,
+    ):
+        first_feed = self._create_feed_sync_batch_feed(source_id="stop-feed-1", mp_name="Stop Feed 1")
+        second_feed = self._create_feed_sync_batch_feed(source_id="stop-feed-2", mp_name="Stop Feed 2")
+
+        def execute_side_effect(**kwargs):
+            if kwargs["feed"].id == first_feed.id:
+                raise RuntimeError("batch failed")
+            raise AssertionError("The second feed should not be executed")
+
+        mock_execute_sync_batch_inline.side_effect = execute_side_effect
+
+        response = self.client.post(
+            "/api/v1/we-rss/feeds/sync-batch/",
+            {
+                "feed_ids": [first_feed.id, second_feed.id],
+                "sync_scope": "full",
+                "continue_on_error": False,
+            },
+            format="json",
+            HTTP_ACCEPT="text/event-stream",
+        )
+        events = self._decode_sse_events(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([event["event"] for event in events], ["start", "feed_start", "feed_done", "error"])
+        self.assertEqual(events[2]["data"]["status"], "failed")
+        self.assertEqual(events[2]["data"]["error"], "batch failed")
+        self.assertEqual(events[3]["data"]["status"], "failed")
+        self.assertEqual(events[3]["data"]["error"], "batch sync aborted after feed failure")
+
+    @patch.object(FeedService, "BATCH_STREAM_HEARTBEAT_INTERVAL_SECONDS", 0.01)
+    @patch.object(FeedService, "execute_sync_batch_inline")
+    def test_feed_sync_batch_emits_heartbeat_while_waiting_for_long_batch(self, mock_execute_sync_batch_inline):
+        feed = self._create_feed_sync_batch_feed(source_id="heartbeat-feed-1", mp_name="Heartbeat Feed 1")
+
+        def execute_side_effect(**kwargs):
+            time.sleep(0.05)
+            return {
+                "batch_no": kwargs["batch_no"],
+                "begin": kwargs["begin"],
+                "end": kwargs["begin"] + 1,
+                "has_more": False,
+                "next_begin": kwargs["begin"] + 1,
+                "article_count": 1,
+                "article_ids": [901],
+                "articles": [],
+                "failed_articles": [],
+                "detail_success_count": 1,
+                "detail_failed_count": 0,
+            }
+
+        mock_execute_sync_batch_inline.side_effect = execute_side_effect
+
+        response = self.client.post(
+            "/api/v1/we-rss/feeds/sync-batch/",
+            {"feed_ids": [feed.id], "sync_scope": "full"},
+            format="json",
+            HTTP_ACCEPT="text/event-stream",
+        )
+        events = self._decode_sse_events(response)
+
+        heartbeat_events = [event for event in events if event["event"] == "heartbeat"]
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(heartbeat_events), 1)
+        self.assertEqual(heartbeat_events[0]["data"]["current_feed_id"], feed.id)
+        self.assertEqual(events[-1]["event"], "done")
 
     def test_member_can_clear_all_articles_under_a_feed(self):
         feed = WechatFeed.objects.create(

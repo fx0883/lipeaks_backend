@@ -3,7 +3,15 @@ from rest_framework.test import APITestCase
 from common.authentication.jwt_auth import generate_jwt_token
 from tenants.models import Tenant
 from users.models import Member
-from we_rss.models import WechatArticle, WechatCredential, WechatFeed
+from we_rss.models import (
+    MemberArticleState,
+    MemberFeedSubscription,
+    MemberFeedTagRelation,
+    MemberTag,
+    WechatArticle,
+    WechatCredential,
+    WechatFeed,
+)
 
 
 class RssApiTests(APITestCase):
@@ -37,6 +45,11 @@ class RssApiTests(APITestCase):
             source_id="feed-1",
             created_by=self.member,
             updated_by=self.member,
+        )
+        MemberFeedSubscription.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            feed=self.feed,
         )
         self.article = WechatArticle.objects.create(
             tenant=self.tenant,
@@ -93,6 +106,32 @@ class RssApiTests(APITestCase):
         self.assertEqual(response["Content-Type"], "application/xml")
         self.assertIn("Tenant Feed", response.content.decode("utf-8"))
 
+    def test_authenticated_member_can_get_tag_rss(self):
+        token = generate_jwt_token(self.member)["access_token"]
+        tag = MemberTag.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            name="AI",
+        )
+        MemberFeedTagRelation.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            tag=tag,
+            feed=self.feed,
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        response = self.client.get(f"/api/v1/we-rss/rss/tags/{tag.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/xml")
+        content = response.content.decode("utf-8")
+        self.assertIn("AI We RSS", content)
+        self.assertIn("Tenant Article", content)
+
     def test_authenticated_member_can_get_article_content(self):
         token = generate_jwt_token(self.member)["access_token"]
         self.client.credentials(
@@ -103,5 +142,23 @@ class RssApiTests(APITestCase):
         response = self.client.get(f"/api/v1/we-rss/rss/content/{self.article.id}/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "text/html")
+        self.assertEqual(response["Content-Type"], "text/markdown")
         self.assertIn("Tenant Content", response.content.decode("utf-8"))
+
+    def test_hidden_article_is_excluded_from_rss(self):
+        token = generate_jwt_token(self.member)["access_token"]
+        MemberArticleState.objects.create(
+            tenant=self.tenant,
+            member=self.member,
+            article=self.article,
+            is_hidden=True,
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+            HTTP_X_TENANT_ID=str(self.tenant.id),
+        )
+
+        response = self.client.get("/api/v1/we-rss/rss/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Tenant Article", response.content.decode("utf-8"))

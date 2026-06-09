@@ -1,12 +1,15 @@
 from django.urls import path
 
 from we_rss.views.article_views import ArticleViewSet, SyncTaskViewSet
+from we_rss.views.article_stats_views import ArticleStatsViewSet
 from we_rss.views.credential_views import (
     CredentialLoginSessionViewSet,
     CredentialViewSet,
 )
 from we_rss.views.feed_views import FeedViewSet
-from we_rss.views.rss_views import ArticleContentView, FeedRssView, TenantRssView
+from we_rss.views.markdown_views import MarkdownFormatViewSet
+from we_rss.views.rss_views import ArticleContentView, FeedRssView, TagRssView, TenantRssView
+from we_rss.views.seo_keyword_views import MemberSeoKeywordViewSet
 from we_rss.views.tag_views import MemberTagViewSet
 
 app_name = "we-rss"
@@ -24,18 +27,40 @@ urlpatterns = [
         name="credential-login-session-detail",
     ),
     path("feeds/", FeedViewSet.as_view({"get": "list", "post": "create"}), name="feed-list"),
+    path("seo-keywords/", MemberSeoKeywordViewSet.as_view({"get": "list", "post": "create"}), name="seo-keyword-list"),
+    path(
+        "seo-keywords/<int:pk>/",
+        MemberSeoKeywordViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}),
+        name="seo-keyword-detail",
+    ),
     path("tags/", MemberTagViewSet.as_view({"get": "list", "post": "create"}), name="tag-list"),
     path("tags/<int:pk>/", MemberTagViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}), name="tag-detail"),
     path("feeds/search/", FeedViewSet.as_view({"get": "search"}), name="feed-search"),
+    path("markdown/format/", MarkdownFormatViewSet.as_view({"post": "create"}), name="markdown-format"),
     path("feeds/subscribe/", FeedViewSet.as_view({"post": "subscribe"}), name="feed-subscribe"),
+    path("feeds/sync-batch/", FeedViewSet.as_view({"post": "sync_batch"}), name="feed-sync-batch"),
     path("feeds/<int:pk>/", FeedViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}), name="feed-detail"),
     path("feeds/<int:pk>/articles/", FeedViewSet.as_view({"delete": "clear_articles"}), name="feed-clear-articles"),
     path("feeds/<int:pk>/subscribe/", FeedViewSet.as_view({"delete": "unsubscribe"}), name="feed-unsubscribe"),
     path("feeds/<int:pk>/tags/", FeedViewSet.as_view({"get": "list_tags"}), name="feed-tag-list"),
     path("feeds/<int:pk>/tags/attach/", FeedViewSet.as_view({"post": "attach_tags"}), name="feed-tag-attach"),
     path("feeds/<int:pk>/tags/detach/", FeedViewSet.as_view({"post": "detach_tags"}), name="feed-tag-detach"),
+    path("feeds/<int:pk>/refresh-content/", FeedViewSet.as_view({"post": "refresh_content"}), name="feed-refresh-content"),
     path("feeds/<int:pk>/sync/", FeedViewSet.as_view({"post": "sync"}), name="feed-sync"),
     path("articles/", ArticleViewSet.as_view({"get": "list"}), name="article-list"),
+    path("articles/search/", ArticleViewSet.as_view({"get": "search"}), name="article-search"),
+    path(
+        "article-stats/refresh-by-url/",
+        ArticleStatsViewSet.as_view({"post": "refresh_by_url"}),
+        name="article-stats-refresh-by-url",
+    ),
+    path(
+        "article-stats/refresh/",
+        ArticleStatsViewSet.as_view({"post": "refresh"}),
+        name="article-stats-refresh",
+    ),
+    path("articles/batch-delete/", ArticleViewSet.as_view({"post": "batch_delete"}), name="article-batch-delete"),
+    path("articles/export/", ArticleViewSet.as_view({"post": "export"}), name="article-export"),
     path("articles/import-by-url/", ArticleViewSet.as_view({"post": "import_by_url"}), name="article-import-by-url"),
     path("articles/<int:pk>/", ArticleViewSet.as_view({"get": "retrieve", "delete": "destroy"}), name="article-detail"),
     path("articles/<int:pk>/refresh/", ArticleViewSet.as_view({"post": "refresh"}), name="article-refresh"),
@@ -46,6 +71,7 @@ urlpatterns = [
     path("tasks/", SyncTaskViewSet.as_view({"get": "list"}), name="task-list"),
     path("tasks/<int:task_id>/", SyncTaskViewSet.as_view({"get": "retrieve"}), name="task-detail"),
     path("rss/", TenantRssView.as_view(), name="rss"),
+    path("rss/tags/<int:tag_id>/", TagRssView.as_view(), name="rss-tag"),
     path("rss/<int:feed_id>/", FeedRssView.as_view(), name="rss-feed"),
     path("rss/content/<int:article_id>/", ArticleContentView.as_view(), name="rss-content"),
 ]

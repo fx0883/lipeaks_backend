@@ -1,8 +1,10 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import close_old_connections
+from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 
 from we_rss.models import WechatSyncTask
@@ -12,16 +14,32 @@ logger = logging.getLogger(__name__)
 _task_executor = ThreadPoolExecutor(max_workers=4)
 
 
+def _should_run_task_inline_on_submit_error(exc):
+    if isinstance(exc, RuntimeError):
+        error_message = str(exc)
+        return (
+            "cannot schedule new futures after shutdown" in error_message
+            or "cannot schedule new futures after interpreter shutdown" in error_message
+        )
+
+    if isinstance(exc, OSError):
+        return exc.errno == 22 and str(exc).strip() == "[Errno 22] Invalid argument"
+
+    return False
+
+
+def _run_task_inline(task_func, *args, **kwargs):
+    if hasattr(task_func, "apply"):
+        return task_func.apply(args=args, kwargs=kwargs)
+    if hasattr(task_func, "run"):
+        return task_func.run(*args, **kwargs)
+    return task_func(*args, **kwargs)
+
+
 def _run_task_in_background(task_func, *args, **kwargs):
     close_old_connections()
     try:
-        if hasattr(task_func, "apply"):
-            task_func.apply(args=args, kwargs=kwargs)
-            return
-        if hasattr(task_func, "run"):
-            task_func.run(*args, **kwargs)
-            return
-        task_func(*args, **kwargs)
+        _run_task_inline(task_func, *args, **kwargs)
     except Exception:
         logger.exception("We RSS background task execution failed.")
     finally:
@@ -29,9 +47,22 @@ def _run_task_in_background(task_func, *args, **kwargs):
 
 
 def dispatch_we_rss_task(task_func, *args, **kwargs):
+    if not getattr(settings, "CELERY_ENABLED", True):
+        try:
+            return _task_executor.submit(_run_task_in_background, task_func, *args, **kwargs)
+        except (RuntimeError, OSError) as exc:
+            if not _should_run_task_inline_on_submit_error(exc):
+                raise
+            logger.warning(
+                "We RSS background executor is shutting down; running task inline instead.",
+                extra={"task_func": getattr(task_func, "__name__", str(task_func))},
+            )
+            return _run_task_inline(task_func, *args, **kwargs)
+
     if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
-        _run_task_in_background(task_func, *args, **kwargs)
+        _run_task_inline(task_func, *args, **kwargs)
         return None
+
     if getattr(settings, "CELERY_ENABLED", True):
         return task_func.delay(*args, **kwargs)
     return _task_executor.submit(_run_task_in_background, task_func, *args, **kwargs)
@@ -66,6 +97,7 @@ class TaskService:
         task_key="",
         message="Task created.",
         request_payload=None,
+        result_payload=None,
     ):
         return WechatSyncTask.objects.create(
             tenant=tenant,
@@ -76,6 +108,7 @@ class TaskService:
             task_key=task_key,
             message=message,
             request_payload=request_payload,
+            result_payload=result_payload,
             created_by=created_by,
         )
 
@@ -107,3 +140,38 @@ class TaskService:
         task.finished_at = timezone.now()
         task.save(update_fields=["status", "message", "result_payload", "finished_at", "updated_at"])
         return task
+
+    @staticmethod
+    def mark_partial_success(task, *, message="", result_payload=None):
+        task.status = WechatSyncTask.Status.PARTIAL_SUCCESS
+        task.message = message or task.message
+        task.result_payload = result_payload
+        task.finished_at = timezone.now()
+        task.save(update_fields=["status", "message", "result_payload", "finished_at", "updated_at"])
+        return task
+
+    @staticmethod
+    def mark_timed_out(task, *, message="", result_payload=None):
+        task.status = WechatSyncTask.Status.TIMED_OUT
+        task.message = message or task.message
+        task.result_payload = result_payload
+        task.finished_at = timezone.now()
+        task.save(update_fields=["status", "message", "result_payload", "finished_at", "updated_at"])
+        return task
+
+    @staticmethod
+    def get_last_progress_at(task):
+        payload = task.result_payload or {}
+        raw_value = payload.get("last_progress_at")
+        if isinstance(raw_value, str):
+            parsed_value = parse_datetime(raw_value)
+            if parsed_value is not None:
+                return parsed_value
+        return task.started_at or task.updated_at or task.created_at
+
+    @staticmethod
+    def is_task_stale(task, *, stale_after_seconds):
+        last_progress_at = TaskService.get_last_progress_at(task)
+        if last_progress_at is None:
+            return False
+        return timezone.now() >= last_progress_at + timedelta(seconds=stale_after_seconds)

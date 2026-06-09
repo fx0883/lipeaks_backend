@@ -16,7 +16,7 @@ from we_rss.services.task_service import TaskService, dispatch_we_rss_task
 class WechatCredentialGateway:
     base_url = "https://mp.weixin.qq.com"
 
-    def __init__(self, *, session_factory=None, poll_interval=2, max_poll_attempts=90, timeout=15):
+    def __init__(self, *, session_factory=None, poll_interval=2, max_poll_attempts=90, timeout=120):
         self.session_factory = session_factory or requests.Session
         self.poll_interval = poll_interval
         self.max_poll_attempts = max_poll_attempts
@@ -169,7 +169,7 @@ class WechatCredentialGateway:
             payload["error_message"] = error_message
         on_status(payload)
 
-    def create_login_session(self):
+    def initialize_login_session(self, login_session=None):
         session = self._build_session()
         session.get(f"{self.base_url}/", timeout=self.timeout)
 
@@ -236,23 +236,39 @@ class WechatCredentialGateway:
             qr_code_image = "data:image/png;base64," + base64.b64encode(qr_response.content).decode("ascii")
 
         return {
-            "session_id": session_id,
             "status": WechatCredentialLoginSession.Status.PENDING,
             "qr_code_url": qr_code_url,
             "qr_code_image": qr_code_image,
             "scan_status": "waiting",
             "expired_at": timezone.now() + timedelta(minutes=10),
-            "token_snapshot": self._serialize_cookie_dict({"fingerprint": fingerprint}),
+            "token_snapshot": self._serialize_cookie_dict(
+                {
+                    "fingerprint": fingerprint,
+                    "wechat_session_id": session_id,
+                }
+            ),
             "cookie_snapshot": self._serialize_cookie_dict(session.cookies.get_dict()),
         }
+
+    def create_login_session(self):
+        payload = self.initialize_login_session()
+        token_state = self._parse_token_state(payload.get("token_snapshot", ""))
+        payload["session_id"] = token_state.get("wechat_session_id", "")
+        return payload
 
     def wait_for_login(self, login_session, on_status=None):
         session = self._build_session()
         cookie_dict = self._load_session_cookies(session, login_session.cookie_snapshot)
         token_state = self._parse_token_state(login_session.token_snapshot)
         fingerprint = token_state.get("fingerprint") or cookie_dict.get("fingerprint") or uuid.uuid4().hex
+        wechat_session_id = (
+            token_state.get("wechat_session_id")
+            or token_state.get("session_id")
+            or cookie_dict.get("uuid")
+            or login_session.session_id
+        )
         session.cookies.set("fingerprint", fingerprint)
-        session.cookies.set("uuid", login_session.session_id)
+        session.cookies.set("uuid", wechat_session_id)
 
         for _attempt in range(self.max_poll_attempts):
             response = session.get(
@@ -322,17 +338,16 @@ class WechatCredentialGateway:
 class CredentialService:
     @staticmethod
     def create_login_session(*, tenant, created_by, gateway):
-        payload = gateway.create_login_session()
         login_session = WechatCredentialLoginSession.objects.create(
             tenant=tenant,
-            session_id=payload["session_id"],
-            status=payload.get("status", WechatCredentialLoginSession.Status.PENDING),
-            qr_code_url=payload.get("qr_code_url", ""),
-            qr_code_image=payload.get("qr_code_image", ""),
-            scan_status=payload.get("scan_status", ""),
-            token_snapshot=payload.get("token_snapshot", ""),
-            cookie_snapshot=payload.get("cookie_snapshot", ""),
-            expired_at=payload.get("expired_at"),
+            session_id=uuid.uuid4().hex,
+            status=WechatCredentialLoginSession.Status.PENDING,
+            qr_code_url="",
+            qr_code_image="",
+            scan_status="waiting",
+            token_snapshot="",
+            cookie_snapshot="",
+            expired_at=timezone.now() + timedelta(minutes=10),
             created_by=created_by,
         )
         task = TaskService.create_task(

@@ -56,5 +56,14 @@ class RssService:
         )
 
     @staticmethod
+    def build_tag_rss(*, tag, articles):
+        return RssService.build_feed_xml(
+            title=f"{tag.name} We RSS",
+            description=tag.description or f"Authenticated RSS feed for member tag {tag.name}",
+            link=f"https://example.com/api/v1/we-rss/rss/tags/{tag.id}/",
+            articles=articles,
+        )
+
+    @staticmethod
     def build_article_content(*, article):
         return article.content or ""

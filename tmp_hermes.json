@@ -1,0 +1,96 @@
+﻿{
+  "query": "Hermes",
+  "total": 10,
+  "articles": [
+    {
+      "title": "Hermes Agent使用初体验",
+      "url": "https://weixin.sogou.com/link?url=dn9a_-gY295K0Rci_xozVXfdMkSQTLW6cwJThYulHEtVjXrGTiVgS6DIbppaVZBHAr_6GdGPC9lZCqbblWBbvVqXa8Fplpd9NHukKDQ6F9wz8xLaWZnQzYKjwKfbrPK54Ps0B6HBQwQ14_TuBoMKjyG-_xtLyV6CZerXq8llD5JggKDmRXBR4hmA0w6vRStg6d9I4hBYssCyLRdz8QUd6WvH_wypYzKo8Lc9rsRrzE1sj2r-tyADsJGC7oUJy8fKl5HEPuSbLAvP28temKTOwg..&type=2&query=Hermes&token=9C1FB22FE0554C8B20196F4D805E8C2720A45AEB69DC9E6A",
+      "summary": "初体验目前只有一个字,爽!!!从 OpenClaw 换到 Hermes-Agent,用了几天后真心觉得——这才是我想要的 AI 工作流.1️⃣ 安全 ...",
+      "datetime": "2026-04-13 08:39:54",
+      "date_text": "2026年04月13日",
+      "date_description": "7小时前",
+      "source": "生信小院"
+    },
+    {
+      "title": "Hermes 连接微信:让 AI 在个人微信里跑起来",
+      "url": "https://weixin.sogou.com/link?url=dn9a_-gY295K0Rci_xozVXfdMkSQTLW6cwJThYulHEtVjXrGTiVgS6DIbppaVZBHAr_6GdGPC9lZCqbblWBbvVqXa8Fplpd9LU3yx46Tb1CHbZdmF99MVcblDslD8f0ZnywKXKQ7H1q2EIJLL0Zc4UycoxT-dhBWEh8AG45vma5Idsy6q3kRZJE1YY87_7sP5ase4FW2u-PcoAEhFQpcDMndEmAu2vGdZqypcrfvFTPmt9fN_UvKabhwBE0nJwXMecv89Wv9nCBhWLv6O878UA..&type=2&query=Hermes&token=9C1FB22FE0554C8B20196F4D805E8C2720A45AEB69DC9E6A",
+      "summary": "Hermes是一个开源的 AI 网关项目,通过 iLink Bot API 连接个人微信账号,无需公网地址、Webhook 或 WebSocket,一条长轮询全搞...",
+      "datetime": "2026-04-13 11:52:43",
+      "date_text": "2026年04月13日",
+      "date_description": "3小时前",
+      "source": "为郎"
+    },
+    {
+      "title": "Hermes 一装就崩,一跑就傻,一联网就 403?",
+      "url": "https://weixin.sogou.com/link?url=dn9a_-gY295K0Rci_xozVXfdMkSQTLW6cwJThYulHEtVjXrGTiVgS6DIbppaVZBHAr_6GdGPC9lZCqbblWBbvVqXa8Fplpd9trdYue7-k6SAFfLj01eW4gTvWuyX8gY8hntl-NyBta-WrPr_wgEdsQSwYh0AIZ_S1t-Pdnn6l_OlBTnUAs5ZYfxPldcLVF983iNjIMFehgtlU2mgEP51tXCwTP1IEUHcg3ZlzDUd23KpQapq4I_yPGofd5Bx9XiY7Sd93Jr_HkLyPfCoem7FzA..&type=2&query=Hermes&token=9C1FB22FE0554C8B20196F4D805E8C2720A45AEB69DC9E6A",
+      "summary": "Hermes Agent 过程中,最致命的 25 个坑,全部挖出来给你讲透.不管你是刚入坑,还是已经玩生产化部署的老手,这份避坑指南,至...",
+      "datetime": "2026-04-13 00:07:02",
+      "date_text": "2026年04月13日",
+      "date_description": "15小时前",
+      "source": "硬核水墨"
+    },
+    {
+      "title": "Hermes agent",
+      "url": "https://weixin.sogou.com/link?url=dn9a_-gY295K0Rci_xozVXfdMkSQTLW6cwJThYulHEtVjXrGTiVgS6DIbppaVZBHAr_6GdGPC9lZCqbblWBbvVqXa8Fplpd9quTh0lBpyX45kz1_Co1HYdGzqZ2mYOyyED0PRPIQwiM6OxKRcHLod8prTM6VhdTL7dZR6U4Q9MOSimliDIqI7MmA_BAu8WTLMKmLG05yLxuBHBkCVWBLInStxgVScDydK1XrYreBXs8720TVm3WFS9UUcK1ev_-kFsR5CaOX8496VKrzu_4XKA..&type=2&query=Hermes&token=9C1FB22FE0554C8B20196F4D805E8C2720A45AEB69DC9E6A",
+      "summary": "我安装了Hermes Agent,使用CLI 本地对话.我安装的最大诉求就是为了理解它和 openclaw 的区别.所以我跟它进行了对话,主要询...",
+      "datetime": "2026-04-13 09:20:50",
+      "date_text": "2026年04月13日",
+      "date_description": "6小时前",
+      "source": "B端产品经理手册"
+    },
+    {
+      "title": "Hermes Agent火了,AI智能体开始「会自我进化」",
+      "url": "https://weixin.sogou.com/link?url=dn9a_-gY295K0Rci_xozVXfdMkSQTLW6cwJThYulHEtVjXrGTiVgS6DIbppaVZBHAr_6GdGPC9lZCqbblWBbvVqXa8Fplpd9W81T0zLJeT03eI2PGFq-Ybs-mfKoKKUF85KKA5Rx9zKTawd1VuYEVgabcqBnYGzyA46OgNBJ-2sKTEMMff2oywbfQGc7CzW1ljiLm8csKtOUajfRNrC8Kdlpo_Wi6KzfIhbSEzKqHjQiebKkg_GjF3_c_Yg3Zers1iEePvUPEDNQ_LeJW-Rhtg..&type=2&query=Hermes&token=9C1FB22FE0554C8B20196F4D805E8C2720A45AEB69DC9E6A",
+      "summary": "Hermes 说,它会成长.会成长是什么意思翻了翻源码和文档,这个「成长」具体指几件事.第一,它能从经验中创建技能.你让它帮...",
+      "datetime": "2026-04-13 08:03:16",
+      "date_text": "2026年04月13日",
+      "date_description": "7小时前",
+      "source": "dotNET跨平台"
+    },
+    {
+      "title": "Hermes 和 OpenClaw 到底有啥不一样?",
+      "url": "https://weixin.sogou.com/link?url=dn9a_-gY295K0Rci_xozVXfdMkSQTLW6cwJThYulHEtVjXrGTiVgS6DIbppaVZBHAr_6GdGPC9lZCqbblWBbvVqXa8Fplpd9jE1uroC7pWdDbSjDCeo_E4fyQsfcWZltFNX_Ut3don4IoJpLCp9QULQQKRwlN0xb7aR7Vsdwglt_OD4n5XiHxXd9WrA9IYkl_CrEaEe2W-eLsUWEGijF9tmGHSrnBMSEmVuNKfxwpB9YVh90HnBF9fU2I5H-Zl3uxmg17v68zy7yPfCoem7FzA..&type=2&query=Hermes&token=9C1FB22FE0554C8B20196F4D805E8C2720A45AEB69DC9E6A",
+      "summary": "最近开源社区有个叫 Hermes 的项目热度很高,那它跟 OpenClaw 到底哪里不一样?我试着用一个生活化的例子打个比方OpenClaw 更...",
+      "datetime": "2026-04-13 13:31:11",
+      "date_text": "2026年04月13日",
+      "date_description": "2小时前",
+      "source": "若清笔记"
+    },
+    {
+      "title": "Hermes Agent :生态全景+橙宝书",
+      "url": "https://weixin.sogou.com/link?url=dn9a_-gY295K0Rci_xozVXfdMkSQTLW6cwJThYulHEtVjXrGTiVgS6DIbppaVZBHAr_6GdGPC9lZCqbblWBbvVqXa8Fplpd9fWLmae7u5sXoSc0HLAJkLSEEjchde_GHJOHc-TQZXSRBt3y7DGA5wbuYsBWFoWbAR1sC-KqmcN7aO_b6iDJsxgaKlTFdaLtx0NbqQ_uLQKt43mk21AyuR5TT34clNlzqrVRpCuUWEgNbWagfM6ZFqDrhJx5uvul0Im0biAvBa5R6VKrzu_4XKA..&type=2&query=Hermes&token=9C1FB22FE0554C8B20196F4D805E8C2720A45AEB69DC9E6A",
+      "summary": "🤖 近期出圈的 Hermes Agent(爱马仕智能体),实力真的很强!官方仓库狂揽 66.6K GitHub 星,支持20+ LLM提供商、14个部署平...",
+      "datetime": "2026-04-13 09:32:56",
+      "date_text": "2026年04月13日",
+      "date_description": "6小时前",
+      "source": "E出海"
+    },
+    {
+      "title": "Hermes agent打造质量总经理-方案篇",
+      "url": "https://weixin.sogou.com/link?url=dn9a_-gY295K0Rci_xozVXfdMkSQTLW6cwJThYulHEtVjXrGTiVgS6DIbppaVZBHAr_6GdGPC9lZCqbblWBbvVqXa8Fplpd9M5iN4kgFOKkZQ_obG_gLqXEcBCctETCHAnBA8Gr7TYEtk3t8wq-BSt6AOzoulcMHWu6Dan8sc2XiHNbW9lh-LXO4dRJwZeeeKU85M2MgmMFxhX_Hl9jQG_SIwjIj9NsX6AntGv0MmPC-Mf2Ftv0oA-P6aP1GRq0dbjoFvMd48GBQL0Hr9Gyd3Q..&type=2&query=Hermes&token=9C1FB22FE0554C8B20196F4D805E8C2720A45AEB69DC9E6A",
+      "summary": "一、项目背景与目标1.1 起源当前有文档记录了 Hermes-agent 的基础安装方法(参考:源文档),其核心理念是打造 AI 版的职能角色...",
+      "datetime": "2026-04-12 21:07:54",
+      "date_text": "2026年04月12日",
+      "date_description": "18小时前",
+      "source": "清水草堂"
+    },
+    {
+      "title": "Hermes Agent:“养”>“养🦞”?",
+      "url": "https://weixin.sogou.com/link?url=dn9a_-gY295K0Rci_xozVXfdMkSQTLW6cwJThYulHEtVjXrGTiVgS6DIbppaVZBHAr_6GdGPC9lZCqbblWBbvVqXa8Fplpd9KfVkX1gU0DUwDlAIxQo-dDibB34gQ9aDhg4_TXfr7byDQYUQCJzi_qzETjxHkXdDt03nJBEqROaENu2rD29HlRMVAsp8ChIfUmfVtVX3ZgK9Pbrb3ClIJSQZn552SL_W0i8FoHV6sQ7NpdaSHwz69K0lkfcP1jZA0pxJMOgSTAhflztgI7RZ1g..&type=2&query=Hermes&token=9C1FB22FE0554C8B20196F4D805E8C2720A45AEB69DC9E6A",
+      "summary": "Hermes Agent 和 OpenClaw 的核心区别可以这样理解🧪 OpenClaw:= AI 实验室里的“操作电脑机器人”主要复现 Claude Computer ...",
+      "datetime": "2026-04-13 08:05:19",
+      "date_text": "2026年04月13日",
+      "date_description": "7小时前",
+      "source": "超级个体小狮子"
+    },
+    {
+      "title": "Hermes Agent 重新定义 Agentic Workflow 的生命周期",
+      "url": "https://weixin.sogou.com/link?url=dn9a_-gY295K0Rci_xozVXfdMkSQTLW6cwJThYulHEtVjXrGTiVgS6DIbppaVZBHAr_6GdGPC9lZCqbblWBbvVqXa8Fplpd9ZPAgyzq9uqySYgnH5ell-vBbcjtuYisrGF7PeR85oqiVft6ryuqULb4nn3aMjJxdtEYdzCjl0mc9Nf5gK41GjwqVUqlrPjmZda_Gz3hbd17DoVmUxSzqsscE97PCUGXSpHtWSGRCmGizc3ZKe5g55d3b0WFXrULjIHSaBGtjqFO54z_tGSZTqA..&type=2&query=Hermes&token=9C1FB22FE0554C8B20196F4D805E8C2720A45AEB69DC9E6A",
+      "summary": "Hermes Agent 的核心解法不再是单纯依赖模型自身的 Long Context 能力(即便有 128K 甚至 1M 的窗口,推理成本和检索精度衰减依...",
+      "datetime": "2026-04-13 08:11:52",
+      "date_text": "2026年04月13日",
+      "date_description": "7小时前",
+      "source": "各类资料收集整理"
+    }
+  ]
+}

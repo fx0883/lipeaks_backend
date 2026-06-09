@@ -29,15 +29,14 @@ class CredentialSerializerTests(TestCase):
 
 
 class FakeCredentialGateway:
-    def create_login_session(self):
+    def initialize_login_session(self, login_session, on_status=None):
         return {
-            "session_id": "session-123",
             "status": "pending",
             "qr_code_url": "https://example.com/qr",
             "qr_code_image": "base64-image",
             "scan_status": "waiting",
             "expired_at": timezone.now(),
-            "token_snapshot": json.dumps({"fingerprint": "fingerprint-123"}),
+            "token_snapshot": json.dumps({"fingerprint": "fingerprint-123", "wechat_session_id": "session-123"}),
             "cookie_snapshot": json.dumps({"uuid": "session-123", "fingerprint": "fingerprint-123"}),
         }
 
@@ -67,25 +66,28 @@ class CredentialServiceTests(TestCase):
             tenant=self.tenant,
         )
 
-    @patch("we_rss.tasks.get_credential_gateway", return_value=FakeCredentialGateway())
-    def test_create_login_session_returns_qr_payload(self, _mock_task_gateway):
-        session = CredentialService.create_login_session(
-            tenant=self.tenant,
-            created_by=self.member,
-            gateway=FakeCredentialGateway(),
-        )
+    def test_create_login_session_returns_local_placeholder_before_background_qr_fetch(self):
+        gateway = Mock()
+        gateway.create_login_session.side_effect = AssertionError("request thread should not fetch WeChat QR data")
 
-        self.assertEqual(session.session_id, "session-123")
-        self.assertEqual(session.qr_code_url, "https://example.com/qr")
-        self.assertEqual(session.qr_code_image, "base64-image")
+        with patch("we_rss.services.credential_service.dispatch_we_rss_task", create=True) as mock_dispatch:
+            session = CredentialService.create_login_session(
+                tenant=self.tenant,
+                created_by=self.member,
+                gateway=gateway,
+            )
+
+        self.assertTrue(session.session_id)
+        self.assertEqual(session.status, "pending")
+        self.assertEqual(session.qr_code_url, "")
+        self.assertEqual(session.qr_code_image, "")
         self.assertEqual(session.scan_status, "waiting")
         self.assertEqual(session.tenant, self.tenant)
         self.assertEqual(session.created_by, self.member)
-        self.assertEqual(session.token_snapshot, json.dumps({"fingerprint": "fingerprint-123"}))
-        self.assertEqual(
-            session.cookie_snapshot,
-            json.dumps({"uuid": "session-123", "fingerprint": "fingerprint-123"}),
-        )
+        self.assertEqual(session.token_snapshot, "")
+        self.assertEqual(session.cookie_snapshot, "")
+        self.assertIsNotNone(session.expired_at)
+        mock_dispatch.assert_called_once()
 
     @override_settings(CELERY_ENABLED=False, CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
     @patch("we_rss.tasks.get_credential_gateway", return_value=FakeCredentialGateway())
@@ -196,7 +198,7 @@ class FakeResponse:
 class CredentialGatewayTests(TestCase):
     @patch("we_rss.services.credential_service.uuid.uuid4")
     @patch("we_rss.services.credential_service.requests.Session")
-    def test_create_login_session_returns_qr_payload_with_gateway_state(self, mock_session_cls, mock_uuid4):
+    def test_initialize_login_session_returns_qr_payload_with_gateway_state(self, mock_session_cls, mock_uuid4):
         mock_uuid4.side_effect = [
             Mock(hex="uuid-session"),
             Mock(hex="uuid-fingerprint"),
@@ -217,14 +219,16 @@ class CredentialGatewayTests(TestCase):
         start_login_response = FakeResponse(json_data={"base_resp": {"ret": 0}})
         start_login_response.cookies = {"uuid": "uuid-session"}
         session.post.return_value = start_login_response
+        login_session = WechatCredentialLoginSession(session_id="local-session-id")
 
-        payload = WechatCredentialGateway().create_login_session()
+        payload = WechatCredentialGateway().initialize_login_session(login_session)
 
-        self.assertEqual(payload["session_id"], "uuid-session")
         self.assertEqual(payload["status"], "pending")
         self.assertEqual(payload["scan_status"], "waiting")
         self.assertTrue(payload["qr_code_image"].startswith("data:image/png;base64,"))
-        self.assertEqual(json.loads(payload["token_snapshot"])["fingerprint"], "uuid-fingerprint")
+        token_state = json.loads(payload["token_snapshot"])
+        self.assertEqual(token_state["fingerprint"], "uuid-fingerprint")
+        self.assertEqual(token_state["wechat_session_id"], "uuid-session")
         self.assertEqual(json.loads(payload["cookie_snapshot"])["uuid"], "uuid-session")
 
     @patch("we_rss.services.credential_service.time.sleep", return_value=None)
@@ -261,8 +265,8 @@ class CredentialGatewayTests(TestCase):
             url="https://mp.weixin.qq.com/cgi-bin/home?t=home/index&lang=zh_CN&token=token-123",
         )
         login_session = WechatCredentialLoginSession(
-            session_id="uuid-session",
-            token_snapshot=json.dumps({"fingerprint": "uuid-fingerprint"}),
+            session_id="local-session-id",
+            token_snapshot=json.dumps({"fingerprint": "uuid-fingerprint", "wechat_session_id": "uuid-session"}),
             cookie_snapshot=json.dumps({"uuid": "uuid-session", "fingerprint": "uuid-fingerprint"}),
         )
 
@@ -309,8 +313,8 @@ class CredentialGatewayTests(TestCase):
             url="https://mp.weixin.qq.com/cgi-bin/home?t=home/index&lang=zh_CN&token=token-123",
         )
         login_session = WechatCredentialLoginSession(
-            session_id="uuid-session",
-            token_snapshot=json.dumps({"fingerprint": "uuid-fingerprint"}),
+            session_id="local-session-id",
+            token_snapshot=json.dumps({"fingerprint": "uuid-fingerprint", "wechat_session_id": "uuid-session"}),
             cookie_snapshot=json.dumps({"uuid": "uuid-session", "fingerprint": "uuid-fingerprint"}),
         )
         statuses = []
@@ -382,8 +386,10 @@ class CredentialApiTests(APITestCase):
         response = self.client.post("/api/v1/we-rss/credentials/login-sessions/", {}, format="json")
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data["data"]["session_id"], "session-123")
-        self.assertEqual(response.data["data"]["qr_code_url"], "https://example.com/qr")
+        self.assertTrue(response.data["data"]["session_id"])
+        self.assertEqual(response.data["data"]["qr_code_url"], "")
+        self.assertEqual(response.data["data"]["qr_code_image"], "")
+        self.assertEqual(response.data["data"]["scan_status"], "waiting")
         self.assertIsNotNone(response.data["data"]["task_id"])
 
     def test_member_can_get_login_session_detail(self):

@@ -2,6 +2,8 @@
 微信小程序相关序列化器
 """
 import logging
+from pathlib import Path
+
 import requests
 from django.conf import settings
 from rest_framework import serializers
@@ -123,3 +125,177 @@ class WechatUserSerializer(serializers.Serializer):
     nickname = serializers.CharField(read_only=True, allow_null=True)
     avatar_url = serializers.URLField(read_only=True, allow_null=True)
     created_at = serializers.DateTimeField(read_only=True)
+
+
+class WechatAccountOptionSerializer(serializers.Serializer):
+    name = serializers.CharField(read_only=True)
+    author = serializers.CharField(read_only=True, allow_blank=True)
+    appid = serializers.CharField(read_only=True)
+
+
+class WechatAccountsResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    code = serializers.IntegerField()
+    message = serializers.CharField()
+    data = WechatAccountOptionSerializer(many=True)
+
+
+class WechatUploadImageRequestSerializer(serializers.Serializer):
+    account_appid = serializers.CharField(required=True, max_length=64)
+    media = serializers.FileField(required=True, write_only=True)
+
+    def validate_media(self, value):
+        file_name = Path(str(getattr(value, "name", "")).strip()).name
+        extension = Path(file_name).suffix.lower()
+        if extension not in {".jpg", ".jpeg", ".png"}:
+            raise serializers.ValidationError(
+                f"Unsupported image extension for {file_name}. Supported extensions: .jpg, .jpeg, .png."
+            )
+
+        file_size = getattr(value, "size", None)
+        max_bytes = int(getattr(settings, "WECHAT_DRAFT_IMAGE_MAX_BYTES", 10 * 1024 * 1024))
+        if file_size is None:
+            raise serializers.ValidationError(f"Unable to determine image size for {file_name}.")
+        if file_size <= 0:
+            raise serializers.ValidationError(f"Image file is empty: {file_name}.")
+        if file_size > max_bytes:
+            raise serializers.ValidationError(
+                f"Image file is too large: {file_name}. Size={file_size} bytes, limit={max_bytes} bytes."
+            )
+        return value
+
+
+class WechatUploadImageResultSerializer(serializers.Serializer):
+    account_appid = serializers.CharField(read_only=True)
+    account_name = serializers.CharField(read_only=True)
+    url = serializers.URLField(read_only=True)
+
+
+class WechatUploadImageResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    code = serializers.IntegerField()
+    message = serializers.CharField()
+    data = WechatUploadImageResultSerializer()
+
+
+class WechatAddMaterialRequestSerializer(serializers.Serializer):
+    account_appid = serializers.CharField(required=True, max_length=64)
+    type = serializers.ChoiceField(
+        choices=["image", "thumb"],
+        required=False,
+        default="image",
+    )
+    media = serializers.FileField(required=True, write_only=True)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        uploaded_file = attrs["media"]
+        file_name = Path(str(getattr(uploaded_file, "name", "")).strip()).name
+        extension = Path(file_name).suffix.lower()
+
+        allowed_extensions = {".jpg", ".jpeg", ".png"}
+        if attrs["type"] == "thumb":
+            allowed_extensions = {".jpg", ".jpeg"}
+
+        if extension not in allowed_extensions:
+            allowed = ", ".join(sorted(allowed_extensions))
+            raise serializers.ValidationError(
+                {"media": [f"Unsupported file extension for {file_name}. Supported extensions: {allowed}."]}
+            )
+
+        file_size = getattr(uploaded_file, "size", None)
+        max_bytes = int(getattr(settings, "WECHAT_DRAFT_IMAGE_MAX_BYTES", 10 * 1024 * 1024))
+        if attrs["type"] == "thumb":
+            max_bytes = int(getattr(settings, "WECHAT_DRAFT_THUMB_MAX_BYTES", 64 * 1024))
+
+        if file_size is None:
+            raise serializers.ValidationError({"media": [f"Unable to determine file size for {file_name}."]})
+        if file_size <= 0:
+            raise serializers.ValidationError({"media": [f"File is empty: {file_name}."]})
+        if file_size > max_bytes:
+            raise serializers.ValidationError(
+                {"media": [f"File is too large: {file_name}. Size={file_size} bytes, limit={max_bytes} bytes."]}
+            )
+        return attrs
+
+
+class WechatAddMaterialResultSerializer(serializers.Serializer):
+    account_appid = serializers.CharField(read_only=True)
+    account_name = serializers.CharField(read_only=True)
+    type = serializers.CharField(read_only=True)
+    media_id = serializers.CharField(read_only=True)
+    url = serializers.URLField(read_only=True, required=False, allow_null=True)
+
+
+class WechatAddMaterialResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    code = serializers.IntegerField()
+    message = serializers.CharField()
+    data = WechatAddMaterialResultSerializer()
+
+
+class WechatDraftAddRequestSerializer(serializers.Serializer):
+    account_appid = serializers.CharField(required=True, max_length=64)
+    articles = serializers.ListField(
+        child=serializers.JSONField(),
+        required=True,
+        allow_empty=False,
+        min_length=1,
+        help_text="Official WeChat draft/add articles payload.",
+    )
+
+    def validate_articles(self, value):
+        for index, article in enumerate(value):
+            if not isinstance(article, dict):
+                raise serializers.ValidationError(f"Article at index {index} must be an object.")
+
+            article_type = str(article.get("article_type", "news")).strip() or "news"
+            title = str(article.get("title", "")).strip()
+            content = str(article.get("content", "")).strip()
+            if not title:
+                raise serializers.ValidationError(f"Article at index {index} is missing title.")
+            if not content:
+                raise serializers.ValidationError(f"Article at index {index} is missing content.")
+
+            if article_type == "news":
+                thumb_media_id = str(article.get("thumb_media_id", "")).strip()
+                if not thumb_media_id:
+                    raise serializers.ValidationError(
+                        f"Article at index {index} must include thumb_media_id for news drafts."
+                    )
+            elif article_type == "newspic":
+                image_info = article.get("image_info") or {}
+                image_list = image_info.get("image_list") or []
+                if not image_list:
+                    raise serializers.ValidationError(
+                        f"Article at index {index} must include image_info.image_list for newspic drafts."
+                    )
+                if len(image_list) > 20:
+                    raise serializers.ValidationError(
+                        f"Article at index {index} exceeds the 20 image limit for newspic drafts."
+                    )
+            else:
+                raise serializers.ValidationError(
+                    f"Article at index {index} has unsupported article_type: {article_type}."
+                )
+        return value
+
+
+class WechatDraftAddResultSerializer(serializers.Serializer):
+    account_appid = serializers.CharField(read_only=True)
+    account_name = serializers.CharField(read_only=True)
+    draft_media_id = serializers.CharField(read_only=True)
+
+
+class WechatDraftAddResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    code = serializers.IntegerField()
+    message = serializers.CharField()
+    data = WechatDraftAddResultSerializer()
+
+
+class WechatErrorResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    code = serializers.IntegerField()
+    message = serializers.CharField()
+    data = serializers.JSONField(required=False, allow_null=True)

@@ -10671,6 +10671,130 @@ paths:
           description: Statistics data
         '403':
           description: Permission denied
+  /api/v1/image-prompt/analyze-series-characters/:
+    post:
+      operationId: image_prompt_analyze_series_characters
+      description: Returns `text/event-stream`. The final structured business payload
+        is sent in the `completed` SSE event.
+      summary: Analyze reusable series characters
+      tags:
+      - image-prompt
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyzeSeriesCharactersRequestRequest'
+            examples:
+              AnalyzeSeriesCharactersRequest:
+                value:
+                  source_text: 深夜加班的产品经理和工程师又因为一个需求吵了起来。
+                  series_name: 办公室连载
+                summary: Analyze series characters request
+                description: Submit one source story and an optional series name.
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyzeSeriesCharactersRequestRequest'
+            examples:
+              AnalyzeSeriesCharactersRequest:
+                value:
+                  source_text: 深夜加班的产品经理和工程师又因为一个需求吵了起来。
+                  series_name: 办公室连载
+                summary: Analyze series characters request
+                description: Submit one source story and an optional series name.
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyzeSeriesCharactersRequestRequest'
+            examples:
+              AnalyzeSeriesCharactersRequest:
+                value:
+                  source_text: 深夜加班的产品经理和工程师又因为一个需求吵了起来。
+                  series_name: 办公室连载
+                summary: Analyze series characters request
+                description: Submit one source story and an optional series name.
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              examples:
+                StreamingResponseExample:
+                  value: |+
+                    event: start
+                    data: {"message":"Image prompt streaming started"}
+
+                    event: completed
+                    data: {"analysis_notes":["done"]}
+
+                  summary: Streaming response example
+          description: Returns `text/event-stream`. The final structured business
+            payload is sent in the `completed` SSE event.
+  /api/v1/image-prompt/joke-to-comic/:
+    post:
+      operationId: image_prompt_joke_to_comic
+      description: Returns `text/event-stream`. The final structured business payload
+        is sent in the `completed` SSE event.
+      summary: Turn one joke into a comic prompt pack
+      tags:
+      - image-prompt
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JokeToComicRequestRequest'
+            examples:
+              JokeToComicRequest:
+                value:
+                  joke: 产品经理说这个需求很简单，工程师看完文档后沉默了三分钟。
+                  confirmed_characters: []
+                summary: Joke to comic request
+                description: Submit one joke and optional locked character profiles.
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JokeToComicRequestRequest'
+            examples:
+              JokeToComicRequest:
+                value:
+                  joke: 产品经理说这个需求很简单，工程师看完文档后沉默了三分钟。
+                  confirmed_characters: []
+                summary: Joke to comic request
+                description: Submit one joke and optional locked character profiles.
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JokeToComicRequestRequest'
+            examples:
+              JokeToComicRequest:
+                value:
+                  joke: 产品经理说这个需求很简单，工程师看完文档后沉默了三分钟。
+                  confirmed_characters: []
+                summary: Joke to comic request
+                description: Submit one joke and optional locked character profiles.
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              examples:
+                StreamingResponseExample:
+                  value: |+
+                    event: start
+                    data: {"message":"Image prompt streaming started"}
+
+                    event: completed
+                    data: {"analysis_notes":["done"]}
+
+                  summary: Streaming response example
+          description: Returns `text/event-stream`. The final structured business
+            payload is sent in the `completed` SSE event.
   /api/v1/interactions/article-likes/:
     get:
       operationId: api_v1_interactions_article_likes_list
@@ -16170,7 +16294,7 @@ paths:
         name: version
         schema:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 版本号
@@ -16203,7 +16327,7 @@ paths:
         name: version
         schema:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 版本号
@@ -21027,12 +21151,276 @@ paths:
           description: 权限不足
         '404':
           description: 用户不存在
+  /api/v1/we-rss/article-stats/refresh/:
+    post:
+      operationId: we_rss_article_stats_batch_refresh
+      description: Create one async task to refresh stats for a selected article set,
+        one feed, or all articles under one member's subscribed feeds. Resolved articles
+        always respect member-visible scope. The task updates shared article rows
+        in place and returns only the task. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant`
+        共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      summary: Refresh article stats in batch
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      tags:
+      - we-rss
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArticleStatsBatchRefreshRequest'
+            examples:
+              ArticleStatsBatchRefreshByArticleIdsRequest:
+                value:
+                  article_ids:
+                  - 11
+                  - 12
+                  - 13
+                summary: Article stats batch refresh by article ids request
+                description: Refresh the selected article IDs asynchronously.
+              ArticleStatsBatchRefreshByFeedRequest:
+                value:
+                  feed_id: 2
+                summary: Article stats batch refresh by feed request
+                description: Refresh all articles under one feed asynchronously.
+              ArticleStatsBatchRefreshByMemberRequest:
+                value:
+                  member_id: 5
+                summary: Article stats batch refresh by member request
+                description: Refresh all articles under feeds subscribed by one member
+                  asynchronously.
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ArticleStatsBatchRefreshRequest'
+            examples:
+              ArticleStatsBatchRefreshByArticleIdsRequest:
+                value:
+                  article_ids:
+                  - 11
+                  - 12
+                  - 13
+                summary: Article stats batch refresh by article ids request
+                description: Refresh the selected article IDs asynchronously.
+              ArticleStatsBatchRefreshByFeedRequest:
+                value:
+                  feed_id: 2
+                summary: Article stats batch refresh by feed request
+                description: Refresh all articles under one feed asynchronously.
+              ArticleStatsBatchRefreshByMemberRequest:
+                value:
+                  member_id: 5
+                summary: Article stats batch refresh by member request
+                description: Refresh all articles under feeds subscribed by one member
+                  asynchronously.
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ArticleStatsBatchRefreshRequest'
+            examples:
+              ArticleStatsBatchRefreshByArticleIdsRequest:
+                value:
+                  article_ids:
+                  - 11
+                  - 12
+                  - 13
+                summary: Article stats batch refresh by article ids request
+                description: Refresh the selected article IDs asynchronously.
+              ArticleStatsBatchRefreshByFeedRequest:
+                value:
+                  feed_id: 2
+                summary: Article stats batch refresh by feed request
+                description: Refresh all articles under one feed asynchronously.
+              ArticleStatsBatchRefreshByMemberRequest:
+                value:
+                  member_id: 5
+                summary: Article stats batch refresh by member request
+                description: Refresh all articles under feeds subscribed by one member
+                  asynchronously.
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Articlestatsbatchrefreshresponse200Envelope'
+              examples:
+                ArticleStatsBatchRefreshResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      id: 108
+                      task_type: article_stats_refresh
+                      status: success
+                      task_key: article_stats_refresh:feed:2
+                      target_type: article_stats
+                      target_id: null
+                      message: Article stats refresh complete
+                      request_payload:
+                        article_ids:
+                        - 11
+                        - 12
+                        - 13
+                        feed_id: 2
+                        member_id: null
+                      result_payload:
+                        task_type: article_stats_refresh
+                        selector_type: feed_id
+                        requested_count: 3
+                        success_count: 2
+                        failed_count: 1
+                        article_ids:
+                        - 11
+                        - 12
+                        - 13
+                        failed_articles:
+                        - article_id: 13
+                          url: https://mp.weixin.qq.com/s/article-13
+                          error: stats blocked
+                      celery_task_id: c7c84d64-5834-4a5a-8334-37d70ad43ca6
+                      started_at: '2026-03-21T10:00:00Z'
+                      finished_at: '2026-03-21T10:00:05Z'
+                      created_at: '2026-03-21T10:00:00Z'
+                      updated_at: '2026-03-21T10:00:05Z'
+                  summary: Article stats batch refresh response
+          description: Article stats refresh task created.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+  /api/v1/we-rss/article-stats/refresh-by-url/:
+    post:
+      operationId: we_rss_article_stats_refresh_by_url
+      description: Refresh stats for one existing member-visible article by its public
+        WeChat URL, persist the updated shared stats, and return the full updated
+        article. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定
+        tenant 时会被拒绝访问。
+      summary: Refresh article stats by URL
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      tags:
+      - we-rss
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArticleStatsRefreshByUrlRequest'
+            examples:
+              ArticleStatsRefreshByURLRequest:
+                value:
+                  url: https://mp.weixin.qq.com/s/article-1?token=123456
+                summary: Article stats refresh by URL request
+                description: Refresh one existing article by its public WeChat URL.
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ArticleStatsRefreshByUrlRequest'
+            examples:
+              ArticleStatsRefreshByURLRequest:
+                value:
+                  url: https://mp.weixin.qq.com/s/article-1?token=123456
+                summary: Article stats refresh by URL request
+                description: Refresh one existing article by its public WeChat URL.
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ArticleStatsRefreshByUrlRequest'
+            examples:
+              ArticleStatsRefreshByURLRequest:
+                value:
+                  url: https://mp.weixin.qq.com/s/article-1?token=123456
+                summary: Article stats refresh by URL request
+                description: Refresh one existing article by its public WeChat URL.
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticlestatsrefreshbyURLresponse200Envelope'
+              examples:
+                ArticleStatsRefreshByURLResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      id: 1
+                      feed_id: 1
+                      source_id: article-1
+                      article_type: news
+                      title: Imported Article
+                      description: Imported description
+                      content: |-
+                        # Imported Article
+
+                        Imported content
+                      url: https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc
+                      pic_url: https://example.com/article-cover.png
+                      publish_time: '2026-03-20T12:00:00Z'
+                      status: active
+                      is_favorite: false
+                      last_refreshed_at: '2026-03-21T09:30:00Z'
+                      read_num: 101
+                      like_num: 51
+                      old_like_num: 21
+                      share_num: 11
+                      collect_num: 9
+                      comment_count: 7
+                      comment_reply_count: 8
+                      comment_total_count: 15
+                      created_at: '2026-03-20T12:00:00Z'
+                      updated_at: '2026-03-21T09:30:00Z'
+                  summary: Article stats refresh by URL response
+          description: Article stats refreshed successfully.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
   /api/v1/we-rss/articles/:
     get:
       operationId: we_rss_articles_list
-      description: Return the saved WeChat articles for the current tenant. 需要使用当前项目的
-        Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
-      summary: List tenant articles
+      description: Return WeChat articles currently visible to the authenticated member.
+        Without `feed_id`, the list is limited to subscribed feeds. With `feed_id`,
+        the list returns all tenant articles under that feed except the current member's
+        hidden articles. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member
+        未绑定 tenant 时会被拒绝访问。
+      summary: List visible articles
       parameters:
       - in: header
         name: X-Tenant-ID
@@ -21063,6 +21451,17 @@ paths:
           ArticleFavoriteOnlyExample:
             value: true
             summary: Article favorite only example
+      - in: query
+        name: feed_id
+        schema:
+          type: integer
+        description: Filter articles by one feed ID. When provided, the result returns
+          all tenant articles under that feed except the current member's hidden articles,
+          even when the member is not subscribed to the feed.
+        examples:
+          ArticleFeedIdExample:
+            value: 1
+            summary: Article feed id example
       - in: query
         name: search
         schema:
@@ -21105,7 +21504,10 @@ paths:
                       article_type: news
                       title: Imported Article
                       description: Imported description
-                      content: <p>Imported content</p>
+                      content: |-
+                        # Imported Article
+
+                        Imported content
                       url: https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc
                       pic_url: https://example.com/article-cover.png
                       publish_time: '2026-03-20T12:00:00Z'
@@ -21137,8 +21539,9 @@ paths:
   /api/v1/we-rss/articles/{id}/:
     get:
       operationId: we_rss_articles_retrieve
-      description: Return the details of one tenant-scoped WeChat article. 需要使用当前项目的
-        Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      description: Return one tenant article unless the current member has hidden
+        it. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant
+        时会被拒绝访问。
       summary: Retrieve one article
       parameters:
       - in: header
@@ -21186,7 +21589,10 @@ paths:
                       article_type: news
                       title: Imported Article
                       description: Imported description
-                      content: <p>Imported content</p>
+                      content: |-
+                        # Imported Article
+
+                        Imported content
                       url: https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc
                       pic_url: https://example.com/article-cover.png
                       publish_time: '2026-03-20T12:00:00Z'
@@ -21217,9 +21623,10 @@ paths:
           description: 服务器内部错误
     delete:
       operationId: we_rss_articles_destroy
-      description: Delete an article record within the current tenant. 需要使用当前项目的 Member
-        JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
-      summary: Delete one article
+      description: Hide one article from the authenticated member without deleting
+        the shared article record. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant`
+        共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      summary: Hide one article
       parameters:
       - in: header
         name: X-Tenant-ID
@@ -21263,8 +21670,9 @@ paths:
   /api/v1/we-rss/articles/{id}/favorite/:
     put:
       operationId: we_rss_articles_update_favorite
-      description: Mark or unmark an article as favorite for the current member. 需要使用当前项目的
-        Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      description: Mark or unmark one tenant article as favorite for the current member
+        unless the article has been hidden by the same member. 需要使用当前项目的 Member JWT
+        访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
       summary: Update article favorite status
       parameters:
       - in: header
@@ -21342,7 +21750,10 @@ paths:
                       article_type: news
                       title: Imported Article
                       description: Imported description
-                      content: <p>Imported content</p>
+                      content: |-
+                        # Imported Article
+
+                        Imported content
                       url: https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc
                       pic_url: https://example.com/article-cover.png
                       publish_time: '2026-03-20T12:00:00Z'
@@ -21375,8 +21786,8 @@ paths:
     post:
       operationId: we_rss_articles_refresh
       description: Create a task to re-fetch article content, publish time, and engagement
-        metrics for one article. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant`
-        共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+        metrics for one tenant article unless the current member has hidden it. 需要使用当前项目的
+        Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
       summary: Refresh article content
       parameters:
       - in: header
@@ -21452,9 +21863,9 @@ paths:
   /api/v1/we-rss/articles/{id}/tags/:
     get:
       operationId: we_rss_articles_tags_list
-      description: Return the current member's private tags attached to one article.
-        需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant
-        时会被拒绝访问。
+      description: Return the current member's private tags attached to one tenant
+        article unless the article has been hidden by the same member. 需要使用当前项目的 Member
+        JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
       summary: List current member tags on an article
       parameters:
       - in: header
@@ -21521,9 +21932,9 @@ paths:
   /api/v1/we-rss/articles/{id}/tags/attach/:
     post:
       operationId: we_rss_articles_tags_attach
-      description: Attach one or more existing member tags to an article in the current
-        tenant. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定
-        tenant 时会被拒绝访问。
+      description: Attach one or more existing member tags to one tenant article unless
+        the article has been hidden by the same member. 需要使用当前项目的 Member JWT 访问。所有数据按
+        `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
       summary: Attach existing tags to an article
       parameters:
       - in: header
@@ -21629,9 +22040,9 @@ paths:
   /api/v1/we-rss/articles/{id}/tags/detach/:
     post:
       operationId: we_rss_articles_tags_detach
-      description: Detach one or more existing member tags from an article in the
-        current tenant. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member
-        未绑定 tenant 时会被拒绝访问。
+      description: Detach one or more existing member tags from one tenant article
+        unless the article has been hidden by the same member. 需要使用当前项目的 Member JWT
+        访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
       summary: Detach tags from an article
       parameters:
       - in: header
@@ -21734,6 +22145,225 @@ paths:
           description: 请求的资源不存在
         '500':
           description: 服务器内部错误
+  /api/v1/we-rss/articles/batch-delete/:
+    post:
+      operationId: we_rss_articles_batch_delete
+      description: Hide multiple articles from the authenticated member in one request.
+        The request fails when any article ID is outside the current tenant scope
+        or already hidden from the current member's accessible article scope. 需要使用当前项目的
+        Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      summary: Batch hide articles
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      tags:
+      - we-rss
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArticleBatchDeleteRequest'
+            examples:
+              ArticleBatchDeleteRequest:
+                value:
+                  article_ids:
+                  - 11
+                  - 12
+                  - 13
+                summary: Article batch delete request
+                description: Hide the selected article IDs in the same order sent
+                  by the frontend.
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ArticleBatchDeleteRequest'
+            examples:
+              ArticleBatchDeleteRequest:
+                value:
+                  article_ids:
+                  - 11
+                  - 12
+                  - 13
+                summary: Article batch delete request
+                description: Hide the selected article IDs in the same order sent
+                  by the frontend.
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ArticleBatchDeleteRequest'
+            examples:
+              ArticleBatchDeleteRequest:
+                value:
+                  article_ids:
+                  - 11
+                  - 12
+                  - 13
+                summary: Article batch delete request
+                description: Hide the selected article IDs in the same order sent
+                  by the frontend.
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Articlebatchdeleteresponse200Envelope'
+              examples:
+                ArticleBatchDeleteResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      deleted_count: 3
+                      article_ids:
+                      - 11
+                      - 12
+                      - 13
+                  summary: Article batch delete response
+          description: Articles hidden successfully.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+  /api/v1/we-rss/articles/export/:
+    post:
+      operationId: we_rss_articles_export
+      description: 'Export articles as one CSV file. Selectors are resolved in this
+        order: `article_ids`, `member_id`, then `feed_id`. Export results always respect
+        the resolved member-visible article scope. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant`
+        共享隔离，Member 未绑定 tenant 时会被拒绝访问。'
+      summary: Export articles as CSV
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      tags:
+      - we-rss
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArticleExportRequest'
+            examples:
+              ArticleExportByArticleIdsRequest:
+                value:
+                  article_ids:
+                  - 11
+                  - 12
+                  - 13
+                summary: Article export by article ids request
+                description: Export the selected article IDs in the same order sent
+                  by the frontend.
+              ArticleExportByMemberRequest:
+                value:
+                  member_id: 5
+                summary: Article export by member request
+                description: Export all articles under feeds subscribed by the selected
+                  member.
+              ArticleExportByFeedRequest:
+                value:
+                  feed_id: 2
+                summary: Article export by feed request
+                description: Export all articles under one feed.
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ArticleExportRequest'
+            examples:
+              ArticleExportByArticleIdsRequest:
+                value:
+                  article_ids:
+                  - 11
+                  - 12
+                  - 13
+                summary: Article export by article ids request
+                description: Export the selected article IDs in the same order sent
+                  by the frontend.
+              ArticleExportByMemberRequest:
+                value:
+                  member_id: 5
+                summary: Article export by member request
+                description: Export all articles under feeds subscribed by the selected
+                  member.
+              ArticleExportByFeedRequest:
+                value:
+                  feed_id: 2
+                summary: Article export by feed request
+                description: Export all articles under one feed.
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ArticleExportRequest'
+            examples:
+              ArticleExportByArticleIdsRequest:
+                value:
+                  article_ids:
+                  - 11
+                  - 12
+                  - 13
+                summary: Article export by article ids request
+                description: Export the selected article IDs in the same order sent
+                  by the frontend.
+              ArticleExportByMemberRequest:
+                value:
+                  member_id: 5
+                summary: Article export by member request
+                description: Export all articles under feeds subscribed by the selected
+                  member.
+              ArticleExportByFeedRequest:
+                value:
+                  feed_id: 2
+                summary: Article export by feed request
+                description: Export all articles under one feed.
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            text/csv:
+              schema:
+                type: string
+              examples:
+                ArticleExportCSVResponse:
+                  value: |-
+                    article_id,feed_id,feed_name,feed_source_id,source_id,article_type,title,description,content,url,pic_url,publish_time,status,read_num,like_num,old_like_num,share_num,collect_num,comment_count,comment_reply_count,comment_total_count,last_refreshed_at,created_at,updated_at
+                    1,1,AI Daily,gh_abcdef123456,article-1,news,Imported Article,Imported description,# Imported Article,https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc,https://example.com/article-cover.png,2026-03-20T12:00:00Z,active,101,51,21,11,9,7,8,15,2026-03-21T09:30:00Z,2026-03-20T12:00:00Z,2026-03-21T09:30:00Z
+                  summary: Article export CSV response
+          description: CSV export file.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
   /api/v1/we-rss/articles/import-by-url/:
     post:
       operationId: we_rss_articles_import_by_url
@@ -21821,6 +22451,86 @@ paths:
                       updated_at: '2026-03-21T09:30:03Z'
                   summary: Article import response
           description: Article import task created.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+  /api/v1/we-rss/articles/search/:
+    get:
+      operationId: we_rss_articles_search
+      description: Search public WeChat articles through the internal `llm_gateway`
+        capability layer. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member
+        未绑定 tenant 时会被拒绝访问。
+      summary: Search public WeChat articles
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Maximum number of article results to return. Defaults to 10 and
+          cannot exceed 50.
+        examples:
+          ArticleSearchLimitExample:
+            value: 10
+            summary: Article search limit example
+      - in: query
+        name: query
+        schema:
+          type: string
+        description: Keyword used to search public WeChat articles through the internal
+          LLM gateway.
+        required: true
+        examples:
+          ArticleSearchQueryExample:
+            value: AI Agent
+            summary: Article search query example
+      tags:
+      - we-rss
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Articlesearchresponse200Envelope'
+              examples:
+                ArticleSearchResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      query: AI Agent
+                      total: 1
+                      items:
+                      - title: AI Agent 实战
+                        url: https://mp.weixin.qq.com/s/agent-1
+                        summary: AI Agent related article summary text.
+                        datetime: '2026-04-10 10:00:00'
+                        date_text: 2026年04月10日
+                        date_description: 今天
+                        source: OpenAI
+                  summary: Article search response
+          description: Public article search completed successfully.
         '400':
           description: 输入数据验证错误
         '401':
@@ -22758,8 +23468,10 @@ paths:
           description: 服务器内部错误
     delete:
       operationId: we_rss_feeds_destroy
-      description: Delete one feed record in the current tenant. 需要使用当前项目的 Member
-        JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      description: Delete one feed record in the current tenant, and cascade delete
+        all articles under that feed together with their related member relations.
+        需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant
+        时会被拒绝访问。
       summary: Delete feed
       parameters:
       - in: header
@@ -22862,6 +23574,98 @@ paths:
           description: 请求的资源不存在
         '500':
           description: 服务器内部错误
+  /api/v1/we-rss/feeds/{id}/refresh-content/:
+    post:
+      operationId: we_rss_feeds_refresh_content
+      description: Create one async task to regenerate Markdown content for all articles
+        under one feed. The frontend should poll the returned task through the task-detail
+        endpoint. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member
+        未绑定 tenant 时会被拒绝访问。
+      summary: Refresh feed article markdown content
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: 公众号记录 ID。
+        required: true
+        examples:
+          IdExample:
+            value: 1
+            summary: id example
+      tags:
+      - we-rss
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Feedcontentrefreshresponse200Envelope'
+              examples:
+                FeedContentRefreshResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      id: 109
+                      task_type: feed_content_refresh
+                      status: success
+                      task_key: feed_content_refresh:2
+                      target_type: feed
+                      target_id: 2
+                      message: Feed content refresh complete
+                      request_payload:
+                        feed_id: 2
+                        article_ids:
+                        - 11
+                        - 12
+                        - 13
+                      result_payload:
+                        task_type: feed_content_refresh
+                        feed_id: 2
+                        requested_count: 3
+                        success_count: 2
+                        failed_count: 1
+                        article_ids:
+                        - 11
+                        - 12
+                        - 13
+                        failed_articles:
+                        - article_id: 13
+                          url: https://mp.weixin.qq.com/s/article-13
+                          error: markdown blocked
+                      celery_task_id: b8bf05b5-fb7f-43c7-83de-d5f8b4af9658
+                      started_at: '2026-03-21T09:36:00Z'
+                      finished_at: '2026-03-21T09:36:08Z'
+                      created_at: '2026-03-21T09:36:00Z'
+                      updated_at: '2026-03-21T09:36:08Z'
+                  summary: Feed content refresh response
+          description: Feed content refresh task created.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
   /api/v1/we-rss/feeds/{id}/subscribe/:
     delete:
       operationId: we_rss_feeds_unsubscribe
@@ -22911,9 +23715,10 @@ paths:
   /api/v1/we-rss/feeds/{id}/sync/:
     post:
       operationId: we_rss_feeds_sync
-      description: Create or reuse a sync task for one feed and fetch its WeChat articles.
-        需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant
-        时会被拒绝访问。
+      description: Create or reuse the parent feed-sync task for one feed. The response
+        returns one `feed_sync_run` task immediately, and the frontend should poll
+        that parent task every 5 seconds through the task-detail endpoint. 需要使用当前项目的
+        Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
       summary: Sync feed articles
       parameters:
       - in: header
@@ -22939,6 +23744,104 @@ paths:
             summary: id example
       tags:
       - we-rss
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedSyncRequestRequest'
+            examples:
+              FeedSyncFullRequest:
+                value:
+                  sync_scope: full
+                  refresh_markdown: false
+                summary: Feed sync full request
+                description: Run a full feed sync from the beginning.
+              FeedSyncLatestRequest:
+                value:
+                  sync_scope: latest
+                  refresh_markdown: false
+                summary: Feed sync latest request
+                description: Sync only until a normalized article URL already exists,
+                  then stop.
+              FeedSyncWindowRequest:
+                value:
+                  sync_scope: window
+                  window_days: 7
+                  refresh_markdown: false
+                summary: Feed sync window request
+                description: Sync only articles from the last N days, then stop at
+                  the first older article.
+              FeedSyncWithMarkdownRefreshRequest:
+                value:
+                  sync_scope: full
+                  refresh_markdown: true
+                summary: Feed sync with markdown refresh request
+                description: Run a full feed sync and refresh Markdown content for
+                  synced articles.
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FeedSyncRequestRequest'
+            examples:
+              FeedSyncFullRequest:
+                value:
+                  sync_scope: full
+                  refresh_markdown: false
+                summary: Feed sync full request
+                description: Run a full feed sync from the beginning.
+              FeedSyncLatestRequest:
+                value:
+                  sync_scope: latest
+                  refresh_markdown: false
+                summary: Feed sync latest request
+                description: Sync only until a normalized article URL already exists,
+                  then stop.
+              FeedSyncWindowRequest:
+                value:
+                  sync_scope: window
+                  window_days: 7
+                  refresh_markdown: false
+                summary: Feed sync window request
+                description: Sync only articles from the last N days, then stop at
+                  the first older article.
+              FeedSyncWithMarkdownRefreshRequest:
+                value:
+                  sync_scope: full
+                  refresh_markdown: true
+                summary: Feed sync with markdown refresh request
+                description: Run a full feed sync and refresh Markdown content for
+                  synced articles.
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FeedSyncRequestRequest'
+            examples:
+              FeedSyncFullRequest:
+                value:
+                  sync_scope: full
+                  refresh_markdown: false
+                summary: Feed sync full request
+                description: Run a full feed sync from the beginning.
+              FeedSyncLatestRequest:
+                value:
+                  sync_scope: latest
+                  refresh_markdown: false
+                summary: Feed sync latest request
+                description: Sync only until a normalized article URL already exists,
+                  then stop.
+              FeedSyncWindowRequest:
+                value:
+                  sync_scope: window
+                  window_days: 7
+                  refresh_markdown: false
+                summary: Feed sync window request
+                description: Sync only articles from the last N days, then stop at
+                  the first older article.
+              FeedSyncWithMarkdownRefreshRequest:
+                value:
+                  sync_scope: full
+                  refresh_markdown: true
+                summary: Feed sync with markdown refresh request
+                description: Run a full feed sync and refresh Markdown content for
+                  synced articles.
       security:
       - Bearer: []
       - Bearer: []
@@ -22956,37 +23859,68 @@ paths:
                     message: Operation succeeded
                     data:
                       id: 101
-                      task_type: feed_sync
-                      status: success
-                      task_key: feed_sync:1
+                      task_type: feed_sync_run
+                      status: running
+                      task_key: ''
                       target_type: feed
                       target_id: 1
-                      message: Feed sync complete
+                      message: A feed sync task is already running.
                       request_payload:
                         feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
                       result_payload:
-                        fetched_count: 3
-                        detail_success_count: 2
-                        detail_failed_count: 1
-                        errors:
-                        - source_id: article-3
-                          url: https://mp.weixin.qq.com/s/article-3?__biz=Qkl6&mid=1&idx=3&sn=ghi
-                          error: WeChat article detail fetch failed.
-                      feed_id: 1
-                      article_ids:
-                      - 11
-                      - 12
-                      - 13
-                      article_count: 3
-                      detail_success_count: 2
-                      detail_failed_count: 1
-                      failed_articles:
-                      - source_id: article-3
-                        url: https://mp.weixin.qq.com/s/article-3?__biz=Qkl6&mid=1&idx=3&sn=ghi
-                        error: WeChat article detail fetch failed.
-                      celery_task_id: 6ec3c8a2-e570-4bd8-9031-53d5976fb415
+                        run_status: running
+                        feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
+                        has_more: true
+                        next_begin: 20
+                        batches_completed: 1
+                        batches_failed: 0
+                        articles_synced: 20
+                        articles_failed: 0
+                        article_ids:
+                        - 11
+                        - 12
+                        - 13
+                        current_batch_task_id: 202
+                        latest_completed_batch:
+                          batch_no: 1
+                          begin: 0
+                          end: 20
+                          has_more: true
+                          article_count: 20
+                          article_ids:
+                          - 11
+                          - 12
+                          - 13
+                          articles:
+                          - id: 11
+                            source_id: article-1
+                            title: Imported Article 1
+                            url: https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc
+                            publish_time: '2026-03-20T12:00:00Z'
+                            pic_url: https://example.com/article-cover-1.png
+                            status: active
+                          failed_articles: []
+                          started_at: '2026-03-21T09:20:00Z'
+                          finished_at: '2026-03-21T09:20:08Z'
+                        last_progress_at: '2026-03-21T09:20:08Z'
+                        timeout_reason: ''
+                        stop_reason: ''
+                        stop_article_url: ''
+                        stop_article_source_id: ''
+                        stop_publish_time: null
+                      celery_task_id: ''
                       started_at: '2026-03-21T09:20:00Z'
-                      finished_at: '2026-03-21T09:20:08Z'
+                      finished_at: null
                       created_at: '2026-03-21T09:20:00Z'
                       updated_at: '2026-03-21T09:20:08Z'
                   summary: Feed sync success response
@@ -22996,20 +23930,45 @@ paths:
                     code: 2000
                     message: Operation succeeded
                     data:
-                      id: 102
-                      task_type: feed_sync
+                      id: 103
+                      task_type: feed_sync_run
                       status: failed
-                      task_key: feed_sync:1
+                      task_key: ''
                       target_type: feed
                       target_id: 1
                       message: 'Feed sync failed: WeChat rate limit triggered'
                       request_payload:
                         feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
                       result_payload:
+                        run_status: failed
                         feed_id: 1
-                        task_type: feed_sync
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
+                        has_more: false
+                        next_begin: 0
+                        batches_completed: 0
+                        batches_failed: 1
+                        articles_synced: 0
+                        articles_failed: 0
+                        article_ids: []
+                        current_batch_task_id: 204
+                        latest_completed_batch: null
+                        last_progress_at: '2026-03-21T09:25:02Z'
+                        timeout_reason: ''
+                        stop_reason: ''
+                        stop_article_url: ''
+                        stop_article_source_id: ''
+                        stop_publish_time: null
                         error: WeChat rate limit triggered
-                      celery_task_id: 34e4eb4f-505c-4e8a-86ae-24f614e9f5c1
+                      celery_task_id: ''
                       started_at: '2026-03-21T09:25:00Z'
                       finished_at: '2026-03-21T09:25:02Z'
                       created_at: '2026-03-21T09:25:00Z'
@@ -23488,12 +24447,110 @@ paths:
           description: 请求的资源不存在
         '500':
           description: 服务器内部错误
+  /api/v1/we-rss/markdown/format/:
+    post:
+      operationId: we_rss_markdown_format
+      description: Format Markdown or plain text through the internal `llm_gateway`
+        markdown formatter. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member
+        未绑定 tenant 时会被拒绝访问。
+      summary: Format Markdown or plain text
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      tags:
+      - we-rss
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkdownFormatRequestRequest'
+            examples:
+              MarkdownFormatRequest:
+                value:
+                  content: |-
+                    # Title
+                    Body
+                  mode: gentle
+                summary: Markdown format request
+                description: Format one Markdown or plain-text string with gentle
+                  cleanup.
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MarkdownFormatRequestRequest'
+            examples:
+              MarkdownFormatRequest:
+                value:
+                  content: |-
+                    # Title
+                    Body
+                  mode: gentle
+                summary: Markdown format request
+                description: Format one Markdown or plain-text string with gentle
+                  cleanup.
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MarkdownFormatRequestRequest'
+            examples:
+              MarkdownFormatRequest:
+                value:
+                  content: |-
+                    # Title
+                    Body
+                  mode: gentle
+                summary: Markdown format request
+                description: Format one Markdown or plain-text string with gentle
+                  cleanup.
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Markdownformatresponse200Envelope'
+              examples:
+                MarkdownFormatResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      formatted_markdown: |-
+                        # Title
+
+                        Body
+                      mode: gentle
+                      executor: codex
+                  summary: Markdown format response
+          description: Markdown formatted successfully.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
   /api/v1/we-rss/rss/:
     get:
       operationId: we_rss_rss_tenant
-      description: 输出当前 tenant 下全部公众号文章的聚合 RSS XML。需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant`
-        共享隔离，Member 未绑定 tenant 时会被拒绝访问。
-      summary: 获取当前租户的聚合 RSS
+      description: Return RSS XML for all articles currently visible to the authenticated
+        member. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定
+        tenant 时会被拒绝访问。
+      summary: Get tenant RSS
       parameters:
       - in: header
         name: X-Tenant-ID
@@ -23534,7 +24591,7 @@ paths:
                       </channel>
                     </rss>
                   summary: Tenant RSS XML
-          description: 当前租户的 RSS XML。
+          description: RSS XML for the current tenant.
         '400':
           description: 输入数据验证错误
         '401':
@@ -23548,9 +24605,10 @@ paths:
   /api/v1/we-rss/rss/{feed_id}/:
     get:
       operationId: we_rss_rss_feed
-      description: 按公众号 ID 输出该公众号下文章的 RSS XML。需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant`
-        共享隔离，Member 未绑定 tenant 时会被拒绝访问。
-      summary: 获取单个公众号的 RSS
+      description: Return RSS XML for one feed within the authenticated member's visible
+        article scope. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member
+        未绑定 tenant 时会被拒绝访问。
+      summary: Get feed RSS
       parameters:
       - in: header
         name: X-Tenant-ID
@@ -23601,7 +24659,7 @@ paths:
                       </channel>
                     </rss>
                   summary: Feed RSS XML
-          description: 单个公众号的 RSS XML。
+          description: RSS XML for one feed.
         '400':
           description: 输入数据验证错误
         '401':
@@ -23615,9 +24673,10 @@ paths:
   /api/v1/we-rss/rss/content/{article_id}/:
     get:
       operationId: we_rss_rss_content
-      description: 输出单篇公众号文章的正文 HTML，用于 RSS 阅读器或外部阅读页渲染。需要使用当前项目的 Member JWT 访问。所有数据按
-        `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
-      summary: 获取文章正文 HTML
+      description: Return article Markdown for one article currently visible to the
+        authenticated member. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant`
+        共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      summary: Get article Markdown
       parameters:
       - in: header
         name: X-Tenant-ID
@@ -23648,28 +24707,536 @@ paths:
       responses:
         '200':
           content:
-            text/html:
+            text/markdown:
               schema:
                 type: string
               examples:
-                ArticleHTMLResponse:
+                ArticleMarkdownResponse:
                   value: |-
-                    <!DOCTYPE html>
-                    <html lang="zh-CN">
-                      <head>
-                        <meta charset="utf-8" />
-                        <title>Imported Article</title>
-                      </head>
-                      <body>
-                        <article>
-                          <h1>Imported Article</h1>
-                          <p>Imported description</p>
-                          <div><p>Imported content</p></div>
-                        </article>
-                      </body>
-                    </html>
-                  summary: Article HTML response
-          description: 文章正文 HTML。
+                    # Imported Article
+
+                    > 公众号: AI Daily
+
+                    ---
+
+                    Imported content
+                  summary: Article Markdown response
+          description: Markdown for one article.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+  /api/v1/we-rss/rss/tags/{tag_id}/:
+    get:
+      operationId: we_rss_rss_tag
+      description: Return RSS XML for one member-private tag using the current member's
+        feed-tag relations. 需要使用当前项目的 Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member
+        未绑定 tenant 时会被拒绝访问。
+      summary: Get tag RSS
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      - in: path
+        name: tag_id
+        schema:
+          type: integer
+        description: Member private tag ID for RSS output.
+        required: true
+        examples:
+          TagIdExample:
+            value: 1
+            summary: tag_id example
+      tags:
+      - we-rss
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/xml:
+              schema:
+                type: string
+              examples:
+                TagRSSXML:
+                  value: |-
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <rss version="2.0">
+                      <channel>
+                        <title>AI We RSS</title>
+                        <link>https://example.com/api/v1/we-rss/rss/tags/1/</link>
+                        <description>RSS feed for one member-private tag.</description>
+                        <item>
+                          <title>Imported Article</title>
+                          <link>https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&amp;mid=1&amp;idx=1&amp;sn=abc</link>
+                          <description>Imported description</description>
+                        </item>
+                      </channel>
+                    </rss>
+                  summary: Tag RSS XML
+          description: RSS XML for one member-private tag.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+  /api/v1/we-rss/seo-keywords/:
+    get:
+      operationId: we_rss_seo_keywords_list
+      description: Return the selected member's SEO keyword library. 需要使用当前项目的 Member
+        JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      summary: List member SEO keywords
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      - in: query
+        name: member_id
+        schema:
+          type: integer
+        description: Explicit member scope for SEO keyword operations.
+        required: true
+        examples:
+          MemberIdQueryExample:
+            value: 1
+            summary: Member id query example
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Case-insensitive keyword text search within one member scope.
+        examples:
+          SEOKeywordSearchExample:
+            value: weight
+            summary: SEO keyword search example
+      - in: query
+        name: tag_id
+        schema:
+          type: integer
+        description: Filter SEO keywords linked to one member-owned tag.
+        examples:
+          SEOKeywordTagFilterExample:
+            value: 1
+            summary: SEO keyword tag filter example
+      tags:
+      - we-rss
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SEOkeywordlistresponse200Envelope'
+              examples:
+                SEOKeywordListResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                    - id: 1
+                      member_id: 1
+                      keyword: weight loss recipes
+                      search_index: 6800
+                      tag_ids:
+                      - 1
+                      - 2
+                      tags:
+                      - id: 1
+                        name: Weight Loss
+                        color: '#008000'
+                        sort_order: 0
+                      - id: 2
+                        name: Recipes
+                        color: '#FF8800'
+                        sort_order: 10
+                      created_at: '2026-04-05T10:00:00Z'
+                      updated_at: '2026-04-05T10:00:00Z'
+                  summary: SEO keyword list response
+          description: SEO keyword list fetched successfully.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+    post:
+      operationId: we_rss_seo_keywords_create
+      description: Create one SEO keyword under an explicit member scope. 需要使用当前项目的
+        Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      summary: Create a member SEO keyword
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      tags:
+      - we-rss
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeoKeywordWriteRequest'
+            examples:
+              SEOKeywordCreateRequest:
+                value:
+                  member_id: 1
+                  keyword: weight loss recipes
+                  search_index: 6800
+                  tag_ids:
+                  - 1
+                  - 2
+                summary: SEO keyword create request
+                description: Create one SEO keyword and optionally link it to tags.
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SeoKeywordWriteRequest'
+            examples:
+              SEOKeywordCreateRequest:
+                value:
+                  member_id: 1
+                  keyword: weight loss recipes
+                  search_index: 6800
+                  tag_ids:
+                  - 1
+                  - 2
+                summary: SEO keyword create request
+                description: Create one SEO keyword and optionally link it to tags.
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SeoKeywordWriteRequest'
+            examples:
+              SEOKeywordCreateRequest:
+                value:
+                  member_id: 1
+                  keyword: weight loss recipes
+                  search_index: 6800
+                  tag_ids:
+                  - 1
+                  - 2
+                summary: SEO keyword create request
+                description: Create one SEO keyword and optionally link it to tags.
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SEOkeywordcreateresponse201Envelope'
+              examples:
+                SEOKeywordCreateResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      id: 1
+                      member_id: 1
+                      keyword: weight loss recipes
+                      search_index: 6800
+                      tag_ids:
+                      - 1
+                      - 2
+                      tags:
+                      - id: 1
+                        name: Weight Loss
+                        color: '#008000'
+                        sort_order: 0
+                      - id: 2
+                        name: Recipes
+                        color: '#FF8800'
+                        sort_order: 10
+                      created_at: '2026-04-05T10:00:00Z'
+                      updated_at: '2026-04-05T10:00:00Z'
+                  summary: SEO keyword create response
+          description: SEO keyword created successfully.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+  /api/v1/we-rss/seo-keywords/{id}/:
+    get:
+      operationId: we_rss_seo_keywords_retrieve
+      description: Return one SEO keyword under an explicit member scope. 需要使用当前项目的
+        Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      summary: Retrieve a member SEO keyword
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Member SEO keyword ID.
+        required: true
+        examples:
+          IdExample:
+            value: 1
+            summary: id example
+      - in: query
+        name: member_id
+        schema:
+          type: integer
+        description: Explicit member scope for SEO keyword operations.
+        required: true
+        examples:
+          MemberIdQueryExample:
+            value: 1
+            summary: Member id query example
+      tags:
+      - we-rss
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SEOkeyworddetailresponse200Envelope'
+              examples:
+                SEOKeywordDetailResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      id: 1
+                      member_id: 1
+                      keyword: weight loss recipes
+                      search_index: 6800
+                      tag_ids:
+                      - 1
+                      - 2
+                      tags:
+                      - id: 1
+                        name: Weight Loss
+                        color: '#008000'
+                        sort_order: 0
+                      - id: 2
+                        name: Recipes
+                        color: '#FF8800'
+                        sort_order: 10
+                      created_at: '2026-04-05T10:00:00Z'
+                      updated_at: '2026-04-05T10:00:00Z'
+                  summary: SEO keyword detail response
+          description: SEO keyword detail fetched successfully.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+    put:
+      operationId: we_rss_seo_keywords_update
+      description: Update one SEO keyword and replace all linked tags. 需要使用当前项目的 Member
+        JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      summary: Update a member SEO keyword
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Member SEO keyword ID.
+        required: true
+        examples:
+          IdExample:
+            value: 1
+            summary: id example
+      tags:
+      - we-rss
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeoKeywordWriteRequest'
+            examples:
+              SEOKeywordUpdateRequest:
+                value:
+                  member_id: 1
+                  keyword: weight loss menu
+                  search_index: 7200
+                  tag_ids:
+                  - 2
+                summary: SEO keyword update request
+                description: Update one SEO keyword and replace its linked tags.
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SeoKeywordWriteRequest'
+            examples:
+              SEOKeywordUpdateRequest:
+                value:
+                  member_id: 1
+                  keyword: weight loss menu
+                  search_index: 7200
+                  tag_ids:
+                  - 2
+                summary: SEO keyword update request
+                description: Update one SEO keyword and replace its linked tags.
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SeoKeywordWriteRequest'
+            examples:
+              SEOKeywordUpdateRequest:
+                value:
+                  member_id: 1
+                  keyword: weight loss menu
+                  search_index: 7200
+                  tag_ids:
+                  - 2
+                summary: SEO keyword update request
+                description: Update one SEO keyword and replace its linked tags.
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SEOkeywordupdateresponse200Envelope'
+              examples:
+                SEOKeywordUpdateResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      id: 1
+                      member_id: 1
+                      keyword: weight loss menu
+                      search_index: 7200
+                      tag_ids:
+                      - 2
+                      tags:
+                      - id: 2
+                        name: Recipes
+                        color: '#FF8800'
+                        sort_order: 10
+                      created_at: '2026-04-05T10:00:00Z'
+                      updated_at: '2026-04-05T10:00:00Z'
+                  summary: SEO keyword update response
+          description: SEO keyword updated successfully.
+        '400':
+          description: 输入数据验证错误
+        '401':
+          description: 未认证或认证失败
+        '403':
+          description: 没有权限执行该操作
+        '404':
+          description: 请求的资源不存在
+        '500':
+          description: 服务器内部错误
+    delete:
+      operationId: we_rss_seo_keywords_destroy
+      description: Hard-delete one SEO keyword under an explicit member scope. 需要使用当前项目的
+        Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      summary: Delete a member SEO keyword
+      parameters:
+      - in: header
+        name: X-Tenant-ID
+        schema:
+          type: string
+        description: Member JWT 接口必填的租户头。值必须等于当前 member 绑定的 tenant ID，用于触发 `common`
+          模块里的租户隔离和权限校验。
+        required: true
+        examples:
+          TenantHeaderExample:
+            value: '1'
+            summary: Tenant header example
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Member SEO keyword ID.
+        required: true
+        examples:
+          IdExample:
+            value: 1
+            summary: id example
+      tags:
+      - we-rss
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '204':
+          description: SEO keyword deleted
         '400':
           description: 输入数据验证错误
         '401':
@@ -24083,7 +25650,7 @@ paths:
         name: status
         schema:
           type: string
-        description: 按任务状态过滤，可选值包括 `pending`、`running`、`success`、`failed`。
+        description: 按任务状态过滤，可选值包括 `pending`、`running`、`success`、`partial_success`、`timed_out`、`failed`。
         examples:
           TaskStatusExample:
             value: failed
@@ -24110,10 +25677,10 @@ paths:
         name: task_type
         schema:
           type: string
-        description: 按任务类型过滤，可选值包括 `credential_login`、`feed_sync`、`article_import`、`article_refresh`。
+        description: 按任务类型过滤，可选值包括 `credential_login`、`feed_sync_run`、`feed_sync_batch`、`feed_content_refresh`、`article_import`、`article_refresh`、`article_stats_refresh`。
         examples:
           TaskTypeExample:
-            value: feed_sync
+            value: feed_sync_run
             summary: Task type example
       tags:
       - we-rss
@@ -24134,37 +25701,68 @@ paths:
                     message: Operation succeeded
                     data:
                     - id: 101
-                      task_type: feed_sync
-                      status: success
-                      task_key: feed_sync:1
+                      task_type: feed_sync_run
+                      status: running
+                      task_key: ''
                       target_type: feed
                       target_id: 1
-                      message: Feed sync complete
+                      message: A feed sync task is already running.
                       request_payload:
                         feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
                       result_payload:
-                        fetched_count: 3
-                        detail_success_count: 2
-                        detail_failed_count: 1
-                        errors:
-                        - source_id: article-3
-                          url: https://mp.weixin.qq.com/s/article-3?__biz=Qkl6&mid=1&idx=3&sn=ghi
-                          error: WeChat article detail fetch failed.
-                      feed_id: 1
-                      article_ids:
-                      - 11
-                      - 12
-                      - 13
-                      article_count: 3
-                      detail_success_count: 2
-                      detail_failed_count: 1
-                      failed_articles:
-                      - source_id: article-3
-                        url: https://mp.weixin.qq.com/s/article-3?__biz=Qkl6&mid=1&idx=3&sn=ghi
-                        error: WeChat article detail fetch failed.
-                      celery_task_id: 6ec3c8a2-e570-4bd8-9031-53d5976fb415
+                        run_status: running
+                        feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
+                        has_more: true
+                        next_begin: 20
+                        batches_completed: 1
+                        batches_failed: 0
+                        articles_synced: 20
+                        articles_failed: 0
+                        article_ids:
+                        - 11
+                        - 12
+                        - 13
+                        current_batch_task_id: 202
+                        latest_completed_batch:
+                          batch_no: 1
+                          begin: 0
+                          end: 20
+                          has_more: true
+                          article_count: 20
+                          article_ids:
+                          - 11
+                          - 12
+                          - 13
+                          articles:
+                          - id: 11
+                            source_id: article-1
+                            title: Imported Article 1
+                            url: https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc
+                            publish_time: '2026-03-20T12:00:00Z'
+                            pic_url: https://example.com/article-cover-1.png
+                            status: active
+                          failed_articles: []
+                          started_at: '2026-03-21T09:20:00Z'
+                          finished_at: '2026-03-21T09:20:08Z'
+                        last_progress_at: '2026-03-21T09:20:08Z'
+                        timeout_reason: ''
+                        stop_reason: ''
+                        stop_article_url: ''
+                        stop_article_source_id: ''
+                        stop_publish_time: null
+                      celery_task_id: ''
                       started_at: '2026-03-21T09:20:00Z'
-                      finished_at: '2026-03-21T09:20:08Z'
+                      finished_at: null
                       created_at: '2026-03-21T09:20:00Z'
                       updated_at: '2026-03-21T09:20:08Z'
                     - id: 106
@@ -24200,8 +25798,11 @@ paths:
   /api/v1/we-rss/tasks/{task_id}/:
     get:
       operationId: we_rss_tasks_retrieve
-      description: Return status, payload, and results for one sync task. 需要使用当前项目的
-        Member JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
+      description: Return status, payload, and results for one sync task. For feed
+        sync, the frontend should poll the parent `feed_sync_run` task every 5 seconds
+        and append a new batch or refresh the article list exactly once only when
+        `result_payload.latest_completed_batch.batch_no` changes. 需要使用当前项目的 Member
+        JWT 访问。所有数据按 `request.user.tenant` 共享隔离，Member 未绑定 tenant 时会被拒绝访问。
       summary: Retrieve sync task detail
       parameters:
       - in: header
@@ -24244,39 +25845,70 @@ paths:
                     message: Operation succeeded
                     data:
                       id: 101
-                      task_type: feed_sync
+                      task_type: feed_sync_run
                       status: success
-                      task_key: feed_sync:1
+                      task_key: ''
                       target_type: feed
                       target_id: 1
                       message: Feed sync complete
                       request_payload:
                         feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
                       result_payload:
-                        fetched_count: 3
-                        detail_success_count: 2
-                        detail_failed_count: 1
-                        errors:
-                        - source_id: article-3
-                          url: https://mp.weixin.qq.com/s/article-3?__biz=Qkl6&mid=1&idx=3&sn=ghi
-                          error: WeChat article detail fetch failed.
-                      feed_id: 1
-                      article_ids:
-                      - 11
-                      - 12
-                      - 13
-                      article_count: 3
-                      detail_success_count: 2
-                      detail_failed_count: 1
-                      failed_articles:
-                      - source_id: article-3
-                        url: https://mp.weixin.qq.com/s/article-3?__biz=Qkl6&mid=1&idx=3&sn=ghi
-                        error: WeChat article detail fetch failed.
-                      celery_task_id: 6ec3c8a2-e570-4bd8-9031-53d5976fb415
+                        run_status: success
+                        feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
+                        has_more: false
+                        next_begin: 27
+                        batches_completed: 2
+                        batches_failed: 0
+                        articles_synced: 27
+                        articles_failed: 0
+                        article_ids:
+                        - 11
+                        - 12
+                        - 13
+                        current_batch_task_id: null
+                        latest_completed_batch:
+                          batch_no: 2
+                          begin: 20
+                          end: 27
+                          has_more: false
+                          article_count: 7
+                          article_ids:
+                          - 31
+                          - 32
+                          - 33
+                          articles:
+                          - id: 31
+                            source_id: article-21
+                            title: Imported Article 21
+                            url: https://mp.weixin.qq.com/s/article-21?__biz=Qkl6&mid=1&idx=21&sn=abc
+                            publish_time: '2026-03-21T12:00:00Z'
+                            pic_url: https://example.com/article-cover-21.png
+                            status: active
+                          failed_articles: []
+                          started_at: '2026-03-21T09:20:09Z'
+                          finished_at: '2026-03-21T09:20:14Z'
+                        last_progress_at: '2026-03-21T09:20:14Z'
+                        timeout_reason: ''
+                        stop_reason: ''
+                        stop_article_url: ''
+                        stop_article_source_id: ''
+                        stop_publish_time: null
+                      celery_task_id: ''
                       started_at: '2026-03-21T09:20:00Z'
-                      finished_at: '2026-03-21T09:20:08Z'
+                      finished_at: '2026-03-21T09:20:14Z'
                       created_at: '2026-03-21T09:20:00Z'
-                      updated_at: '2026-03-21T09:20:08Z'
+                      updated_at: '2026-03-21T09:20:14Z'
                   summary: Feed sync task success response
                 FeedSyncTaskFailedResponse:
                   value:
@@ -24284,25 +25916,171 @@ paths:
                     code: 2000
                     message: Operation succeeded
                     data:
-                      id: 102
-                      task_type: feed_sync
+                      id: 103
+                      task_type: feed_sync_run
                       status: failed
-                      task_key: feed_sync:1
+                      task_key: ''
                       target_type: feed
                       target_id: 1
                       message: 'Feed sync failed: WeChat rate limit triggered'
                       request_payload:
                         feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
                       result_payload:
+                        run_status: failed
                         feed_id: 1
-                        task_type: feed_sync
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
+                        has_more: false
+                        next_begin: 0
+                        batches_completed: 0
+                        batches_failed: 1
+                        articles_synced: 0
+                        articles_failed: 0
+                        article_ids: []
+                        current_batch_task_id: 204
+                        latest_completed_batch: null
+                        last_progress_at: '2026-03-21T09:25:02Z'
+                        timeout_reason: ''
+                        stop_reason: ''
+                        stop_article_url: ''
+                        stop_article_source_id: ''
+                        stop_publish_time: null
                         error: WeChat rate limit triggered
-                      celery_task_id: 34e4eb4f-505c-4e8a-86ae-24f614e9f5c1
+                      celery_task_id: ''
                       started_at: '2026-03-21T09:25:00Z'
                       finished_at: '2026-03-21T09:25:02Z'
                       created_at: '2026-03-21T09:25:00Z'
                       updated_at: '2026-03-21T09:25:02Z'
                   summary: Feed sync task failed response
+                FeedSyncTaskTimedOutResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      id: 104
+                      task_type: feed_sync_run
+                      status: timed_out
+                      task_key: ''
+                      target_type: feed
+                      target_id: 1
+                      message: Feed sync timed out before any batch completed.
+                      request_payload:
+                        feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
+                      result_payload:
+                        run_status: timed_out
+                        feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
+                        has_more: true
+                        next_begin: 0
+                        batches_completed: 0
+                        batches_failed: 1
+                        articles_synced: 0
+                        articles_failed: 0
+                        article_ids: []
+                        current_batch_task_id: 205
+                        latest_completed_batch: null
+                        last_progress_at: '2026-03-21T09:25:30Z'
+                        timeout_reason: batch_timeout
+                        stop_reason: ''
+                        stop_article_url: ''
+                        stop_article_source_id: ''
+                        stop_publish_time: null
+                      celery_task_id: ''
+                      started_at: '2026-03-21T09:25:00Z'
+                      finished_at: '2026-03-21T09:25:30Z'
+                      created_at: '2026-03-21T09:25:00Z'
+                      updated_at: '2026-03-21T09:25:30Z'
+                  summary: Feed sync task timed out response
+                FeedSyncTaskPartialSuccessResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      id: 102
+                      task_type: feed_sync_run
+                      status: partial_success
+                      task_key: ''
+                      target_type: feed
+                      target_id: 1
+                      message: Feed sync partially completed before timing out.
+                      request_payload:
+                        feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
+                      result_payload:
+                        run_status: partial_success
+                        feed_id: 1
+                        batch_size: 20
+                        poll_after_seconds: 5
+                        sync_scope: full
+                        window_days: null
+                        refresh_markdown: false
+                        has_more: true
+                        next_begin: 20
+                        batches_completed: 1
+                        batches_failed: 1
+                        articles_synced: 20
+                        articles_failed: 0
+                        article_ids:
+                        - 11
+                        - 12
+                        - 13
+                        current_batch_task_id: 203
+                        latest_completed_batch:
+                          batch_no: 1
+                          begin: 0
+                          end: 20
+                          has_more: true
+                          article_count: 20
+                          article_ids:
+                          - 11
+                          - 12
+                          - 13
+                          articles:
+                          - id: 11
+                            source_id: article-1
+                            title: Imported Article 1
+                            url: https://mp.weixin.qq.com/s/article-1?__biz=Qkl6&mid=1&idx=1&sn=abc
+                            publish_time: '2026-03-20T12:00:00Z'
+                            pic_url: https://example.com/article-cover-1.png
+                            status: active
+                          failed_articles: []
+                          started_at: '2026-03-21T09:20:00Z'
+                          finished_at: '2026-03-21T09:20:08Z'
+                        last_progress_at: '2026-03-21T09:21:38Z'
+                        timeout_reason: batch_timeout
+                        stop_reason: ''
+                        stop_article_url: ''
+                        stop_article_source_id: ''
+                        stop_publish_time: null
+                      celery_task_id: ''
+                      started_at: '2026-03-21T09:20:00Z'
+                      finished_at: '2026-03-21T09:21:38Z'
+                      created_at: '2026-03-21T09:20:00Z'
+                      updated_at: '2026-03-21T09:21:38Z'
+                  summary: Feed sync task partial success response
                 ArticleImportTaskResponse:
                   value:
                     success: true
@@ -24380,6 +26158,45 @@ paths:
                       created_at: '2026-03-21T09:50:00Z'
                       updated_at: '2026-03-21T09:50:02Z'
                   summary: Article refresh task failed response
+                FeedContentRefreshTaskResponse:
+                  value:
+                    success: true
+                    code: 2000
+                    message: Operation succeeded
+                    data:
+                      id: 109
+                      task_type: feed_content_refresh
+                      status: success
+                      task_key: feed_content_refresh:2
+                      target_type: feed
+                      target_id: 2
+                      message: Feed content refresh complete
+                      request_payload:
+                        feed_id: 2
+                        article_ids:
+                        - 11
+                        - 12
+                        - 13
+                      result_payload:
+                        task_type: feed_content_refresh
+                        feed_id: 2
+                        requested_count: 3
+                        success_count: 2
+                        failed_count: 1
+                        article_ids:
+                        - 11
+                        - 12
+                        - 13
+                        failed_articles:
+                        - article_id: 13
+                          url: https://mp.weixin.qq.com/s/article-13
+                          error: markdown blocked
+                      celery_task_id: b8bf05b5-fb7f-43c7-83de-d5f8b4af9658
+                      started_at: '2026-03-21T09:36:00Z'
+                      finished_at: '2026-03-21T09:36:08Z'
+                      created_at: '2026-03-21T09:36:00Z'
+                      updated_at: '2026-03-21T09:36:08Z'
+                  summary: Feed content refresh task response
           description: Task detail fetched successfully.
         '400':
           description: 输入数据验证错误
@@ -24391,6 +26208,121 @@ paths:
           description: 请求的资源不存在
         '500':
           description: 服务器内部错误
+  /api/v1/wechat/accounts/:
+    get:
+      operationId: api_v1_wechat_accounts_retrieve
+      description: 读取 `WECHAT_CONFIG_PATH` 配置文件，返回前端下拉框需要的公众号账号列表。响应只暴露 `name`、`author`
+        和 `appid`。
+      summary: 获取公众号账号列表
+      tags:
+      - 微信公众号草稿接口
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatAccountsResponse'
+              examples:
+                公众号账号列表示例:
+                  value:
+                    success: true
+                    code: 2000
+                    message: 获取公众号账号列表成功
+                    data:
+                    - name: 公众号A
+                      author: 作者甲
+                      appid: wx123
+                    - name: 公众号B
+                      author: 作者乙
+                      appid: wx456
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+  /api/v1/wechat/draft/add/:
+    post:
+      operationId: api_v1_wechat_draft_add_create
+      description: 对应微信官方 `/cgi-bin/draft/add` 接口。前端先自行上传正文图片和永久素材，再通过本接口提交 `articles`
+        JSON。
+      summary: 新增草稿
+      tags:
+      - 微信公众号草稿接口
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WechatDraftAddRequestRequest'
+            examples:
+              新增草稿请求示例:
+                value:
+                  account_appid: wx123
+                  articles:
+                  - article_type: news
+                    title: 文章标题
+                    author: 作者甲
+                    digest: 文章摘要
+                    content: <p>正文内容</p>
+                    content_source_url: https://example.com/source-article
+                    thumb_media_id: thumb-media-id
+                    need_open_comment: 0
+                    only_fans_can_comment: 0
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WechatDraftAddRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WechatDraftAddRequestRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatDraftAddResponse'
+              examples:
+                新增草稿成功:
+                  value:
+                    success: true
+                    code: 2000
+                    message: 草稿创建成功
+                    data:
+                      account_appid: wx123
+                      account_name: 公众号A
+                      draft_media_id: draft-media-id
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
   /api/v1/wechat/login/:
     post:
       operationId: api_v1_wechat_login_create
@@ -24411,7 +26343,7 @@ paths:
         name: X-Tenant-ID
         schema:
           type: integer
-        description: 租户ID（首次登录时用于指定新用户所属租户）
+        description: 租户 ID（首次登录时用于指定新用户所属租户）
       tags:
       - 微信登录
       requestBody:
@@ -24468,6 +26400,129 @@ paths:
               schema:
                 description: 请求参数错误或微信登录失败
           description: ''
+  /api/v1/wechat/material/add-material/:
+    post:
+      operationId: api_v1_wechat_material_add_material_create
+      description: 对应微信官方 `/cgi-bin/material/add_material` 接口。前端每次上传一个永久素材。当前支持 `image`
+        和 `thumb`。不传 `type` 时默认按 `image` 处理。
+      summary: 上传永久素材
+      tags:
+      - 微信公众号草稿接口
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WechatAddMaterialRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WechatAddMaterialRequestRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatAddMaterialResponse'
+              examples:
+                上传永久素材成功:
+                  value:
+                    success: true
+                    code: 2000
+                    message: 永久素材上传成功
+                    data:
+                      account_appid: wx123
+                      account_name: 公众号A
+                      type: image
+                      media_id: MEDIA_ID_123
+                      url: https://mmbiz.qpic.cn/example-material
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+  /api/v1/wechat/media/uploadimg/:
+    post:
+      operationId: api_v1_wechat_media_uploadimg_create
+      description: 对应微信官方 `/cgi-bin/media/uploadimg` 接口。前端每次上传一张正文图片，后端返回微信可用的图片 URL。
+      summary: 上传图文正文图片
+      tags:
+      - 微信公众号草稿接口
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WechatUploadImageRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WechatUploadImageRequestRequest'
+        required: true
+      security:
+      - Bearer: []
+      - Bearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatUploadImageResponse'
+              examples:
+                上传正文图片成功:
+                  value:
+                    success: true
+                    code: 2000
+                    message: 正文图片上传成功
+                    data:
+                      account_appid: wx123
+                      account_name: 公众号A
+                      url: https://mmbiz.qpic.cn/example-image
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WechatErrorResponse'
+          description: ''
 components:
   schemas:
     APILog:
@@ -24511,13 +26566,15 @@ components:
           maxLength: 255
         status_code:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 状态码
         response_time:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 响应时间(ms)
         status_type:
           enum:
@@ -24596,13 +26653,15 @@ components:
           title: 请求体
         status_code:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 状态码
         response_time:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 响应时间(ms)
         status_type:
           enum:
@@ -24668,6 +26727,19 @@ components:
       required:
       - confirm_password
       - new_password
+    AnalyzeSeriesCharactersRequestRequest:
+      type: object
+      properties:
+        source_text:
+          type: string
+          minLength: 1
+          maxLength: 8000
+        series_name:
+          type: string
+          default: ''
+          maxLength: 120
+      required:
+      - source_text
     ApplicationCreate:
       type: object
       description: 应用创建序列化器
@@ -25030,6 +27102,30 @@ components:
       - articles
       - feedbacks
       - licenses
+    ArticleBatchDeleteRequest:
+      type: object
+      properties:
+        article_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          description: Delete the selected tenant article IDs in one request.
+      required:
+      - article_ids
+    ArticleBatchDeleteResponse:
+      type: object
+      properties:
+        deleted_count:
+          type: integer
+        article_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+      required:
+      - article_ids
+      - deleted_count
     ArticleCreateUpdateRequest:
       type: object
       description: 文章创建和更新序列化器
@@ -25139,8 +27235,9 @@ components:
           maxLength: 100
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
         parent:
           type: integer
@@ -25322,8 +27419,9 @@ components:
           maxLength: 100
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
         tenant:
           type: integer
@@ -25507,8 +27605,9 @@ components:
           maxLength: 100
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
         parent:
           type: integer
@@ -25519,6 +27618,25 @@ components:
       - content
       - slug
       - title
+    ArticleExportRequest:
+      type: object
+      properties:
+        article_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          description: Explicit article IDs to export. When present, this selector
+            takes priority over the others.
+        member_id:
+          type: integer
+          minimum: 1
+          description: Export all articles under feeds subscribed by this member within
+            the current tenant.
+        feed_id:
+          type: integer
+          minimum: 1
+          description: Export all articles under one feed within the current tenant.
     ArticleFavorite:
       type: object
       description: 文章收藏序列化器
@@ -25995,43 +28113,51 @@ components:
           title: 文章
         views_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 浏览次数
         unique_views_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 独立访客浏览次数
         likes_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 点赞数
         dislikes_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 踩数
         comments_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 评论数
         shares_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 分享数
         bookmarks_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 收藏数
         avg_reading_time:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 平均阅读时长(秒)
         bounce_rate:
           type: string
@@ -26063,43 +28189,51 @@ components:
           title: 文章
         views_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 浏览次数
         unique_views_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 独立访客浏览次数
         likes_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 点赞数
         dislikes_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 踩数
         comments_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 评论数
         shares_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 分享数
         bookmarks_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 收藏数
         avg_reading_time:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 平均阅读时长(秒)
         bounce_rate:
           type: string
@@ -26108,6 +28242,36 @@ components:
           title: 跳出率(%)
       required:
       - article
+    ArticleStatsBatchRefreshRequest:
+      type: object
+      properties:
+        article_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          description: Refresh the selected tenant article IDs asynchronously in the
+            same order sent by the frontend.
+        member_id:
+          type: integer
+          minimum: 1
+          description: Refresh all articles under feeds subscribed by this member
+            within the current tenant.
+        feed_id:
+          type: integer
+          minimum: 1
+          description: Refresh all articles under one feed within the current tenant.
+    ArticleStatsRefreshByUrlRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          description: Public WeChat article URL for an existing tenant article. The
+            backend normalizes it before matching and refreshing stats.
+      required:
+      - url
     ArticleVersion:
       type: object
       description: 文章版本序列化器
@@ -26174,6 +28338,22 @@ components:
       - tenant
       - title
       - version_number
+    Articlebatchdeleteresponse200Envelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ArticleBatchDeleteResponse'
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     Articledetailresponse200Envelope:
       type: object
       properties:
@@ -26245,6 +28425,54 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/WechatSyncTask'
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    Articlesearchresponse200Envelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/WechatArticleSearchResponse'
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    Articlestatsbatchrefreshresponse200Envelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/WechatSyncTask'
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    ArticlestatsrefreshbyURLresponse200Envelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/WechatArticle'
         success:
           type: boolean
         code:
@@ -26421,8 +28649,9 @@ components:
           title: 更新时间
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
         tenant:
           type: integer
@@ -26473,8 +28702,9 @@ components:
           maxLength: 255
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
         application:
           type: integer
@@ -26511,6 +28741,58 @@ components:
       - new_password
       - new_password_confirm
       - old_password
+    CharacterCandidateRequest:
+      type: object
+      properties:
+        character_name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        series_role:
+          type: string
+          minLength: 1
+          maxLength: 80
+        core_identity:
+          type: string
+          minLength: 1
+          maxLength: 300
+        visual_profile:
+          type: string
+          minLength: 1
+          maxLength: 300
+        personality_profile:
+          type: string
+          minLength: 1
+          maxLength: 300
+        speech_style:
+          type: string
+          minLength: 1
+          maxLength: 200
+        relationship_to_others:
+          type: string
+          default: ''
+        signature_elements:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        character_prompt:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        confidence_reason:
+          type: string
+          minLength: 1
+          maxLength: 300
+      required:
+      - character_name
+      - character_prompt
+      - confidence_reason
+      - core_identity
+      - personality_profile
+      - series_role
+      - speech_style
+      - visual_profile
     CheckRecord:
       type: object
       description: |-
@@ -26824,8 +29106,9 @@ components:
           title: 是否置顶
         likes_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 点赞数
         tenant:
           type: integer
@@ -26910,8 +29193,9 @@ components:
           title: 是否置顶
         likes_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 点赞数
       required:
       - article
@@ -28177,6 +30461,28 @@ components:
           default: ''
       required:
       - mp_name
+    FeedSyncRequestRequest:
+      type: object
+      properties:
+        sync_scope:
+          enum:
+          - full
+          - latest
+          - window
+          type: string
+          description: |-
+            * `full` - Full
+            * `latest` - Latest
+            * `window` - Window
+          x-spec-enum-id: cc01fde6f2e678ea
+          default: full
+        window_days:
+          type: integer
+          maximum: 180
+          minimum: 1
+        refresh_markdown:
+          type: boolean
+          default: false
     FeedWriteRequest:
       type: object
       properties:
@@ -28571,8 +30877,9 @@ components:
           nullable: true
         retry_count:
           type: integer
-          maximum: 65535
+          maximum: 9223372036854775807
           minimum: 0
+          format: int64
         created_at:
           type: string
           format: date-time
@@ -29130,6 +31437,22 @@ components:
       - data
       - message
       - success
+    Feedcontentrefreshresponse200Envelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/WechatSyncTask'
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     Feedcreateresponse201Envelope:
       type: object
       properties:
@@ -29336,6 +31659,19 @@ components:
       required:
       - activation_code
       - event_type
+    JokeToComicRequestRequest:
+      type: object
+      properties:
+        joke:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        confirmed_characters:
+          type: array
+          items:
+            $ref: '#/components/schemas/CharacterCandidateRequest'
+      required:
+      - joke
     License:
       type: object
       description: 许可证序列化器（列表显示）
@@ -29377,7 +31713,7 @@ components:
           maxLength: 254
         max_activations:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 最大激活数
@@ -29590,7 +31926,7 @@ components:
           title: 允许共享
         max_devices_per_user:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 用户最大设备数
@@ -29784,7 +32120,7 @@ components:
           title: 允许共享
         max_devices_per_user:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 用户最大设备数
@@ -29849,7 +32185,7 @@ components:
           title: 允许共享
         max_devices_per_user:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 用户最大设备数
@@ -29918,7 +32254,7 @@ components:
           title: 允许共享
         max_devices_per_user:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 用户最大设备数
@@ -29981,7 +32317,7 @@ components:
           writeOnly: true
         max_activations:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 最大激活数
@@ -30035,7 +32371,7 @@ components:
           maxLength: 254
         max_activations:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 最大激活数
@@ -30159,13 +32495,13 @@ components:
           title: 方案类型
         default_max_activations:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 默认最大激活数
         default_validity_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 默认有效天数
@@ -30250,13 +32586,13 @@ components:
           title: 方案类型
         default_max_activations:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 默认最大激活数
         default_validity_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 默认有效天数
@@ -30339,7 +32675,7 @@ components:
           maxLength: 254
         max_activations:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 最大激活数
@@ -30503,6 +32839,54 @@ components:
           title: 状态
       required:
       - license
+    MarkdownFormatRequestRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          minLength: 1
+        mode:
+          enum:
+          - gentle
+          type: string
+          description: '* `gentle` - Gentle'
+          x-spec-enum-id: ee3cd857f6394ce5
+          default: gentle
+      required:
+      - content
+    MarkdownFormatResponse:
+      type: object
+      properties:
+        formatted_markdown:
+          type: string
+        mode:
+          enum:
+          - gentle
+          type: string
+          description: '* `gentle` - Gentle'
+          x-spec-enum-id: ee3cd857f6394ce5
+        executor:
+          type: string
+      required:
+      - executor
+      - formatted_markdown
+      - mode
+    Markdownformatresponse200Envelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MarkdownFormatResponse'
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     Member:
       type: object
       description: 普通用户序列化器
@@ -30713,8 +33097,9 @@ components:
           maxLength: 100
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
         parent:
           type: integer
@@ -31322,6 +33707,26 @@ components:
       - name
       - sort_order
       - updated_at
+    MemberTagSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        color:
+          type: string
+          readOnly: true
+        sort_order:
+          type: integer
+          readOnly: true
+      required:
+      - color
+      - id
+      - name
+      - sort_order
     MemberTagWriteRequest:
       type: object
       properties:
@@ -31336,8 +33741,9 @@ components:
           type: string
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
         is_pinned:
           type: boolean
       required:
@@ -31387,8 +33793,9 @@ components:
           maxLength: 100
         rank:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 菜单排序
         show_link:
           type: boolean
@@ -31422,8 +33829,9 @@ components:
           title: 禁止添加到标签页
         dynamic_level:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           nullable: true
           title: 标签页最大数量
         active_path:
@@ -31520,8 +33928,9 @@ components:
           maxLength: 100
         rank:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 菜单排序
         show_link:
           type: boolean
@@ -31555,8 +33964,9 @@ components:
           title: 禁止添加到标签页
         dynamic_level:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           nullable: true
           title: 标签页最大数量
         active_path:
@@ -31639,8 +34049,9 @@ components:
           maxLength: 100
         rank:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 菜单排序
         show_link:
           type: boolean
@@ -31674,8 +34085,9 @@ components:
           title: 禁止添加到标签页
         dynamic_level:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           nullable: true
           title: 标签页最大数量
         active_path:
@@ -35817,8 +38229,9 @@ components:
           maxLength: 100
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
         parent:
           type: integer
@@ -35894,8 +38307,9 @@ components:
           maxLength: 255
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
         application:
           type: integer
@@ -36048,8 +38462,9 @@ components:
           title: 是否置顶
         likes_count:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 点赞数
     PatchedCustomerMemberRelationRequest:
       type: object
@@ -36517,7 +38932,7 @@ components:
           title: 允许共享
         max_devices_per_user:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 用户最大设备数
@@ -36594,13 +39009,13 @@ components:
           title: 方案类型
         default_max_activations:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 默认最大激活数
         default_validity_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 默认有效天数
@@ -36651,7 +39066,7 @@ components:
           maxLength: 254
         max_activations:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 最大激活数
@@ -36792,8 +39207,9 @@ components:
           maxLength: 100
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
         parent:
           type: integer
@@ -36957,8 +39373,9 @@ components:
           maxLength: 100
         rank:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 菜单排序
         show_link:
           type: boolean
@@ -36992,8 +39409,9 @@ components:
           title: 禁止添加到标签页
         dynamic_level:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           nullable: true
           title: 标签页最大数量
         active_path:
@@ -37518,8 +39936,9 @@ components:
           title: 表单类型
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
     PatchedTaskRequest:
       type: object
@@ -37670,7 +40089,7 @@ components:
           title: 应用
         max_licenses:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 最大许可证数
@@ -37701,7 +40120,7 @@ components:
           title: Current等级
         consecutive_login_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 连续登录天数
@@ -37736,7 +40155,7 @@ components:
           title: 租户
         granted_by_id:
           type: integer
-          maximum: 18446744073709551615
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -37767,14 +40186,14 @@ components:
           title: 过期时间
         original_duration_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
           title: 原始有效期天数
         extended_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 延期天数
@@ -37783,7 +40202,7 @@ components:
           title: 是否自动续期
         grace_period_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 宽限期天数
@@ -37794,7 +40213,7 @@ components:
           title: 已使用的福利记录
         payment_id:
           type: integer
-          maximum: 18446744073709551615
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -37850,8 +40269,9 @@ components:
           title: 用户类型
         user_id:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 用户ID
         role:
           type: integer
@@ -38448,6 +40868,72 @@ components:
       - data
       - message
       - success
+    SEOkeywordcreateresponse201Envelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SeoKeyword'
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    SEOkeyworddetailresponse200Envelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SeoKeyword'
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    SEOkeywordlistresponse200Envelope:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SeoKeyword'
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    SEOkeywordupdateresponse200Envelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SeoKeyword'
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     SecurityAuditLog:
       type: object
       description: 安全审计日志序列化器
@@ -38528,6 +41014,74 @@ components:
       - tenant_name
       - timestamp
       - user_name
+    SeoKeyword:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        member_id:
+          type: integer
+          readOnly: true
+        keyword:
+          type: string
+          readOnly: true
+        search_index:
+          type: integer
+          readOnly: true
+        tag_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          readOnly: true
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemberTagSummary'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 更新时间
+      required:
+      - created_at
+      - id
+      - keyword
+      - member_id
+      - search_index
+      - tag_ids
+      - tags
+      - updated_at
+    SeoKeywordWriteRequest:
+      type: object
+      properties:
+        member_id:
+          type: integer
+          minimum: 1
+        keyword:
+          type: string
+          minLength: 1
+        search_index:
+          type: integer
+          minimum: 0
+        tag_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+      required:
+      - keyword
+      - member_id
+      - search_index
     SimpleResponse:
       type: object
       properties:
@@ -39496,8 +42050,9 @@ components:
           title: 表单类型
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
         created_at:
           type: string
@@ -39565,8 +42120,9 @@ components:
           title: 表单类型
         sort_order:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 排序
       required:
       - translations
@@ -39953,7 +42509,7 @@ components:
           readOnly: true
         max_licenses:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 最大许可证数
@@ -39998,7 +42554,7 @@ components:
           title: 应用
         max_licenses:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 最大许可证数
@@ -40022,23 +42578,27 @@ components:
       properties:
         max_users:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 最大用户数
         max_admins:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 最大管理员数
         max_storage_mb:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 最大存储空间(MB)
         max_products:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 最大产品数
     TenantRequest:
       type: object
@@ -40162,8 +42722,9 @@ components:
           maxLength: 50
         points:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 积分Change数量
         balance_before:
           type: integer
@@ -40180,7 +42741,7 @@ components:
           title: 租户积分倍数
         original_points:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -40201,7 +42762,7 @@ components:
           title: 来源类型
         source_id:
           type: integer
-          maximum: 18446744073709551615
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -40230,7 +42791,7 @@ components:
           title: 操作原因说明
         operator_id:
           type: integer
-          maximum: 18446744073709551615
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -40263,7 +42824,7 @@ components:
           title: 创建时间
         created_by_id:
           type: integer
-          maximum: 18446744073709551615
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -40365,7 +42926,7 @@ components:
           title: 最后等级检查时间
         consecutive_login_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 连续登录天数
@@ -40457,7 +43018,7 @@ components:
           title: Current等级
         consecutive_login_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 连续登录天数
@@ -40503,7 +43064,7 @@ components:
           title: 授予时间
         granted_by_id:
           type: integer
-          maximum: 18446744073709551615
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -40534,14 +43095,14 @@ components:
           title: 过期时间
         original_duration_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
           title: 原始有效期天数
         extended_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 延期天数
@@ -40554,7 +43115,7 @@ components:
           title: 续期次数
         grace_period_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 宽限期天数
@@ -40581,7 +43142,7 @@ components:
           title: 已使用的福利记录
         payment_id:
           type: integer
-          maximum: 18446744073709551615
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -40695,7 +43256,7 @@ components:
           title: 租户
         granted_by_id:
           type: integer
-          maximum: 18446744073709551615
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -40726,14 +43287,14 @@ components:
           title: 过期时间
         original_duration_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
           title: 原始有效期天数
         extended_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 延期天数
@@ -40742,7 +43303,7 @@ components:
           title: 是否自动续期
         grace_period_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 宽限期天数
@@ -40753,7 +43314,7 @@ components:
           title: 已使用的福利记录
         payment_id:
           type: integer
-          maximum: 18446744073709551615
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -41098,19 +43659,19 @@ components:
           maxLength: 20
         level_order:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 等级序号
         min_points:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 最低积分要求
         max_points:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
@@ -41298,8 +43859,9 @@ components:
           title: 用户类型
         user_id:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 用户ID
         role:
           type: integer
@@ -41398,8 +43960,9 @@ components:
           title: 用户类型
         user_id:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           title: 用户ID
         role:
           type: integer
@@ -41499,21 +44062,21 @@ components:
           title: 价格配置
         default_duration_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
           title: 默认有效期天数
         max_duration_days:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           nullable: true
           title: 最大有效期天数
         tag_level:
           type: integer
-          maximum: 4294967295
+          maximum: 9223372036854775807
           minimum: 0
           format: int64
           title: 标签等级
@@ -41621,6 +44184,106 @@ components:
             * `-1` - Downvote
       required:
       - vote_type
+    WechatAccountOption:
+      type: object
+      properties:
+        name:
+          type: string
+          readOnly: true
+        author:
+          type: string
+          readOnly: true
+        appid:
+          type: string
+          readOnly: true
+      required:
+      - appid
+      - author
+      - name
+    WechatAccountsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WechatAccountOption'
+      required:
+      - code
+      - data
+      - message
+      - success
+    WechatAddMaterialRequestRequest:
+      type: object
+      properties:
+        account_appid:
+          type: string
+          minLength: 1
+          maxLength: 64
+        type:
+          enum:
+          - image
+          - thumb
+          type: string
+          description: |-
+            * `image` - image
+            * `thumb` - thumb
+          x-spec-enum-id: 75c5e0886e39351f
+          default: image
+        media:
+          type: string
+          format: binary
+          writeOnly: true
+      required:
+      - account_appid
+      - media
+    WechatAddMaterialResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/WechatAddMaterialResult'
+      required:
+      - code
+      - data
+      - message
+      - success
+    WechatAddMaterialResult:
+      type: object
+      properties:
+        account_appid:
+          type: string
+          readOnly: true
+        account_name:
+          type: string
+          readOnly: true
+        type:
+          type: string
+          readOnly: true
+        media_id:
+          type: string
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+      required:
+      - account_appid
+      - account_name
+      - media_id
+      - type
+      - url
     WechatArticle:
       type: object
       properties:
@@ -41738,6 +44401,42 @@ components:
       - title
       - updated_at
       - url
+    WechatArticleSearchItem:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        summary:
+          type: string
+        datetime:
+          type: string
+        date_text:
+          type: string
+        date_description:
+          type: string
+        source:
+          type: string
+      required:
+      - url
+    WechatArticleSearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        total:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WechatArticleSearchItem'
+      required:
+      - items
+      - query
+      - total
     WechatCredentialDetail:
       type: object
       properties:
@@ -41876,6 +44575,68 @@ components:
       - name
       - status
       - updated_at
+    WechatDraftAddRequestRequest:
+      type: object
+      properties:
+        account_appid:
+          type: string
+          minLength: 1
+          maxLength: 64
+        articles:
+          type: array
+          items: {}
+          description: Official WeChat draft/add articles payload.
+          minItems: 1
+      required:
+      - account_appid
+      - articles
+    WechatDraftAddResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/WechatDraftAddResult'
+      required:
+      - code
+      - data
+      - message
+      - success
+    WechatDraftAddResult:
+      type: object
+      properties:
+        account_appid:
+          type: string
+          readOnly: true
+        account_name:
+          type: string
+          readOnly: true
+        draft_media_id:
+          type: string
+          readOnly: true
+      required:
+      - account_appid
+      - account_name
+      - draft_media_id
+    WechatErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          nullable: true
+      required:
+      - code
+      - message
+      - success
     WechatFeed:
       type: object
       properties:
@@ -41974,29 +44735,41 @@ components:
           enum:
           - credential_login
           - feed_sync
+          - feed_sync_run
+          - feed_sync_batch
+          - feed_content_refresh
           - article_refresh
           - article_import
+          - article_stats_refresh
           type: string
           description: |-
             * `credential_login` - Credential Login
             * `feed_sync` - Feed Sync
+            * `feed_sync_run` - Feed Sync Run
+            * `feed_sync_batch` - Feed Sync Batch
+            * `feed_content_refresh` - Feed Content Refresh
             * `article_refresh` - Article Refresh
             * `article_import` - Article Import
-          x-spec-enum-id: 3021b5aac52fe557
+            * `article_stats_refresh` - Article Stats Refresh
+          x-spec-enum-id: 234c8fc756c8774f
           readOnly: true
         status:
           enum:
           - pending
           - running
           - success
+          - partial_success
+          - timed_out
           - failed
           type: string
           description: |-
             * `pending` - Pending
             * `running` - Running
             * `success` - Success
+            * `partial_success` - Partial Success
+            * `timed_out` - Timed Out
             * `failed` - Failed
-          x-spec-enum-id: b721f6af0d02ce35
+          x-spec-enum-id: 9157055f22637d7c
           readOnly: true
         task_key:
           type: string
@@ -42057,6 +44830,53 @@ components:
       - task_key
       - task_type
       - updated_at
+    WechatUploadImageRequestRequest:
+      type: object
+      properties:
+        account_appid:
+          type: string
+          minLength: 1
+          maxLength: 64
+        media:
+          type: string
+          format: binary
+          writeOnly: true
+      required:
+      - account_appid
+      - media
+    WechatUploadImageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/WechatUploadImageResult'
+      required:
+      - code
+      - data
+      - message
+      - success
+    WechatUploadImageResult:
+      type: object
+      properties:
+        account_appid:
+          type: string
+          readOnly: true
+        account_name:
+          type: string
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          readOnly: true
+      required:
+      - account_appid
+      - account_name
+      - url
   securitySchemes:
     Bearer:
       type: http

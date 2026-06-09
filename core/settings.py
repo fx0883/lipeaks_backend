@@ -106,6 +106,8 @@ INSTALLED_APPS = [
     'notifications',  # 通知系统
     'wechat',  # 微信小程序登录
     'we_rss',
+    'llm_gateway',
+    'image_prompt',
 ]
 
 MIDDLEWARE = [
@@ -342,6 +344,7 @@ CORS_ALLOW_HEADERS = [
 CORS_EXPOSE_HEADERS = [
     "content-type",
     "x-csrftoken",
+    "content-disposition",
 ]
 
 # CSRF 安全配置
@@ -571,6 +574,22 @@ CELERY_ENABLE_UTC = True
 CELERY_TASK_ALWAYS_EAGER = not CELERY_ENABLED
 CELERY_TASK_EAGER_PROPAGATES = not CELERY_ENABLED
 
+# LLM Gateway Configuration
+LLM_GATEWAY_DEFAULT_EXECUTOR = os.getenv('LLM_GATEWAY_DEFAULT_EXECUTOR', 'codex')
+LLM_GATEWAY_FALLBACK_EXECUTOR = os.getenv('LLM_GATEWAY_FALLBACK_EXECUTOR', 'claude')
+LLM_GATEWAY_CODEX_BIN = os.getenv('LLM_GATEWAY_CODEX_BIN', 'codex')
+LLM_GATEWAY_CLAUDE_BIN = os.getenv('LLM_GATEWAY_CLAUDE_BIN', 'claude')
+LLM_GATEWAY_EXECUTION_TIMEOUT_SECONDS = get_env_with_validation(
+    'LLM_GATEWAY_EXECUTION_TIMEOUT_SECONDS', int, 180
+)
+LLM_GATEWAY_SKILL_DIRS = [
+    os.getenv('LLM_GATEWAY_AGENTS_SKILLS_DIR', r'C:\Users\Administrator\.agents\skills'),
+    os.getenv('LLM_GATEWAY_CODEX_SKILLS_DIR', r'C:\Users\Administrator\.codex\skills'),
+]
+LLM_GATEWAY_AGENT_MODEL = os.getenv('LLM_GATEWAY_AGENT_MODEL', 'openai:gpt-4.1-mini')
+LLM_GATEWAY_AGENT_BASE_URL = os.getenv('LLM_GATEWAY_AGENT_BASE_URL', '')
+LLM_GATEWAY_AGENT_API_KEY = os.getenv('LLM_GATEWAY_AGENT_API_KEY', '')
+
 # Celery Task Routes
 CELERY_TASK_ROUTES = {
     'feedbacks.tasks.*': {'queue': 'feedbacks'},
@@ -660,3 +679,17 @@ TENANT_PUBLIC_API_PATHS = [
 # 重要：Secret 必须保密，仅存储在服务端环境变量中
 WECHAT_APPID = os.getenv('WECHAT_APPID', '')
 WECHAT_SECRET = os.getenv('WECHAT_SECRET', '')
+WECHAT_CONFIG_PATH = os.getenv(
+    'WECHAT_CONFIG_PATH',
+    os.path.join(BASE_DIR, 'wechat', 'wechat_config.json'),
+)
+WECHAT_ACCESS_TOKEN_CACHE_TIMEOUT = get_env_with_validation(
+    'WECHAT_ACCESS_TOKEN_CACHE_TIMEOUT', int, 7000
+)
+WECHAT_DRAFT_IMAGE_MAX_BYTES = get_env_with_validation(
+    'WECHAT_DRAFT_IMAGE_MAX_BYTES', int, 10 * 1024 * 1024
+)
+WECHAT_DRAFT_THUMB_MAX_BYTES = get_env_with_validation(
+    'WECHAT_DRAFT_THUMB_MAX_BYTES', int, 64 * 1024
+)
+WECHAT_API_TIMEOUT = get_env_with_validation('WECHAT_API_TIMEOUT', int, 15)

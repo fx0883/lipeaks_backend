@@ -1,0 +1,21 @@
+{
+  "query_name": "轻松职场社",
+  "selected_account": null,
+  "time_range": {
+    "since": "2025-12-20",
+    "until": "2026-03-20"
+  },
+  "retrieval_mode": "best_effort",
+  "completeness_guarantee": false,
+  "article_urls": [],
+  "evidence": {
+    "seed_article_url": null,
+    "matched_fields": [],
+    "account_candidates": [],
+    "notes": []
+  },
+  "warnings": [
+    "Account search returned no candidates",
+    "Seed article required but not provided"
+  ]
+}

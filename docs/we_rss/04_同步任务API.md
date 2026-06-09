@@ -1,8 +1,8 @@
 # we_rss 同步任务 API
 
 这份文档专门讲 `WechatSyncTask`，也就是 `we_rss` 当前所有异步动作共用的任务
-模型。前端只要接扫码登录、公众号同步、按 URL 导入文章、刷新文章中的任意一项，
-就几乎一定会用到这一组接口。
+模型。前端只要接扫码登录、公众号同步、按 URL 导入文章、刷新正文、批量刷新
+文章统计中的任意一项，几乎都会用到这组接口。
 
 你可以把任务模型理解成统一的“后台工作单”。触发某个异步动作后，前端先拿到
 一个任务对象，再用任务详情接口持续轮询，直到进入终态。
@@ -18,7 +18,7 @@ X-Tenant-ID: <current_member_tenant_id>
 
 ### 1. WechatSyncTask 模型字段
 
-`WechatSyncTask` 已继承 `BaseModel`，模型层字段包括：
+`WechatSyncTask` 继承 `BaseModel` 后，模型层字段包括：
 
 | 字段 | 来源 | 说明 |
 | --- | --- | --- |
@@ -76,8 +76,9 @@ X-Tenant-ID: <current_member_tenant_id>
 | --- | --- |
 | `credential_login` | 扫码登录任务 |
 | `feed_sync` | 公众号同步任务 |
-| `article_refresh` | 单篇文章刷新任务 |
 | `article_import` | 按 URL 导入文章任务 |
+| `article_refresh` | 单篇文章正文刷新任务 |
+| `article_stats_refresh` | 批量文章统计刷新任务 |
 
 ### status
 
@@ -99,6 +100,7 @@ X-Tenant-ID: <current_member_tenant_id>
 | `login_session` | 登录会话 |
 | `feed` | 公众号 |
 | `article` | 文章 |
+| `article_stats` | 文章统计批量刷新任务 |
 
 ## 接口一览
 
@@ -128,9 +130,10 @@ GET /api/v1/we-rss/tasks/
 
 ```http
 GET /api/v1/we-rss/tasks/?task_type=feed_sync&status=success
+GET /api/v1/we-rss/tasks/?task_type=article_stats_refresh
 ```
 
-这个接口没有分页，返回的是数组。
+这个接口当前没有分页，返回的是数组。
 
 ## 2. 获取任务详情
 
@@ -146,7 +149,7 @@ GET /api/v1/we-rss/tasks/{task_id}/
 | --- | --- | --- |
 | `task_id` | `number` | 任务 ID |
 
-前端轮询时建议主要看这几个字段：
+前端轮询时建议主要看下面几个字段：
 
 - `status`
 - `message`
@@ -155,12 +158,12 @@ GET /api/v1/we-rss/tasks/{task_id}/
 
 ## result_payload 结构说明
 
-`result_payload` 没有全局统一 schema。它会随任务类型和成功/失败状态而变化，这一
+`result_payload` 没有统一 schema。它会随着任务类型和成功、失败状态变化，这一
 点必须写进前端类型设计里。
 
 ### 1. credential_login
 
-登录任务成功时，当前代码会返回：
+登录任务成功时，当前代码返回：
 
 ```json
 {
@@ -169,7 +172,7 @@ GET /api/v1/we-rss/tasks/{task_id}/
 }
 ```
 
-登录任务失败时，当前代码会返回：
+登录任务失败时，当前代码返回：
 
 ```json
 {
@@ -183,12 +186,6 @@ GET /api/v1/we-rss/tasks/{task_id}/
 ### 2. feed_sync
 
 公众号同步成功时，当前代码返回的 `result_payload` 常见结构如下：
-
-前端要特别注意两个行为：
-
-- 公众号同步当前会按页抓取文章列表，直到微信返回空页为止。
-- 后端会在请求下一页文章列表前，以及请求下一篇文章详情前，各等待 `0.5`
-  秒。
 
 ```json
 {
@@ -227,7 +224,7 @@ GET /api/v1/we-rss/tasks/{task_id}/
 - `failed_articles` 和 `result_payload.errors` 都表示详情抓取失败明细，前者更适合
   前端直接展示。
 
-同步失败时，当前代码会返回：
+同步失败时，当前代码返回：
 
 ```json
 {
@@ -267,7 +264,7 @@ GET /api/v1/we-rss/tasks/{task_id}/
 
 ### 4. article_refresh
 
-文章刷新成功时，当前代码返回：
+文章正文刷新成功时，当前代码返回：
 
 ```json
 {
@@ -280,15 +277,57 @@ GET /api/v1/we-rss/tasks/{task_id}/
 
 补充说明：
 
-- 刷新任务重新抓取正文时，会使用微信返回页做解析，但不会把带 `token` 的跳转 URL 写回文章记录。
+- 这个任务会重新抓取正文，并可能一并刷新统计字段。
+- 刷新任务不会把带 `token` 的临时 URL 写回文章记录。
 
-文章刷新失败时，当前代码返回：
+文章正文刷新失败时，当前代码返回：
 
 ```json
 {
   "task_type": "article_refresh",
   "article_id": 15,
   "error": "WeChat refresh blocked by anti-bot"
+}
+```
+
+### 5. article_stats_refresh
+
+文章统计批量刷新完成时，当前代码返回的 `result_payload` 常见结构如下：
+
+```json
+{
+  "task_type": "article_stats_refresh",
+  "selector_type": "feed_id",
+  "requested_count": 3,
+  "success_count": 2,
+  "failed_count": 1,
+  "article_ids": [11, 12, 13],
+  "failed_articles": [
+    {
+      "article_id": 13,
+      "url": "https://mp.weixin.qq.com/s/article-13",
+      "error": "stats blocked"
+    }
+  ]
+}
+```
+
+补充说明：
+
+- 这个任务来自 `POST /api/v1/we-rss/article-stats/refresh/`。
+- `selector_type` 只会是 `article_ids`、`feed_id`、`member_id` 之一。
+- 这个任务的 `target_type` 固定为 `article_stats`，`target_id` 为空是正常行为。
+- 只要后台把整批文章跑完了，即使其中几篇失败，任务整体状态仍然会是 `success`。
+- 单篇失败会收敛到 `failed_articles`，前端不要把 `failed_count > 0` 误判成任务级失败。
+
+当任务在启动阶段或执行器级别失败时，当前代码返回：
+
+```json
+{
+  "task_type": "article_stats_refresh",
+  "selector_type": "feed_id",
+  "article_ids": [11, 12, 13],
+  "error": "WeChat article stats runtime is not ready."
 }
 ```
 
@@ -299,11 +338,11 @@ GET /api/v1/we-rss/tasks/{task_id}/
 1. 触发异步动作后先拿到任务 ID。
 2. 每 2 秒左右请求一次任务详情。
 3. `status === "success"` 时结束轮询并消费 `result_payload`。
-4. `status === "failed"` 时结束轮询并优先显示
-   `result_payload.error`，没有的话显示 `message`。
+4. `status === "failed"` 时结束轮询并优先显示 `result_payload.error`，没有的话显示
+   `message`。
 5. 到达设定超时后给出“任务超时，请稍后刷新”的提示。
 
-一个通用轮询示例：
+一个通用轮询示例如下：
 
 ```ts
 async function pollWeRssTask(taskId: number) {
@@ -331,7 +370,7 @@ async function pollWeRssTask(taskId: number) {
 
 ## UI 展示建议
 
-如果你要做任务详情面板或任务中心页，建议至少展示下面几个区块：
+如果你要做任务详情面板或任务中心页，建议至少展示下面几个区域：
 
 | 展示区块 | 建议显示内容 |
 | --- | --- |
@@ -344,8 +383,13 @@ async function pollWeRssTask(taskId: number) {
 ## 容易踩坑的点
 
 - `result_payload` 不是统一结构，必须按 `task_type` 分支处理。
-- `task_key` 并不是每个任务都有。只有某些去重任务会显式写入，例如文章导入。
+- `task_key` 并不是每一个任务都有。只有某些去重任务会显式写入，例如文章导入。
+- `article_stats_refresh` 的 `task_key` 会按选择器生成，例如
+  `article_stats_refresh:feed:5` 或 `article_stats_refresh:member:9`。
 - 某些触发接口会直接复用已有运行中任务，所以“返回旧任务”是正常行为。
+- `article_stats_refresh` 返回 `success` 只表示整批执行完，不代表每篇文章都成功。
+- 处理 `article_stats_refresh` 时，前端需要同时关注 `failed_count` 和
+  `failed_articles`。
 - 任务列表当前没有分页。
 
 ## 下一步

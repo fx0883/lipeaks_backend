@@ -1,7 +1,7 @@
 # we_rss 前端群简版说明
 
 这份说明适合直接转给前端群里同步现状。内容已经按当前 `we_rss` 真实实现更新，
-重点是统一“tenant 共享主数据 + member 个性化状态”的口径。
+重点是统一“tenant 共享主数据 + member 个性化状态”的口径，并补上文章统计刷新。
 
 ## 这次前端要接什么
 
@@ -12,7 +12,7 @@
 - 公众号搜索
 - member 订阅公众号和取消订阅
 - 公众号同步文章
-- 文章列表、标题搜索、收藏、详情、刷新、删除
+- 文章列表、标题搜索、收藏、详情、正文刷新、统计刷新、删除
 - 异步任务轮询
 - tenant RSS、单 feed RSS、正文 HTML 输出
 
@@ -26,6 +26,10 @@
 - `is_favorite` 是当前 member 对 article 的收藏状态。
 - 当前没有 `is_read`，也没有 `PUT /articles/{id}/read/`。
 - 文章列表已支持服务端标题搜索，只搜 `title`。
+- 文章“正文刷新”和“统计刷新”是两套独立能力：
+  - `POST /api/v1/we-rss/articles/{id}/refresh/` 是正文刷新，返回任务。
+  - `POST /api/v1/we-rss/article-stats/refresh-by-url/` 是单篇统计同步刷新，直接返回文章。
+  - `POST /api/v1/we-rss/article-stats/refresh/` 是批量统计异步刷新，返回 `article_stats_refresh` 任务。
 
 ## 所有接口共同约束
 
@@ -76,6 +80,8 @@ X-Tenant-ID: <current_member_tenant_id>
 - `GET /api/v1/we-rss/articles/{id}/`
 - `DELETE /api/v1/we-rss/articles/{id}/`
 - `POST /api/v1/we-rss/articles/import-by-url/`
+- `POST /api/v1/we-rss/article-stats/refresh-by-url/`
+- `POST /api/v1/we-rss/article-stats/refresh/`
 - `POST /api/v1/we-rss/articles/{id}/refresh/`
 - `PUT /api/v1/we-rss/articles/{id}/favorite/`
 
@@ -83,6 +89,12 @@ X-Tenant-ID: <current_member_tenant_id>
 
 - `GET /api/v1/we-rss/tasks/`
 - `GET /api/v1/we-rss/tasks/{task_id}/`
+
+公众号同步时，前端只轮询父任务 `feed_sync_run`。当前约定是每 5 秒轮询
+一次 `GET /api/v1/we-rss/tasks/{task_id}/`。如果
+`result_payload.latest_completed_batch.batch_no` 变了，就说明后端又产出了一批
+新文章，前端这时刷新一次文章列表，或者只追加这一批一次；如果 `batch_no`
+没变，就不要重复刷新。
 
 ### RSS / 正文输出
 
@@ -100,6 +112,8 @@ X-Tenant-ID: <current_member_tenant_id>
 4. 对已订阅 feed 调 `POST /feeds/{id}/sync/`。
 5. 在文章列表里用 `search`、`article_type`、`favorite_only` 做筛选。
 6. 用 `PUT /articles/{id}/favorite/` 做收藏切换。
+7. 对单篇文章需要更新统计时，调 `POST /article-stats/refresh-by-url/`。
+8. 对批量文章需要更新统计时，调 `POST /article-stats/refresh/` 并轮询任务。
 
 ## 当前不要按旧习惯去做的事
 
@@ -109,6 +123,7 @@ X-Tenant-ID: <current_member_tenant_id>
 - 不要再把 `is_read` 当返回字段。
 - 不要再把“搜索结果保存 feed”的标准流程写成 `POST /feeds/`。
 - 不要再写“文章列表不支持服务端搜索”。
+- 不要把 `/articles/{id}/refresh/` 当成统计刷新接口。
 
 ## 下一步
 

@@ -1,0 +1,13 @@
+{
+  "name": "wechat-article-stats-poc",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Minimal Playwright PoC for WeChat article stats capture",
+  "type": "module",
+  "scripts": {
+    "wechat:stats": "node scripts/wechat-article-stats-poc.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.52.0"
+  }
+}

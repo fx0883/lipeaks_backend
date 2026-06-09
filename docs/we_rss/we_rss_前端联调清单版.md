@@ -1,7 +1,7 @@
 # we_rss 前端联调清单版
 
 这份文档按“实际联调顺序”整理，适合作为 checklist 使用。内容已经按当前实现
-更新，重点修正了 member 订阅、member 收藏和文章标题搜索这三块。
+更新，重点补齐了文章统计刷新这条新链路。
 
 ## 0. 联调前总检查
 
@@ -71,6 +71,10 @@
 - [ ] `POST /feeds/{id}/sync/` 返回任务对象。
 - [ ] 前端不会把它当成“文章列表立即返回”接口。
 - [ ] 同步后能进入任务轮询。
+- [ ] 前端知道返回的是父任务 `feed_sync_run`。
+- [ ] 前端按 5 秒轮询 `GET /tasks/{task_id}/`。
+- [ ] 当 `result_payload.latest_completed_batch.batch_no` 变化时，前端会刷新一次文章列表，或只追加这一批一次。
+- [ ] 当 `result_payload.latest_completed_batch.batch_no` 没变化时，前端不会重复刷新同一批数据。
 - [ ] 同步成功后文章列表能刷新。
 - [ ] 重复点击同步时，前端能接受“复用运行中任务”的行为。
 
@@ -85,10 +89,12 @@
 这一部分最好抽成统一模块。
 
 - [ ] `GET /tasks/{task_id}/` 能稳定轮询。
-- [ ] `pending / running / success / failed` 四态处理正确。
+- [ ] `pending / running / success / partial_success / timed_out / failed` 六态处理正确。
 - [ ] 超时机制已实现。
 - [ ] 失败时优先展示 `result_payload.error` 或 `message`。
 - [ ] 前端知道 `result_payload` 会随 `task_type` 变化。
+- [ ] 前端知道公众号同步是否有新数据，不看 `status` 单字段，而看 `latest_completed_batch.batch_no` 是否变化。
+- [ ] 前端知道 `article_stats_refresh` 即使部分文章失败，也可能整体返回 `success`。
 
 ## 5. 文章联调
 
@@ -115,14 +121,33 @@
 - [ ] 成功后当前条目状态能同步更新。
 - [ ] 前端知道这里更新的是“当前 member 的收藏关系”。
 
-### 5.4 刷新文章
+### 5.4 按 URL 同步刷新文章统计
+
+- [ ] `POST /article-stats/refresh-by-url/` 可用。
+- [ ] 前端知道这是同步接口，不返回任务对象。
+- [ ] 成功后返回的是已经更新落库后的完整文章对象。
+- [ ] 前端知道这个接口只适用于当前 tenant 内已存在的文章 URL。
+- [ ] 成功后 `read_num`、`like_num`、`comment_total_count`、`last_refreshed_at`
+  等字段能立即更新到页面。
+
+### 5.5 批量异步刷新文章统计
+
+- [ ] `POST /article-stats/refresh/` 可用。
+- [ ] `article_ids`、`feed_id`、`member_id` 三种选择器至少各自联调一次。
+- [ ] 前端知道这三种选择器只能传一种。
+- [ ] 返回的是 `article_stats_refresh` 任务，不是文章数组。
+- [ ] 轮询完成后能读取 `success_count`、`failed_count`、`failed_articles`。
+- [ ] 前端不会把 `failed_count > 0` 误判成任务级失败。
+
+### 5.6 刷新文章正文
 
 - [ ] `POST /articles/{id}/refresh/` 返回任务对象。
 - [ ] 刷新成功后 `last_refreshed_at` 发生变化。
 - [ ] 前端知道刷新优先使用 feed 绑定凭证。
 - [ ] 同一文章运行中刷新任务会复用。
+- [ ] 前端知道这是正文刷新接口，不要和统计刷新接口混用。
 
-### 5.5 删除文章
+### 5.7 删除文章
 
 - [ ] `DELETE /articles/{id}/` 返回 `204`。
 - [ ] 前端知道删除文章是软删除。
@@ -187,5 +212,7 @@
 - [ ] 公众号订阅和取消订阅可用。
 - [ ] 公众号同步可用。
 - [ ] 文章列表、搜索、收藏可用。
-- [ ] 文章详情、刷新、删除可用。
+- [ ] 单篇同步统计刷新可用。
+- [ ] 批量异步统计刷新可用。
+- [ ] 文章详情、正文刷新、删除可用。
 - [ ] RSS / HTML 输出可读。

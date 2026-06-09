@@ -1,45 +1,40 @@
 # we_rss 文档索引
 
-这组文档面向 `we_rss` 的前端开发、联调和排期协作。当前文档已经按
-仓库里的真实实现更新，重点补齐了 member 维度订阅、member 维度收藏，
-以及文章标题搜索能力。
+这组文档面向 `we_rss` 的前端开发、联调和排期协作。内容已经按当前仓库里的
+真实实现整理，重点覆盖 tenant 共享数据、member 维度状态、异步任务，以及
+最新增加的文章统计刷新接口。
 
-当前需要先记住一个总原则：`we_rss` 的核心数据仍然按 tenant 共享，
-但不是所有状态都全局共享。`WechatFeed` 和 `WechatArticle` 仍然是 tenant
-共享主数据，而 member 自己的订阅关系和收藏关系通过独立关联表维护。
+当前最重要的口径只有一条：`WechatFeed` 和 `WechatArticle` 仍然是 tenant 共享
+主数据，`is_subscribed`、`is_favorite`、标签关系这类状态才是 member 维度。
+这次还新增了一组独立的文章统计刷新接口，不和旧的文章导入、正文刷新接口混用。
 
 ## 本次更新重点
 
-这次文档更新主要覆盖下面这些变化：
-
-- `WechatArticle` 保留官方字段名 `article_type`，取值为 `news` 或
-  `newspic`。
-- `WechatArticle` 不再有全局 `is_read` 和全局 `is_favorite` 字段。
-- 文章列表仍然是 tenant 共享可见，但返回里会带当前 member 的
-  `is_favorite`。
-- 公众号列表仍然是 tenant 共享主数据，但返回里会带当前 member 的
-  `is_subscribed`。
-- member 订阅公众号的标准流程改为“先搜索，再订阅”，而不是直接把搜索
-  结果当作本地 feed 创建。
-- 新增 member 私有标签系统，标签可独立管理，也可绑定到 feed 和 article。
-- feed 和 article 列表都新增 `tag_ids=1,2,3` 过滤，多个标签使用 AND 语义。
-- 文章列表新增 `search` 和 `favorite_only` 过滤。
-- 公众号列表新增 `subscribed_only` 过滤。
-- RSS 和正文输出仍然需要成员鉴权和 `X-Tenant-ID`。
+- `WechatArticle` 继续使用 `article_type`，取值为 `news` 或 `newspic`。
+- `WechatArticle` 没有全局 `is_read` 和全局 `is_favorite` 字段。
+- 文章列表返回里的 `is_favorite` 是当前 member 的状态。
+- 公众号列表返回里的 `is_subscribed` 是当前 member 的状态。
+- 新增同步文章统计刷新接口：
+  `POST /api/v1/we-rss/article-stats/refresh-by-url/`。
+- 新增批量文章统计刷新接口：
+  `POST /api/v1/we-rss/article-stats/refresh/`。
+- 新增异步任务类型 `article_stats_refresh`，专门承接批量统计刷新。
+- 文章“正文刷新”和“统计刷新”已经拆成两套能力：
+  - `/articles/{id}/refresh/` 用于正文、摘要、封面、发布时间等内容刷新。
+  - `/article-stats/*` 只用于统计字段刷新。
 
 ## 文档怎么选
-
-你可以按不同使用场景选择文档：
 
 | 文档 | 适合谁看 | 作用 |
 | --- | --- | --- |
 | [00_总览与对接说明.md](./00_总览与对接说明.md) | 所有人 | 先建立整体认知，搞清鉴权、tenant 共享、member 个性化状态和异步任务。 |
 | [01_凭证与扫码登录API.md](./01_凭证与扫码登录API.md) | 前端开发、联调 | 对接微信凭证、扫码登录、默认凭证、凭证检查。 |
 | [02_公众号API.md](./02_公众号API.md) | 前端开发、联调 | 对接公众号搜索、订阅、取消订阅、标签、同步和管理。 |
-| [03_公众号文章API.md](./03_公众号文章API.md) | 前端开发、联调 | 对接文章列表、详情、标题搜索、收藏、标签、按 URL 导入和刷新。 |
-| [04_同步任务API.md](./04_同步任务API.md) | 前端开发、联调 | 统一理解 `credential_login`、`feed_sync`、`article_import`、`article_refresh`。 |
+| [03_公众号文章API.md](./03_公众号文章API.md) | 前端开发、联调 | 对接文章列表、详情、收藏、标签、按 URL 导入、正文刷新和文章统计刷新。 |
+| [04_同步任务API.md](./04_同步任务API.md) | 前端开发、联调 | 统一理解 `credential_login`、`feed_sync`、`article_import`、`article_refresh`、`article_stats_refresh`。 |
 | [05_RSS与正文输出API.md](./05_RSS与正文输出API.md) | 前端开发、阅读器集成 | 对接 RSS XML 与正文 HTML 输出。 |
-| [we_rss_前端完整API文档.md](./we_rss_前端完整API文档.md) | 需要一份总文档的人 | 单文件查看全量接口、字段、示例和接入建议。 |
+| [06_文章统计刷新运行准备.md](./06_文章统计刷新运行准备.md) | 前端开发、联调、测试 | 统计刷新接口联调前的环境准备，包括代理、证书、运行时文件和排错。 |
+| [we_rss_前端完整API文档.md](./we_rss_前端完整API文档.md) | 需要一份总文档的人 | 单文件查看全量接口、核心字段、任务口径和接入建议。 |
 | [we_rss_前端联调清单版.md](./we_rss_前端联调清单版.md) | 联调负责人 | 按页面和链路逐项打勾，核对是否跑通。 |
 | [we_rss_前端开发排期版.md](./we_rss_前端开发排期版.md) | 前端负责人 | 拆阶段、拆优先级、拆人力。 |
 | [we_rss_前端群简版说明.md](./we_rss_前端群简版说明.md) | 群同步、快速转发 | 给前端群里同步当前可接范围和注意事项。 |
@@ -49,14 +44,10 @@
 如果你是第一次接这套能力，建议按下面顺序阅读：
 
 1. 先看 [00_总览与对接说明.md](./00_总览与对接说明.md)。
-2. 再看 [01_凭证与扫码登录API.md](./01_凭证与扫码登录API.md)，先把
-   登录态跑通。
-3. 再看 [02_公众号API.md](./02_公众号API.md) 和
-   [04_同步任务API.md](./04_同步任务API.md)，把公众号和任务链路接起来。
-4. 再看 [03_公众号文章API.md](./03_公众号文章API.md)，把文章列表、
-   搜索、收藏和详情跑通。
-5. 最后看 [05_RSS与正文输出API.md](./05_RSS与正文输出API.md)，做
-   阅读器或调试页。
+2. 再看 [01_凭证与扫码登录API.md](./01_凭证与扫码登录API.md)，先把登录态跑通。
+3. 再看 [02_公众号API.md](./02_公众号API.md) 和 [04_同步任务API.md](./04_同步任务API.md)，把公众号和任务链路接起来。
+4. 再看 [03_公众号文章API.md](./03_公众号文章API.md)，把文章列表、详情、收藏、正文刷新和统计刷新跑通。
+5. 最后看 [05_RSS与正文输出API.md](./05_RSS与正文输出API.md)，接阅读器或调试页。
 
 ## 最小可用链路
 
@@ -68,12 +59,11 @@
 4. 搜索公众号，并调用 `POST /feeds/subscribe/` 订阅。
 5. 触发公众号同步，并轮询同步任务。
 6. 在文章列表里看到同步下来的文章。
-7. 支持文章详情、标题搜索、收藏和刷新。
+7. 支持文章详情、标题搜索、收藏、正文刷新和文章统计刷新。
 8. 需要时读取 RSS XML 或正文 HTML。
 
 ## 下一步
 
 如果你要把一份文档直接发给前端，优先使用
-[we_rss_前端完整API文档.md](./we_rss_前端完整API文档.md)。如果你要带着
-前端逐步联调，优先使用
-[we_rss_前端联调清单版.md](./we_rss_前端联调清单版.md)。
+[we_rss_前端完整API文档.md](./we_rss_前端完整API文档.md)。如果你要带着前端
+逐步联调，优先使用 [we_rss_前端联调清单版.md](./we_rss_前端联调清单版.md)。

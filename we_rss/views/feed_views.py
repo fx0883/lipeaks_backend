@@ -1,20 +1,25 @@
+import json
+from datetime import timedelta
+
 from django.db.models import Exists, OuterRef
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from django.utils import timezone
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
+from django.http import StreamingHttpResponse
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from common.schema.responses import common_error_responses
-from we_rss.models import MemberFeedSubscription, WechatFeed
+from we_rss.models import MemberFeedSubscription, WechatArticle, WechatFeed
 from we_rss.schema import (
     FEED_ARTICLE_CLEAR_EXAMPLE,
     FEED_EXAMPLE,
     FEED_ID_PARAMETER,
     FEED_SEARCH_EXAMPLE,
+    FEED_SYNC_TASK_FAILED_EXAMPLE,
     FEED_SUBSCRIBED_ONLY_PARAMETER,
     FEED_SYNC_TASK_EXAMPLE,
-    FEED_SYNC_TASK_FAILED_EXAMPLE,
     KEYWORD_PARAMETER,
     MEMBER_TAG_EXAMPLE,
     TAG_IDS_PARAMETER,
@@ -29,14 +34,17 @@ from we_rss.schema import (
 )
 from we_rss.serializers import (
     FeedArticleClearResponseSerializer,
+    FeedSyncBatchRequestSerializer,
+    FeedSyncRequestSerializer,
     FeedSearchResultSerializer,
     FeedSubscriptionWriteSerializer,
     FeedWriteSerializer,
     MemberTagSerializer,
     TagRelationWriteSerializer,
     WechatFeedSerializer,
-    WechatSyncTaskSerializer,
 )
+from we_rss.renderers import EventStreamRenderer
+from we_rss.services.article_service import ArticleService, get_article_markdown_service
 from we_rss.services.feed_service import FeedService, WechatFeedGateway
 from we_rss.services.tag_service import TagService
 from we_rss.views.base import WeRssTenantModelViewSet
@@ -50,6 +58,11 @@ class FeedApiGatewayMixin:
 class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
     queryset = WechatFeed.objects.all()
     serializer_class = WechatFeedSerializer
+
+    def get_renderers(self):
+        if getattr(self, "action", None) in {"sync", "sync_batch", "refresh_content"}:
+            return [EventStreamRenderer()]
+        return super().get_renderers()
 
     def get_queryset(self):
         subscription_exists = MemberFeedSubscription.objects.filter(
@@ -83,7 +96,9 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
         if self.action == "clear_articles":
             return FeedArticleClearResponseSerializer
         if self.action == "sync":
-            return WechatSyncTaskSerializer
+            return FeedSyncRequestSerializer
+        if self.action == "sync_batch":
+            return FeedSyncBatchRequestSerializer
         if self.action == "subscribe":
             return FeedSubscriptionWriteSerializer
         if self.action in {"attach_tags", "detach_tags"}:
@@ -221,13 +236,16 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
         operation_id="we_rss_feeds_destroy",
         tags=[WE_RSS_TAG],
         summary="Delete feed",
-        description=f"Delete one feed record in the current tenant. {WE_RSS_AUTH_DESCRIPTION}",
+        description=(
+            "Delete one feed record in the current tenant, and cascade delete all articles "
+            f"under that feed together with their related member relations. {WE_RSS_AUTH_DESCRIPTION}"
+        ),
         parameters=with_tenant_header(FEED_ID_PARAMETER),
         responses={204: OpenApiResponse(description="Feed deleted"), **common_error_responses},
     )
     def destroy(self, request, *args, **kwargs):
         feed = self.get_object()
-        feed.delete()
+        FeedService.delete_feed(feed=feed)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
@@ -443,37 +461,430 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
         return Response(MemberTagSerializer(tags, many=True).data)
 
     @extend_schema(
-        operation_id="we_rss_feeds_sync",
+        operation_id="we_rss_feeds_refresh_content",
         tags=[WE_RSS_TAG],
-        summary="Sync feed articles",
-        description=f"Create or reuse a sync task for one feed and fetch its WeChat articles. {WE_RSS_AUTH_DESCRIPTION}",
+        summary="Refresh feed article markdown content",
+        description=(
+            "Stream Markdown content refresh progress for all articles under one feed. "
+            "The response content type is `text/event-stream`; each article emits one progress event. "
+            f"{WE_RSS_AUTH_DESCRIPTION}"
+        ),
         parameters=with_tenant_header(FEED_ID_PARAMETER),
         request=None,
         responses={
-            200: json_response(
-                WechatSyncTaskSerializer,
-                "Feed sync task created.",
-                FEED_SYNC_TASK_EXAMPLE,
-                example_name="Feed sync response",
-                message="Operation succeeded",
-                examples=[
-                    success_example(
-                        "Feed sync success response",
-                        FEED_SYNC_TASK_EXAMPLE,
-                        message="Operation succeeded",
-                    ),
-                    success_example(
-                        "Feed sync failed task response",
-                        FEED_SYNC_TASK_FAILED_EXAMPLE,
-                        message="Operation succeeded",
-                    ),
-                ],
+            200: None,
+            **common_error_responses,
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="refresh-content")
+    def refresh_content(self, request, *args, **kwargs):
+        feed = self.get_object()
+
+        def encode_event(event, payload):
+            return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+        def stream():
+            articles = list(
+                WechatArticle.objects.filter(
+                    tenant=feed.tenant,
+                    feed=feed,
+                )
+                .select_related("feed", "tenant")
+                .order_by(*WechatArticle._meta.ordering)
+            )
+            total = len(articles)
+            success_count = 0
+            failed_count = 0
+            refreshed_articles = []
+            failed_articles = []
+            markdown_service = get_article_markdown_service()
+
+            yield encode_event(
+                "start",
+                {
+                    "feed_id": feed.id,
+                    "feed_name": feed.mp_name,
+                    "article_ids": [article.id for article in articles],
+                    "total": total,
+                    "success_count": 0,
+                    "failed_count": 0,
+                    "progress": 0,
+                    "status": "running",
+                },
+            )
+
+            for index, article in enumerate(articles, start=1):
+                try:
+                    markdown_content = ArticleService.refresh_article_markdown(
+                        article=article,
+                        markdown_service=markdown_service,
+                        sleep_seconds=0,
+                    )
+                    success_count += 1
+                    payload = {
+                        "feed_id": feed.id,
+                        "feed_name": feed.mp_name,
+                        "article_id": article.id,
+                        "title": article.title,
+                        "url": article.url,
+                        "index": index,
+                        "total": total,
+                        "status": "success",
+                        "progress": int(index * 100 / total) if total else 100,
+                        "success_count": success_count,
+                        "failed_count": failed_count,
+                        "markdown_length": len(markdown_content),
+                    }
+                    refreshed_articles.append(payload)
+                except Exception as exc:
+                    failed_count += 1
+                    payload = {
+                        "feed_id": feed.id,
+                        "feed_name": feed.mp_name,
+                        "article_id": article.id,
+                        "title": article.title,
+                        "url": article.url,
+                        "index": index,
+                        "total": total,
+                        "status": "failed",
+                        "progress": int(index * 100 / total) if total else 100,
+                        "success_count": success_count,
+                        "failed_count": failed_count,
+                        "error": str(exc),
+                    }
+                    failed_articles.append(payload)
+
+                yield encode_event("progress", payload)
+
+            yield encode_event(
+                "done",
+                {
+                    "feed_id": feed.id,
+                    "feed_name": feed.mp_name,
+                    "article_ids": [article.id for article in articles],
+                    "total": total,
+                    "success_count": success_count,
+                    "failed_count": failed_count,
+                    "progress": 100,
+                    "status": "done",
+                    "articles": refreshed_articles,
+                    "failed_articles": failed_articles,
+                },
+            )
+
+        response = StreamingHttpResponse(stream(), content_type="text/event-stream; charset=utf-8")
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
+
+    @extend_schema(
+        operation_id="we_rss_feeds_sync",
+        tags=[WE_RSS_TAG],
+        summary="Sync feed articles",
+        description=(
+            "Stream feed sync progress for one feed. The response content type is `text/event-stream`; "
+            f"each completed batch emits one batch event. {WE_RSS_AUTH_DESCRIPTION}"
+        ),
+        parameters=with_tenant_header(FEED_ID_PARAMETER),
+        request=request_body(
+            FeedSyncRequestSerializer,
+            request_example(
+                "Feed sync full request",
+                {"sync_scope": "full", "refresh_markdown": False},
+                description="Run a full feed sync from the beginning.",
             ),
+            request_example(
+                "Feed sync latest request",
+                {"sync_scope": "latest", "refresh_markdown": False},
+                description="Sync only until a normalized article URL already exists, then stop.",
+            ),
+            request_example(
+                "Feed sync window request",
+                {"sync_scope": "window", "window_days": 7, "refresh_markdown": False},
+                description="Sync only articles from the last N days, then stop at the first older article.",
+            ),
+            request_example(
+                "Feed sync with markdown refresh request",
+                {"sync_scope": "full", "refresh_markdown": True},
+                description="Run a full feed sync and refresh Markdown content for synced articles.",
+            ),
+        ),
+        responses={
+            200: None,
             **common_error_responses,
         },
     )
     @action(detail=True, methods=["post"])
     def sync(self, request, *args, **kwargs):
         feed = self.get_object()
-        task = FeedService.sync_feed(feed=feed, created_by=request.user)
-        return Response(WechatSyncTaskSerializer(task).data)
+        serializer = FeedSyncRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        sync_scope = serializer.validated_data["sync_scope"]
+        window_days = serializer.validated_data.get("window_days")
+        refresh_markdown = serializer.validated_data["refresh_markdown"]
+
+        def encode_event(event, payload):
+            return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+        def stream():
+            batch_size = FeedService.BATCH_SIZE
+            batch_no = 1
+            begin = 0
+            batches_completed = 0
+            articles_synced = 0
+            articles_failed = 0
+            article_ids = []
+            failed_articles = []
+            run_deadline = timezone.now() + timedelta(seconds=FeedService.RUN_TIMEOUT_SECONDS)
+
+            yield encode_event(
+                "start",
+                {
+                    "feed_id": feed.id,
+                    "feed_name": feed.mp_name,
+                    "sync_scope": sync_scope,
+                    "window_days": window_days,
+                    "refresh_markdown": refresh_markdown,
+                    "batch_size": batch_size,
+                    "status": "running",
+                    "batches_completed": 0,
+                    "articles_synced": 0,
+                    "articles_failed": 0,
+                    "next_begin": begin,
+                    "has_more": True,
+                },
+            )
+
+            try:
+                while True:
+                    batch_result = FeedService.execute_sync_batch_inline(
+                        feed=feed,
+                        updated_by=request.user,
+                        gateway=self.get_gateway(),
+                        batch_no=batch_no,
+                        begin=begin,
+                        batch_size=batch_size,
+                        sync_scope=sync_scope,
+                        window_days=window_days,
+                        refresh_markdown=refresh_markdown,
+                        run_deadline=run_deadline,
+                    )
+                    batches_completed += 1
+                    article_ids = list(dict.fromkeys([*article_ids, *(batch_result.get("article_ids") or [])]))
+                    articles_synced = len(article_ids)
+                    articles_failed += int(batch_result.get("detail_failed_count") or 0)
+                    failed_articles.extend(batch_result.get("failed_articles") or [])
+
+                    payload = FeedService.build_feed_sync_progress_payload(
+                        feed=feed,
+                        batch_result=batch_result,
+                        sync_scope=sync_scope,
+                        window_days=window_days,
+                        refresh_markdown=refresh_markdown,
+                        batches_completed=batches_completed,
+                        articles_synced=articles_synced,
+                        articles_failed=articles_failed,
+                    )
+                    FeedService.log_feed_sync_progress(payload)
+                    yield encode_event("batch", payload)
+
+                    if not batch_result.get("has_more", False):
+                        stop_reason = batch_result.get("stop_reason", "")
+                        yield encode_event(
+                            "done",
+                            {
+                                "feed_id": feed.id,
+                                "feed_name": feed.mp_name,
+                                "sync_scope": sync_scope,
+                                "window_days": window_days,
+                                "refresh_markdown": refresh_markdown,
+                                "status": "done",
+                                "batches_completed": batches_completed,
+                                "articles_synced": articles_synced,
+                                "articles_failed": articles_failed,
+                                "article_ids": article_ids,
+                                "failed_articles": failed_articles,
+                                "next_begin": batch_result.get("next_begin"),
+                                "has_more": False,
+                                "stop_reason": stop_reason,
+                                "stop_article_url": batch_result.get("stop_article_url", ""),
+                                "stop_article_source_id": batch_result.get("stop_article_source_id", ""),
+                                "stop_publish_time": batch_result.get("stop_publish_time"),
+                            },
+                        )
+                        break
+
+                    begin = int(batch_result.get("next_begin") or begin)
+                    batch_no += 1
+            except Exception as exc:
+                error_payload = {
+                    "feed_id": feed.id,
+                    "feed_name": feed.mp_name,
+                    "sync_scope": sync_scope,
+                    "window_days": window_days,
+                    "refresh_markdown": refresh_markdown,
+                    "status": "failed",
+                    "batches_completed": batches_completed,
+                    "articles_synced": articles_synced,
+                    "articles_failed": articles_failed,
+                    "article_ids": article_ids,
+                    "failed_articles": failed_articles,
+                    "next_begin": begin,
+                    "error": str(exc),
+                }
+                FeedService.log_feed_sync_progress(error_payload)
+                yield encode_event("error", error_payload)
+
+        response = StreamingHttpResponse(stream(), content_type="text/event-stream; charset=utf-8")
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
+
+    @extend_schema(
+        operation_id="we_rss_feeds_sync_batch",
+        tags=[WE_RSS_TAG],
+        summary="Sync multiple feeds serially",
+        description=(
+            "Stream serial batch feed sync progress. The response content type is `text/event-stream`; "
+            "the backend executes the provided feed IDs in order and emits batch-level progress events. "
+            "Events include `start`, `feed_start`, `feed_batch`, `feed_done`, `done`, `error`, and "
+            "`heartbeat`. `feed_ids` are deduplicated while preserving first-seen order. "
+            f"{WE_RSS_AUTH_DESCRIPTION}"
+        ),
+        parameters=with_tenant_header(),
+        request=request_body(
+            FeedSyncBatchRequestSerializer,
+            request_example(
+                "Feed sync batch window request",
+                {
+                    "feed_ids": [11, 22, 33],
+                    "sync_scope": "window",
+                    "window_days": 7,
+                    "refresh_markdown": False,
+                    "continue_on_error": True,
+                },
+                description="Run a serial batch sync for the provided feed IDs.",
+            ),
+            request_example(
+                "Feed sync batch latest request",
+                {
+                    "feed_ids": [20, 21, 22],
+                    "sync_scope": "latest",
+                    "refresh_markdown": False,
+                    "continue_on_error": False,
+                },
+                description="Stop the whole batch immediately after the first failed feed.",
+            ),
+        ),
+        responses={
+            200: OpenApiResponse(
+                description=(
+                    "Returns `text/event-stream`. The stream starts with `start`, then emits `feed_start`, "
+                    "`feed_batch`, `feed_done`, optional `heartbeat`, and finally `done` or `error`."
+                ),
+                examples=[
+                    OpenApiExample(
+                        "Batch sync success stream example",
+                        value=(
+                            "event: start\n"
+                            'data: {"batch_task_id":12345,"status":"running","sync_scope":"window",'
+                            '"window_days":7,"refresh_markdown":false,"continue_on_error":true,'
+                            '"total_feeds":3,"queued_feed_ids":[11,22,33],"completed_feeds":0,'
+                            '"success_feeds":0,"failed_feeds":0}\n\n'
+                            "event: feed_start\n"
+                            'data: {"batch_task_id":12345,"status":"running","feed_id":11,'
+                            '"feed_index":1,"total_feeds":3,"completed_feeds":0,'
+                            '"success_feeds":0,"failed_feeds":0}\n\n'
+                            "event: feed_batch\n"
+                            'data: {"batch_task_id":12345,"status":"running","feed_id":11,'
+                            '"feed_index":1,"total_feeds":3,"completed_feeds":0,'
+                            '"success_feeds":0,"failed_feeds":0,"batch_no":1,"batch_size":20,'
+                            '"articles_synced":10,"articles_failed":0,"has_more":true,'
+                            '"next_begin":20,"detail_success_count":10,"detail_failed_count":0}\n\n'
+                            "event: feed_done\n"
+                            'data: {"batch_task_id":12345,"status":"success","feed_id":11,'
+                            '"feed_index":1,"total_feeds":3,"completed_feeds":1,'
+                            '"success_feeds":1,"failed_feeds":0,"articles_synced":23,'
+                            '"articles_failed":1,"detail_success_count":23,"detail_failed_count":1}\n\n'
+                            "event: done\n"
+                            'data: {"batch_task_id":12345,"status":"done","sync_scope":"window",'
+                            '"window_days":7,"refresh_markdown":false,"continue_on_error":true,'
+                            '"total_feeds":3,"completed_feeds":3,"success_feeds":2,"failed_feeds":1,'
+                            '"results":[{"feed_id":11,"status":"success","articles_synced":23,'
+                            '"articles_failed":1},{"feed_id":22,"status":"failed","error":"feed not found"},'
+                            '{"feed_id":33,"status":"success","articles_synced":8,"articles_failed":0}]}\n\n'
+                        ),
+                        response_only=True,
+                        media_type="text/event-stream",
+                        status_codes=[200],
+                    ),
+                    OpenApiExample(
+                        "Batch sync heartbeat stream example",
+                        value=(
+                            "event: heartbeat\n"
+                            'data: {"batch_task_id":12345,"status":"running","current_feed_id":11,'
+                            '"completed_feeds":0,"success_feeds":0,"failed_feeds":0,'
+                            '"timestamp":"2026-05-13T12:00:00Z"}\n\n'
+                        ),
+                        response_only=True,
+                        media_type="text/event-stream",
+                        status_codes=[200],
+                    ),
+                    OpenApiExample(
+                        "Batch sync aborted stream example",
+                        value=(
+                            "event: feed_done\n"
+                            'data: {"batch_task_id":12345,"status":"failed","feed_id":22,'
+                            '"feed_index":2,"total_feeds":3,"completed_feeds":2,'
+                            '"success_feeds":1,"failed_feeds":1,"articles_synced":0,'
+                            '"articles_failed":0,"error":"feed not found"}\n\n'
+                            "event: error\n"
+                            'data: {"batch_task_id":12345,"status":"failed",'
+                            '"error":"batch sync aborted after feed failure"}\n\n'
+                        ),
+                        response_only=True,
+                        media_type="text/event-stream",
+                        status_codes=[200],
+                    ),
+                ],
+            ),
+            **common_error_responses,
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="sync-batch")
+    def sync_batch(self, request, *args, **kwargs):
+        serializer = FeedSyncBatchRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+
+        batch_task, event_stream_factory = FeedService.sync_feed_batch(
+            tenant=request.user.tenant,
+            created_by=request.user,
+            gateway=self.get_gateway(),
+            feed_ids=serializer.validated_data["feed_ids"],
+            sync_scope=serializer.validated_data["sync_scope"],
+            window_days=serializer.validated_data.get("window_days"),
+            refresh_markdown=serializer.validated_data["refresh_markdown"],
+            continue_on_error=serializer.validated_data["continue_on_error"],
+        )
+
+        def encode_event(event, payload):
+            return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+        def stream():
+            try:
+                for item in event_stream_factory():
+                    yield encode_event(item["event"], item["data"])
+            except Exception:
+                yield encode_event(
+                    "error",
+                    {
+                        "batch_task_id": batch_task.id,
+                        "status": "failed",
+                        "error": "batch sync initialization failed",
+                    },
+                )
+
+        response = StreamingHttpResponse(stream(), content_type="text/event-stream; charset=utf-8")
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
