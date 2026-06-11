@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, OpenApiTypes, extend_schema
 from django.http import StreamingHttpResponse
 from rest_framework import status
 from rest_framework.decorators import action
@@ -472,13 +472,39 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
         parameters=with_tenant_header(FEED_ID_PARAMETER),
         request=None,
         responses={
-            200: None,
+            (200, "text/event-stream"): OpenApiResponse(
+                response=OpenApiTypes.STR,
+                description=(
+                    "Returns `text/event-stream`. The stream starts with `start`, then emits one `progress` "
+                    "event for each refreshed article, and finishes with `done`."
+                ),
+                examples=[
+                    OpenApiExample(
+                        "Feed content refresh stream example",
+                        value=(
+                            "event: start\n"
+                            'data: {"feed_id":11,"feed_name":"Example Feed","total":2,'
+                            '"success_count":0,"failed_count":0,"progress":0,"status":"running"}\n\n'
+                            "event: progress\n"
+                            'data: {"feed_id":11,"article_id":101,"status":"success",'
+                            '"progress":50,"success_count":1,"failed_count":0,"markdown_length":2048}\n\n'
+                            "event: done\n"
+                            'data: {"feed_id":11,"total":2,"success_count":2,'
+                            '"failed_count":0,"progress":100,"status":"done"}\n\n'
+                        ),
+                        response_only=True,
+                        media_type="text/event-stream",
+                        status_codes=[200],
+                    ),
+                ],
+            ),
             **common_error_responses,
         },
     )
     @action(detail=True, methods=["post"], url_path="refresh-content")
     def refresh_content(self, request, *args, **kwargs):
         feed = self.get_object()
+        markdown_service = get_article_markdown_service()
 
         def encode_event(event, payload):
             return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
@@ -490,14 +516,13 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
                     feed=feed,
                 )
                 .select_related("feed", "tenant")
-                .order_by(*WechatArticle._meta.ordering)
+                .order_by("id")
             )
             total = len(articles)
             success_count = 0
             failed_count = 0
             refreshed_articles = []
             failed_articles = []
-            markdown_service = get_article_markdown_service()
 
             yield encode_event(
                 "start",
@@ -610,7 +635,32 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
             ),
         ),
         responses={
-            200: None,
+            (200, "text/event-stream"): OpenApiResponse(
+                response=OpenApiTypes.STR,
+                description=(
+                    "Returns `text/event-stream`. The stream starts with `start`, then emits one `batch` "
+                    "event for each completed sync batch, and finishes with `done` or `error`."
+                ),
+                examples=[
+                    OpenApiExample(
+                        "Feed sync stream example",
+                        value=(
+                            "event: start\n"
+                            'data: {"feed_id":11,"status":"running","sync_scope":"full",'
+                            '"batch_size":20,"batches_completed":0,"articles_synced":0}\n\n'
+                            "event: batch\n"
+                            'data: {"feed_id":11,"status":"success","batch_no":1,'
+                            '"articles_synced":10,"articles_failed":0,"has_more":false}\n\n'
+                            "event: done\n"
+                            'data: {"feed_id":11,"status":"done","batches_completed":1,'
+                            '"articles_synced":10,"articles_failed":0,"has_more":false}\n\n'
+                        ),
+                        response_only=True,
+                        media_type="text/event-stream",
+                        status_codes=[200],
+                    ),
+                ],
+            ),
             **common_error_responses,
         },
     )

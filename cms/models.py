@@ -120,7 +120,7 @@ class Article(BaseModel):
         constraints = [
             # 确保user和member有且仅有一个非空
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(user__isnull=False, member__isnull=True) | 
                     models.Q(user__isnull=True, member__isnull=False)
                 ),
@@ -515,7 +515,7 @@ class Comment(BaseModel):
         constraints = [
             # 确保至少有一种评论者类型
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(user__isnull=False, member__isnull=True, guest_name__isnull=True) |
                     models.Q(user__isnull=True, member__isnull=False, guest_name__isnull=True) |
                     models.Q(user__isnull=True, member__isnull=True, guest_name__isnull=False)
@@ -965,7 +965,7 @@ class OperationLog(BaseModel):
         constraints = [
             # 确保user和member有且仅有一个非空
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(user__isnull=False, member__isnull=True) |
                     models.Q(user__isnull=True, member__isnull=False)
                 ),

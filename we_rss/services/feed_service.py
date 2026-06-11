@@ -657,7 +657,7 @@ class FeedService:
                 tenant=feed.tenant,
                 feed=feed,
             )
-            .order_by(*WechatArticle._meta.ordering)
+            .order_by("id")
             .values_list("id", flat=True)
         )
         task = TaskService.create_task(

@@ -601,15 +601,15 @@ class LicenseAssignment(BaseModel):
                 name='unique_member_license_assignment'
             ),
             models.CheckConstraint(
-                check=models.Q(max_devices_per_user__gte=1),
+                condition=models.Q(max_devices_per_user__gte=1),
                 name='valid_max_devices'
             ),
             models.CheckConstraint(
-                check=models.Q(usage_count__gte=0),
+                condition=models.Q(usage_count__gte=0),
                 name='valid_usage_count'
             ),
             models.CheckConstraint(
-                check=models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=models.F('assigned_at')),
+                condition=models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=models.F('assigned_at')),
                 name='valid_assignment_expiry'
             ),
         ]

@@ -688,6 +688,8 @@ class WeRssTaskWorkflowTests(TestCase):
         self.assertNotEqual(task.id, stale.id)
 
     def test_feed_sync_replaces_orphan_batch_tasks_from_stale_parent_run(self):
+        stale_parent_started_at = timezone.now() - timedelta(seconds=FeedService.STALE_AFTER_SECONDS + 60)
+        stale_batch_started_at = timezone.now() - timedelta(seconds=FeedService.BATCH_TIMEOUT_SECONDS + 60)
         stale_parent = WechatSyncTask.objects.create(
             tenant=self.tenant,
             task_type="feed_sync_run",
@@ -696,11 +698,11 @@ class WeRssTaskWorkflowTests(TestCase):
             target_id=self.feed.id,
             result_payload={
                 "run_status": "running",
-                "last_progress_at": (timezone.now() - timedelta(hours=2)).isoformat(),
+                "last_progress_at": stale_parent_started_at.isoformat(),
             },
             created_by=self.member,
         )
-        stale_parent.started_at = timezone.now() - timedelta(hours=2)
+        stale_parent.started_at = stale_parent_started_at
         stale_parent.save(update_fields=["started_at", "updated_at"])
 
         stale_batch = WechatSyncTask.objects.create(
@@ -718,7 +720,7 @@ class WeRssTaskWorkflowTests(TestCase):
             },
             created_by=self.member,
         )
-        stale_batch.started_at = timezone.now() - timedelta(hours=2)
+        stale_batch.started_at = stale_batch_started_at
         stale_batch.save(update_fields=["started_at", "updated_at"])
 
         with patch("we_rss.services.feed_service.dispatch_we_rss_task"):

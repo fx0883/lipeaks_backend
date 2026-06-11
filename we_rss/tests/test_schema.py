@@ -87,19 +87,18 @@ class WeRssSchemaTests(SimpleTestCase):
         schema = SchemaGenerator().get_schema(request=None, public=True)
 
         sync_examples = schema["paths"]["/api/v1/we-rss/feeds/{id}/sync/"]["post"]["responses"]["200"]["content"][
-            "application/json"
+            "text/event-stream"
         ]["examples"]
         task_examples = schema["paths"]["/api/v1/we-rss/tasks/{task_id}/"]["get"]["responses"]["200"]["content"][
             "application/json"
         ]["examples"]
 
-        sync_example_value = sync_examples["FeedSyncSuccessResponse"]["value"]
+        sync_example_value = sync_examples["FeedSyncStreamExample"]["value"]
         failed_task_example = task_examples["FeedSyncTaskFailedResponse"]["value"]
 
-        self.assertEqual(sync_example_value["data"]["task_type"], "feed_sync_run")
-        self.assertEqual(sync_example_value["data"]["status"], "running")
-        self.assertEqual(sync_example_value["data"]["result_payload"]["poll_after_seconds"], 5)
-        self.assertIn("latest_completed_batch", sync_example_value["data"]["result_payload"])
+        self.assertIn("event: start", sync_example_value)
+        self.assertIn("event: batch", sync_example_value)
+        self.assertIn("event: done", sync_example_value)
         self.assertEqual(failed_task_example["data"]["status"], "failed")
         self.assertEqual(failed_task_example["data"]["task_type"], "feed_sync_run")
         self.assertEqual(failed_task_example["data"]["result_payload"]["run_status"], "failed")
@@ -211,13 +210,11 @@ class WeRssSchemaTests(SimpleTestCase):
         self.assertEqual(operation["operationId"], "we_rss_article_stats_refresh_by_url")
         self.assertIn("examples", operation["requestBody"]["content"]["application/json"])
 
-        response_schema = self._resolve_schema(
-            schema,
-            operation["responses"]["200"]["content"]["application/json"]["schema"],
-        )
-        data_schema = self._resolve_schema(schema, response_schema["properties"]["data"])
-        self.assertIn("read_num", data_schema["properties"])
-        self.assertIn("title", data_schema["properties"])
+        response_content = operation["responses"]["200"]["content"]
+        self.assertIn("text/event-stream", response_content)
+        examples = response_content["text/event-stream"]["examples"]
+        self.assertIn("ArticleStatsRefreshStreamExample", examples)
+        self.assertIn("event: progress", examples["ArticleStatsRefreshStreamExample"]["value"])
 
     def test_article_stats_batch_refresh_operation_is_documented(self):
         schema = SchemaGenerator().get_schema(request=None, public=True)
@@ -234,13 +231,12 @@ class WeRssSchemaTests(SimpleTestCase):
         self.assertIn("feed_id", request_schema["properties"])
         self.assertIn("member_id", request_schema["properties"])
 
-        response_schema = self._resolve_schema(
-            schema,
-            operation["responses"]["200"]["content"]["application/json"]["schema"],
-        )
-        data_schema = self._resolve_schema(schema, response_schema["properties"]["data"])
-        self.assertIn("task_type", data_schema["properties"])
-        self.assertIn("result_payload", data_schema["properties"])
+        response_content = operation["responses"]["200"]["content"]
+        self.assertIn("text/event-stream", response_content)
+        examples = response_content["text/event-stream"]["examples"]
+        self.assertIn("ArticleStatsBatchRefreshStreamExample", examples)
+        self.assertIn("event: start", examples["ArticleStatsBatchRefreshStreamExample"]["value"])
+        self.assertIn("event: done", examples["ArticleStatsBatchRefreshStreamExample"]["value"])
 
     def test_markdown_format_operation_is_documented(self):
         schema = SchemaGenerator().get_schema(request=None, public=True)
@@ -270,7 +266,11 @@ class WeRssSchemaTests(SimpleTestCase):
         operation = schema["paths"]["/api/v1/we-rss/feeds/{id}/refresh-content/"]["post"]
 
         self.assertEqual(operation["operationId"], "we_rss_feeds_refresh_content")
-        self.assertEqual(operation["responses"]["200"]["description"], "No response body")
+        response_content = operation["responses"]["200"]["content"]
+        self.assertIn("text/event-stream", response_content)
+        examples = response_content["text/event-stream"]["examples"]
+        self.assertIn("FeedContentRefreshStreamExample", examples)
+        self.assertIn("event: progress", examples["FeedContentRefreshStreamExample"]["value"])
 
     def test_article_content_refresh_operation_is_documented(self):
         schema = SchemaGenerator().get_schema(request=None, public=True)

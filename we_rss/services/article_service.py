@@ -245,6 +245,8 @@ class ArticleService:
         for field, value in defaults.items():
             setattr(existing, field, value)
         existing.save()
+        if existing.content:
+            ArticleService.enqueue_markdown_refresh(article_id=existing.id)
         return existing, False
 
     @staticmethod

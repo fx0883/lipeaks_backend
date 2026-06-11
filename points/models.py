@@ -80,11 +80,11 @@ class TenantUserProfile(models.Model):
                 name='unique_member_tenant'
             ),
             models.CheckConstraint(
-                check=models.Q(total_points__gte=0) & models.Q(available_points__gte=0),
+                condition=models.Q(total_points__gte=0) & models.Q(available_points__gte=0),
                 name='valid_points'
             ),
             models.CheckConstraint(
-                check=models.Q(available_points__lte=models.F('total_points')),
+                condition=models.Q(available_points__lte=models.F('total_points')),
                 name='available_points_check'
             ),
         ]
@@ -260,11 +260,11 @@ class UserLevel(models.Model):
         ordering = ['level_order']
         constraints = [
             models.CheckConstraint(
-                check=models.Q(min_points__gte=0),
+                condition=models.Q(min_points__gte=0),
                 name='valid_min_points'
             ),
             models.CheckConstraint(
-                check=models.Q(max_points__isnull=True) | models.Q(max_points__gt=models.F('min_points')),
+                condition=models.Q(max_points__isnull=True) | models.Q(max_points__gt=models.F('min_points')),
                 name='valid_max_points'
             ),
         ]
@@ -434,19 +434,19 @@ class TenantUserPoints(models.Model):
         ordering = ['-created_at']
         constraints = [
             models.CheckConstraint(
-                check=models.Q(points__gt=0) | models.Q(points__lt=0),  # 积分Change不能为0
+                condition=models.Q(points__gt=0) | models.Q(points__lt=0),  # 积分Change不能为0
                 name='points_not_zero'
             ),
             models.CheckConstraint(
-                check=models.Q(balance_after=models.F('balance_before') + models.F('points')),
+                condition=models.Q(balance_after=models.F('balance_before') + models.F('points')),
                 name='valid_balance'
             ),
             models.CheckConstraint(
-                check=models.Q(balance_after__gte=0),
+                condition=models.Q(balance_after__gte=0),
                 name='valid_balance_positive'
             ),
             models.CheckConstraint(
-                check=models.Q(tenant_multiplier__gt=0),
+                condition=models.Q(tenant_multiplier__gt=0),
                 name='valid_tenant_multiplier'
             ),
         ]
@@ -835,15 +835,15 @@ class TenantUserTypeTag(models.Model):
                 name='unique_tenant_member_tag'
             ),
             models.CheckConstraint(
-                check=models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=models.F('granted_at')),
+                condition=models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=models.F('granted_at')),
                 name='valid_expiry'
             ),
             models.CheckConstraint(
-                check=models.Q(original_duration_days__isnull=True) | models.Q(original_duration_days__gt=0),
+                condition=models.Q(original_duration_days__isnull=True) | models.Q(original_duration_days__gt=0),
                 name='valid_duration'
             ),
             models.CheckConstraint(
-                check=models.Q(payment_amount__isnull=True) | models.Q(payment_amount__gte=0),
+                condition=models.Q(payment_amount__isnull=True) | models.Q(payment_amount__gte=0),
                 name='valid_payment_amount'
             ),
         ]

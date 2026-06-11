@@ -476,6 +476,7 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
     @action(detail=True, methods=["post"])
     def refresh(self, request, *args, **kwargs):
         article = self.get_object()
+        markdown_service = get_article_markdown_service()
 
         def stream():
             yield self._encode_stream_event(
@@ -495,7 +496,7 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
             try:
                 markdown_content = ArticleService.refresh_article_markdown(
                     article=article,
-                    markdown_service=get_article_markdown_service(),
+                    markdown_service=markdown_service,
                     sleep_seconds=0,
                 )
                 article.refresh_from_db()

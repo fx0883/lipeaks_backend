@@ -123,6 +123,7 @@ class FeedGatewayPaginationTests(unittest.TestCase):
             article_id = f"article-{index}"
             title = f"Article {index}"
             responses.append(self._publish_payload(article_id, title, index))
+            responses.append(self._article_payload(article_id, title, index))
         responses.append(
             FakeGatewayResponse(
                 json_data={
@@ -349,6 +350,7 @@ class FeedGatewayPaginationTests(unittest.TestCase):
                     }
                 ]
             ),
+            self._article_payload_without_publish_time("article-1", "Article 1", 1),
             FakeGatewayResponse(
                 json_data={
                     "base_resp": {"ret": 0},
@@ -436,6 +438,7 @@ class FeedGatewayPaginationTests(unittest.TestCase):
                     }
                 ]
             ),
+            self._article_payload("article-1", "Article 1", 1),
             FakeGatewayResponse(
                 json_data={
                     "base_resp": {"ret": 0},
@@ -492,6 +495,7 @@ class FeedGatewayPaginationTests(unittest.TestCase):
                     }
                 ]
             ),
+            self._article_payload("article-1", "Article 1", 1),
             FakeGatewayResponse(
                 json_data={
                     "base_resp": {"ret": 0},
@@ -543,6 +547,7 @@ class FeedGatewayPaginationTests(unittest.TestCase):
                     }
                 ]
             ),
+            self._article_payload("article-1", "Article 1", 1),
             FakeGatewayResponse(
                 json_data={
                     "base_resp": {"ret": 0},
@@ -594,6 +599,7 @@ class FeedGatewayPaginationTests(unittest.TestCase):
                     }
                 ]
             ),
+            self._article_payload("article-1", "Article 1", 1),
             FakeGatewayResponse(
                 json_data={
                     "base_resp": {"ret": 0},
@@ -638,6 +644,7 @@ class FeedGatewayPaginationTests(unittest.TestCase):
                     }
                 ]
             ),
+            self._article_payload("article-1", "Article 1", 1),
             FakeGatewayResponse(
                 json_data={
                     "base_resp": {"ret": 0},

@@ -1,6 +1,6 @@
 import json
 
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, OpenApiTypes, extend_schema
 from django.http import StreamingHttpResponse
 from rest_framework.response import Response
 
@@ -142,7 +142,23 @@ class ArticleStatsViewSet(WeRssTenantGenericViewSet):
             ),
         ),
         responses={
-            200: None,
+            (200, "text/event-stream"): OpenApiResponse(
+                response=OpenApiTypes.STR,
+                description="Returns `text/event-stream` with `start`, `progress`, and `done` events.",
+                examples=[
+                    OpenApiExample(
+                        "Article stats refresh stream example",
+                        value=(
+                            "event: progress\n"
+                            'data: {"status":"success","title":"Example Article","read_num":128,'
+                            '"success_count":1,"failed_count":0,"progress":100}\n\n'
+                        ),
+                        response_only=True,
+                        media_type="text/event-stream",
+                        status_codes=[200],
+                    ),
+                ],
+            ),
             **common_error_responses,
         },
     )
@@ -189,7 +205,25 @@ class ArticleStatsViewSet(WeRssTenantGenericViewSet):
             ),
         ),
         responses={
-            200: None,
+            (200, "text/event-stream"): OpenApiResponse(
+                response=OpenApiTypes.STR,
+                description="Returns `text/event-stream` with `start`, per-article `progress`, and `done` events.",
+                examples=[
+                    OpenApiExample(
+                        "Article stats batch refresh stream example",
+                        value=(
+                            "event: start\n"
+                            'data: {"selector_type":"article_ids","total":2,"status":"running"}\n\n'
+                            "event: done\n"
+                            'data: {"selector_type":"article_ids","total":2,"success_count":2,'
+                            '"failed_count":0,"progress":100,"status":"done"}\n\n'
+                        ),
+                        response_only=True,
+                        media_type="text/event-stream",
+                        status_codes=[200],
+                    ),
+                ],
+            ),
             **common_error_responses,
         },
     )
