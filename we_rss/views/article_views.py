@@ -6,6 +6,7 @@ from django.http import Http404
 from django.http import StreamingHttpResponse
 from django.db.models import DateTimeField, IntegerField, Value
 from django.db.models.functions import Coalesce
+from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -20,6 +21,8 @@ from we_rss.schema import (
     ARTICLE_EXAMPLE,
     ARTICLE_PUBLIC_SEARCH_LIMIT_PARAMETER,
     ARTICLE_PUBLIC_SEARCH_QUERY_PARAMETER,
+    ARTICLE_PUBLISH_TIME_START_PARAMETER,
+    ARTICLE_PUBLISH_TIME_END_PARAMETER,
     ARTICLE_FEED_ID_PARAMETER,
     ARTICLE_EXPORT_CSV_EXAMPLE,
     ARTICLE_FAVORITE_ONLY_PARAMETER,
@@ -126,6 +129,17 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
         except (TypeError, ValueError):
             raise ValidationError({"feed_id": ["A valid integer is required."]})
 
+    def _parse_publish_time_param(self, val, param_name):
+        if not val:
+            return None
+        dt = parse_datetime(val)
+        if dt is not None:
+            return dt
+        d = parse_date(val)
+        if d is not None:
+            return d
+        raise ValidationError({param_name: ["A valid ISO 8601 datetime or YYYY-MM-DD date is required."]})
+
     @classmethod
     def _get_supported_sort_fields_message(cls):
         return f"Supported values are: {', '.join(cls.ARTICLE_LIST_SORT_FIELDS.keys())}."
@@ -192,6 +206,22 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
             tag_ids=tag_ids,
         )
 
+        publish_time_start = self.request.query_params.get("publish_time_start", "").strip()
+        if publish_time_start:
+            parsed = self._parse_publish_time_param(publish_time_start, "publish_time_start")
+            if isinstance(parsed, datetime):
+                queryset = queryset.filter(publish_time__gte=parsed)
+            else:
+                queryset = queryset.filter(publish_time__date__gte=parsed)
+
+        publish_time_end = self.request.query_params.get("publish_time_end", "").strip()
+        if publish_time_end:
+            parsed = self._parse_publish_time_param(publish_time_end, "publish_time_end")
+            if isinstance(parsed, datetime):
+                queryset = queryset.filter(publish_time__lte=parsed)
+            else:
+                queryset = queryset.filter(publish_time__date__lte=parsed)
+
         return self._apply_article_list_sorting(queryset)
 
     def get_object(self):
@@ -239,6 +269,8 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
             ARTICLE_FAVORITE_ONLY_PARAMETER,
             ARTICLE_FEED_ID_PARAMETER,
             TAG_IDS_PARAMETER,
+            ARTICLE_PUBLISH_TIME_START_PARAMETER,
+            ARTICLE_PUBLISH_TIME_END_PARAMETER,
             ARTICLE_SORT_BY_PARAMETER,
             ARTICLE_SORT_ORDER_PARAMETER,
         ),

@@ -1,4 +1,6 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import timedelta
 
 from django.db.models import Exists, OuterRef
@@ -707,18 +709,40 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
 
             try:
                 while True:
-                    batch_result = FeedService.execute_sync_batch_inline(
-                        feed=feed,
-                        updated_by=request.user,
-                        gateway=self.get_gateway(),
-                        batch_no=batch_no,
-                        begin=begin,
-                        batch_size=batch_size,
-                        sync_scope=sync_scope,
-                        window_days=window_days,
-                        refresh_markdown=refresh_markdown,
-                        run_deadline=run_deadline,
-                    )
+                    # Run the (potentially long) batch fetch in a worker thread and
+                    # poll it on a short timeout so we can emit heartbeat frames
+                    # while mp.weixin.qq.com pages are being fetched. Without this,
+                    # a single batch (4 pages ≈ 60-84s of silence) exceeds the
+                    # client's idle timeout and aborts the stream mid-sync.
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(
+                            FeedService.execute_sync_batch_inline,
+                            feed=feed,
+                            updated_by=request.user,
+                            gateway=self.get_gateway(),
+                            batch_no=batch_no,
+                            begin=begin,
+                            batch_size=batch_size,
+                            sync_scope=sync_scope,
+                            window_days=window_days,
+                            refresh_markdown=refresh_markdown,
+                            run_deadline=run_deadline,
+                        )
+                        while True:
+                            try:
+                                batch_result = future.result(
+                                    timeout=FeedService.BATCH_STREAM_HEARTBEAT_INTERVAL_SECONDS
+                                )
+                                break
+                            except FutureTimeoutError:
+                                yield encode_event(
+                                    "heartbeat",
+                                    {
+                                        "feed_id": feed.id,
+                                        "status": "running",
+                                        "ts": int(timezone.now().timestamp()),
+                                    },
+                                )
                     batches_completed += 1
                     article_ids = list(dict.fromkeys([*article_ids, *(batch_result.get("article_ids") or [])]))
                     articles_synced = len(article_ids)

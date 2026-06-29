@@ -304,6 +304,24 @@ ARTICLE_FEED_ID_PARAMETER = OpenApiParameter(
     examples=[OpenApiExample("Article feed id example", value=1)],
 )
 
+ARTICLE_PUBLISH_TIME_START_PARAMETER = OpenApiParameter(
+    name="publish_time_start",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="Filter articles with publication time on or after this value. Format: YYYY-MM-DD or ISO 8601 datetime.",
+    examples=[OpenApiExample("Article publish time start example", value="2026-06-01")],
+)
+
+ARTICLE_PUBLISH_TIME_END_PARAMETER = OpenApiParameter(
+    name="publish_time_end",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.QUERY,
+    required=False,
+    description="Filter articles with publication time on or before this value. Format: YYYY-MM-DD or ISO 8601 datetime.",
+    examples=[OpenApiExample("Article publish time end example", value="2026-06-30")],
+)
+
 FEED_SUBSCRIBED_ONLY_PARAMETER = OpenApiParameter(
     name="subscribed_only",
     type=OpenApiTypes.BOOL,

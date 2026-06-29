@@ -906,6 +906,73 @@ class ArticleApiTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["data"]["sort_order"], ["Supported values are: asc, desc."])
 
+    def test_article_list_filters_by_publish_time_start(self):
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-early",
+            title="Early",
+            publish_time=datetime(2026, 6, 23, 10, 0, tzinfo=datetime_timezone.utc),
+        )
+        article_late = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-late",
+            title="Late",
+            publish_time=datetime(2026, 6, 25, 10, 0, tzinfo=datetime_timezone.utc),
+        )
+
+        response = self.client.get("/api/v1/we-rss/articles/?publish_time_start=2026-06-24T00:00:00Z")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in self._article_results(response)], [article_late.id])
+
+        # Test date format
+        response_date = self.client.get("/api/v1/we-rss/articles/?publish_time_start=2026-06-24")
+        self.assertEqual(response_date.status_code, 200)
+        self.assertEqual([item["id"] for item in self._article_results(response_date)], [article_late.id])
+
+    def test_article_list_filters_by_publish_time_end(self):
+        article_early = WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-early",
+            title="Early",
+            publish_time=datetime(2026, 6, 23, 10, 0, tzinfo=datetime_timezone.utc),
+        )
+        WechatArticle.objects.create(
+            tenant=self.tenant,
+            feed=self.feed,
+            source_id="article-late",
+            title="Late",
+            publish_time=datetime(2026, 6, 25, 10, 0, tzinfo=datetime_timezone.utc),
+        )
+
+        response = self.client.get("/api/v1/we-rss/articles/?publish_time_end=2026-06-24T00:00:00Z")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in self._article_results(response)], [article_early.id])
+
+        # Test date format
+        response_date = self.client.get("/api/v1/we-rss/articles/?publish_time_end=2026-06-24")
+        self.assertEqual(response_date.status_code, 200)
+        self.assertEqual([item["id"] for item in self._article_results(response_date)], [article_early.id])
+
+    def test_article_list_rejects_invalid_publish_time_format(self):
+        response = self.client.get("/api/v1/we-rss/articles/?publish_time_start=invalid-date")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.data["data"]["publish_time_start"],
+            ["A valid ISO 8601 datetime or YYYY-MM-DD date is required."],
+        )
+
+        response_end = self.client.get("/api/v1/we-rss/articles/?publish_time_end=invalid-date")
+        self.assertEqual(response_end.status_code, 400)
+        self.assertEqual(
+            response_end.data["data"]["publish_time_end"],
+            ["A valid ISO 8601 datetime or YYYY-MM-DD date is required."],
+        )
+
     def test_member_can_search_articles_by_title_only(self):
         WechatArticle.objects.create(
             tenant=self.tenant,
