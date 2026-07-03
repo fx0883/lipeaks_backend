@@ -97,7 +97,6 @@ INSTALLED_APPS = [
     'menus',  # 菜单管理应用
     'charts',  # 图表应用
     'customers',  # 客户管理应用
-    'orders',  # 订单管理应用
     'licenses',  # 许可证管理应用
     'points',  # 多租户积分系统
     'applications',  # 应用管理（整合licenses和feedbacks的软件实体）
@@ -246,8 +245,7 @@ AUTH_USER_MODEL = 'users.User'
 TENANT_REQUIRED_PATHS = [
     '/cms/',  # CMS相关API
     '/customers/',  # cuAPI
-    '/orders/',  # 订单相关API 
-    
+
     # 可以添加其他需要租户验证的关键字...
 ]
 
@@ -658,7 +656,6 @@ TENANT_ISOLATED_API_PATHS = [
     '/api/v1/licenses/',      # 许可证管理
     '/api/v1/feedbacks/',     # 反馈管理
     '/api/v1/customers/',     # 客户管理
-    '/api/v1/orders/',        # 订单管理
     '/api/v1/notifications/',       # 通知系统-成员端
     '/api/v1/admin/notifications/', # 通知系统-管理端
     '/api/v1/we-rss/',        # we_rss 成员接口

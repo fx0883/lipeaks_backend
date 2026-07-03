@@ -7,6 +7,7 @@ from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse, OpenApiTypes
 import logging
 from rest_framework import serializers
@@ -233,6 +234,30 @@ class MemberArticleViewSet(TenantModelViewSet):
             return MemberArticleCreateUpdateSerializer
         else:
             return ArticleDetailSerializer
+
+    def _check_admin_only_categories(self, article, action):
+        """
+        校验文章关联的分类是否含管理员专属分类
+
+        action: 'update'/'delete'/'publish'，用于错误消息
+        """
+        restricted = ArticleCategory.objects.filter(
+            article=article,
+            category__is_admin_only=True,
+            category__is_deleted=False
+        ).select_related('category')
+
+        if restricted.exists():
+            names = []
+            for ac in restricted:
+                name = ac.category.safe_translation_getter('name', any_language=True) or f"ID-{ac.category_id}"
+                names.append(name)
+            raise PermissionDenied(
+                _('分类 [{}] 是管理员专属分类，您无权{}该分类下的文章').format(
+                    ', '.join(names),
+                    {'update': '编辑', 'delete': '删除', 'publish': '发布'}.get(action, '操作')
+                )
+            )
     
     def perform_create(self, serializer):
         """
@@ -260,7 +285,10 @@ class MemberArticleViewSet(TenantModelViewSet):
         # 确保是文章作者（直接检查member_id更高效）
         if instance.member_id != user.id:
             raise serializers.ValidationError(_("你只能编辑自己的文章"))
-        
+
+        # 校验管理员专属分类
+        self._check_admin_only_categories(instance, 'update')
+
         # 更新文章
         article = serializer.save()
         
@@ -278,7 +306,10 @@ class MemberArticleViewSet(TenantModelViewSet):
         # 确保是文章作者（直接检查member_id更高效）
         if instance.member_id != user.id:
             raise serializers.ValidationError(_("你只能删除自己的文章"))
-        
+
+        # 校验管理员专属分类
+        self._check_admin_only_categories(instance, 'delete')
+
         # 软删除：将状态改为archived
         instance.status = 'archived'
         instance.save(update_fields=['status'])
@@ -341,7 +372,10 @@ class MemberArticleViewSet(TenantModelViewSet):
                 {"detail": _("你只能发布自己的文章")},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
+        # 校验管理员专属分类
+        self._check_admin_only_categories(article, 'publish')
+
         # 检查文章状态
         if article.status not in ['draft', 'pending']:
             return Response(

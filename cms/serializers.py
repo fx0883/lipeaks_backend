@@ -2,6 +2,7 @@
 CMS系统序列化器
 """
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 from django.utils.translation import gettext_lazy as _
 from django.utils.text import slugify
 from django.utils import timezone
@@ -9,6 +10,7 @@ from users.serializers import UserSerializer, MemberSerializer
 from tenants.serializers import TenantSerializer
 from common.utils.image_url import add_domain_to_image_url
 from common.mixins import ImageFieldNormalizerMixin
+from common.utils.user_permissions import is_member
 from parler_rest.serializers import TranslatableModelSerializer, TranslatedFieldsField
 from parler_rest.fields import TranslatedField
 
@@ -31,7 +33,7 @@ class CategorySerializer(ImageFieldNormalizerMixin, TranslatableModelSerializer)
         fields = [
             'id', 'slug', 'parent', 'cover_image', 'created_at', 'updated_at', 
             'sort_order', 'tenant', 'application', 'application_name', 
-            'is_active', 'is_pinned',
+            'is_active', 'is_pinned', 'is_admin_only',
             'translations',  # 包含所有语言的翻译
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'tenant', 'application_name']
@@ -41,6 +43,13 @@ class CategorySerializer(ImageFieldNormalizerMixin, TranslatableModelSerializer)
     
     def validate(self, data):
         """验证并自动生成slug"""
+        # 校验：Member 不能创建/修改管理员专属分类
+        request = self.context.get('request')
+        if request and is_member(request.user) and data.get('is_admin_only'):
+            raise PermissionDenied(
+                _('只有管理员可以创建管理员专属分类')
+            )
+
         # 如果没有提供slug，从translations中提取name并生成slug
         if 'slug' not in data or not data['slug']:
             translations = data.get('translations', {})
@@ -51,7 +60,7 @@ class CategorySerializer(ImageFieldNormalizerMixin, TranslatableModelSerializer)
             else:
                 # 如果没有中文名称，使用时间戳生成唯一slug
                 data['slug'] = f"category-{int(timezone.now().timestamp())}"
-        
+
         return data
     
     def to_representation(self, instance):
@@ -597,6 +606,24 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
                     Category.objects.get(id=category_id, tenant=tenant)
                 except Category.DoesNotExist:
                     raise serializers.ValidationError(_(f"分类ID {category_id} 不存在或无权限访问"))
+
+            # 校验管理员专属分类：Member 不能在管理员专属分类下创建文章
+            if is_member(self.context['request'].user):
+                restricted_categories = Category.objects.filter(
+                    id__in=category_ids,
+                    tenant=tenant,
+                    is_admin_only=True
+                )
+                if restricted_categories.exists():
+                    restricted_names = []
+                    for cat in restricted_categories:
+                        name = cat.safe_translation_getter('name', any_language=True) or f"ID-{cat.id}"
+                        restricted_names.append(name)
+                    raise serializers.ValidationError(
+                        _('分类 [{}] 是管理员专属分类，您无法在此分类下创建文章').format(
+                            ', '.join(restricted_names)
+                        )
+                    )
         
         if tag_ids:
             for tag_id in tag_ids:

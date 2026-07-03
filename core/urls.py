@@ -105,10 +105,7 @@ urlpatterns = [
         
         # 客户管理系统路由
         path('customers/', include('customers.urls', namespace='customers')),
-        
-        # 订单管理系统路由
-        path('orders/', include('orders.urls', namespace='orders')),
-        
+
         # 应用管理系统路由
         path('', include('applications.urls')),
         
