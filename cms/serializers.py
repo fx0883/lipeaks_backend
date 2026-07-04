@@ -586,12 +586,8 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
         tenant = self.context['request'].user.tenant
         instance = getattr(self, 'instance', None)
         
-        # 创建时 applications 必填
-        if instance is None:  # 创建操作
-            if not applications:
-                raise serializers.ValidationError({'applications': _('创建文章时必须指定至少一个应用')})
-        
-        # 验证应用存在性
+        # applications 为可选：允许文章不关联任何应用
+        # 验证应用存在性（仅当提供了 applications 时）
         from applications.models import Application
         if applications:
             for app_id in applications:
