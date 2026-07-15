@@ -23,7 +23,6 @@
 | 缓存/消息 | Redis | - |
 | 认证 | JWT (自研) + RBAC | - |
 | 多语言 | django-parler | 2.4 (zh-hans/en/zh-hant/ja/ko/fr) |
-| LLM | pydantic-ai (LLM Gateway) | codex/claude 执行器 |
 | 部署 | Docker + Nginx + Gunicorn | - |
 | 静态 | WhiteNoise | - |
 | 测试 | pytest + pytest-django + factory_boy | - |
@@ -95,8 +94,6 @@ class MyModel(BaseModel):
 | `charts` | `/api/v1/admin/charts/` | 图表/数据可视化 |
 | `wechat` | `/api/v1/wechat/` | 微信小程序登录 |
 | `we_rss` | `/api/v1/we-rss/` | RSS 订阅 |
-| `llm_gateway` | - | LLM 网关（codex/claude） |
-| `image_prompt` | `/api/v1/image-prompt/` | 图像 prompt 生成 |
 | `docs_view` | `/docs/` | 文档查看应用 |
 
 ## 关键配置文件
@@ -125,7 +122,6 @@ SECRET_KEY                                         # Django 密钥
 DEBUG / LOG_TO_CONSOLE                             # 调试与日志
 CELERY_ENABLED, CELERY_BROKER_URL, CELERY_RESULT_BACKEND  # 异步任务
 WECHAT_APPID, WECHAT_SECRET                        # 微信小程序
-LLM_GATEWAY_AGENT_MODEL/BASE_URL/API_KEY           # LLM 网关
 ```
 
 ## 常用命令

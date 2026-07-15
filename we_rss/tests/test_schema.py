@@ -238,29 +238,6 @@ class WeRssSchemaTests(SimpleTestCase):
         self.assertIn("event: start", examples["ArticleStatsBatchRefreshStreamExample"]["value"])
         self.assertIn("event: done", examples["ArticleStatsBatchRefreshStreamExample"]["value"])
 
-    def test_markdown_format_operation_is_documented(self):
-        schema = SchemaGenerator().get_schema(request=None, public=True)
-        operation = schema["paths"]["/api/v1/we-rss/markdown/format/"]["post"]
-
-        self.assertEqual(operation["operationId"], "we_rss_markdown_format")
-        self.assertIn("examples", operation["requestBody"]["content"]["application/json"])
-
-        request_schema = self._resolve_schema(
-            schema,
-            operation["requestBody"]["content"]["application/json"]["schema"],
-        )
-        self.assertIn("content", request_schema["properties"])
-        self.assertIn("mode", request_schema["properties"])
-
-        response_schema = self._resolve_schema(
-            schema,
-            operation["responses"]["200"]["content"]["application/json"]["schema"],
-        )
-        data_schema = self._resolve_schema(schema, response_schema["properties"]["data"])
-        self.assertIn("formatted_markdown", data_schema["properties"])
-        self.assertIn("mode", data_schema["properties"])
-        self.assertIn("executor", data_schema["properties"])
-
     def test_feed_content_refresh_operation_is_documented(self):
         schema = SchemaGenerator().get_schema(request=None, public=True)
         operation = schema["paths"]["/api/v1/we-rss/feeds/{id}/refresh-content/"]["post"]

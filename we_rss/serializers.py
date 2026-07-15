@@ -291,23 +291,6 @@ class WechatArticleSearchResponseSerializer(serializers.Serializer):
     items = WechatArticleSearchItemSerializer(many=True)
 
 
-class MarkdownFormatRequestSerializer(serializers.Serializer):
-    content = serializers.CharField()
-    mode = serializers.ChoiceField(choices=(("gentle", "Gentle"),), required=False, default="gentle")
-
-    def validate_content(self, value):
-        value = str(value or "").strip()
-        if not value:
-            raise serializers.ValidationError("This field may not be blank.")
-        return value
-
-
-class MarkdownFormatResponseSerializer(serializers.Serializer):
-    formatted_markdown = serializers.CharField()
-    mode = serializers.ChoiceField(choices=(("gentle", "Gentle"),))
-    executor = serializers.CharField()
-
-
 class ArticleImportSerializer(serializers.Serializer):
     url = serializers.URLField(
         help_text=(

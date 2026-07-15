@@ -140,8 +140,7 @@ urlpatterns = [
         # 微信小程序登录路由
         path('wechat/', include('wechat.urls', namespace='wechat')),
         path('we-rss/', include('we_rss.urls', namespace='we-rss')),
-        path('image-prompt/', include('image_prompt.urls', namespace='image-prompt')),
-        
+
         # API 文档
         path('schema/', LoggingSpectacularAPIView.as_view(), name='schema'),
         path('docs/', LoggingSpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

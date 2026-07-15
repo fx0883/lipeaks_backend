@@ -105,8 +105,6 @@ INSTALLED_APPS = [
     'notifications',  # 通知系统
     'wechat',  # 微信小程序登录
     'we_rss',
-    'llm_gateway',
-    'image_prompt',
 ]
 
 MIDDLEWARE = [
@@ -608,22 +606,6 @@ CELERY_ENABLE_UTC = True
 # 当 CELERY_ENABLED=False 时，强制任务同步执行
 CELERY_TASK_ALWAYS_EAGER = not CELERY_ENABLED
 CELERY_TASK_EAGER_PROPAGATES = not CELERY_ENABLED
-
-# LLM Gateway Configuration
-LLM_GATEWAY_DEFAULT_EXECUTOR = os.getenv('LLM_GATEWAY_DEFAULT_EXECUTOR', 'codex')
-LLM_GATEWAY_FALLBACK_EXECUTOR = os.getenv('LLM_GATEWAY_FALLBACK_EXECUTOR', 'claude')
-LLM_GATEWAY_CODEX_BIN = os.getenv('LLM_GATEWAY_CODEX_BIN', 'codex')
-LLM_GATEWAY_CLAUDE_BIN = os.getenv('LLM_GATEWAY_CLAUDE_BIN', 'claude')
-LLM_GATEWAY_EXECUTION_TIMEOUT_SECONDS = get_env_with_validation(
-    'LLM_GATEWAY_EXECUTION_TIMEOUT_SECONDS', int, 180
-)
-LLM_GATEWAY_SKILL_DIRS = [
-    os.getenv('LLM_GATEWAY_AGENTS_SKILLS_DIR', r'C:\Users\Administrator\.agents\skills'),
-    os.getenv('LLM_GATEWAY_CODEX_SKILLS_DIR', r'C:\Users\Administrator\.codex\skills'),
-]
-LLM_GATEWAY_AGENT_MODEL = os.getenv('LLM_GATEWAY_AGENT_MODEL', 'openai:gpt-4.1-mini')
-LLM_GATEWAY_AGENT_BASE_URL = os.getenv('LLM_GATEWAY_AGENT_BASE_URL', '')
-LLM_GATEWAY_AGENT_API_KEY = os.getenv('LLM_GATEWAY_AGENT_API_KEY', '')
 
 # Celery Task Routes
 CELERY_TASK_ROUTES = {

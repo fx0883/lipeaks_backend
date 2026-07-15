@@ -11,9 +11,9 @@
 
 1. **项目结构探索** —— 读取根目录、Dockerfile、docker-compose、requirements、README、核心 settings/urls/models，确认这是一个 Django 6.0.6 多租户 SaaS 后端
 2. **生成 `WORKBUDDY.md`**（项目根）—— 工作区上下文文件，包含：
-   - 技术栈矩阵（Django 6.0.6 / DRF / MySQL 8 / Celery+Redis / parler / pydantic-ai）
+   - 技术栈矩阵（Django 6.0.6 / DRF / MySQL 8 / Celery+Redis / parler）
    - 核心架构约定（BaseModel 多租户、TenantManager、软删除、JWT 认证、统一响应渲染器）
-   - 22 个 Django app 清单 + 路由前缀
+   - 20 个 Django app 清单 + 路由前缀
    - 配置文件矩阵、环境变量、常用命令、部署拓扑
 3. **初始化分层记忆** `.workbuddy/memory/`：
    - `MEMORY.md` —— 长期项目记忆（核心约定 + 配置坑点）

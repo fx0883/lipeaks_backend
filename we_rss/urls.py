@@ -8,7 +8,6 @@ from we_rss.views.credential_views import (
 )
 from we_rss.views.feed_views import FeedViewSet
 from we_rss.views.image_proxy_views import image_proxy
-from we_rss.views.markdown_views import MarkdownFormatViewSet
 from we_rss.views.rss_views import ArticleContentView, FeedRssView, TagRssView, TenantRssView
 from we_rss.views.seo_keyword_views import MemberSeoKeywordViewSet
 from we_rss.views.tag_views import MemberTagViewSet
@@ -38,7 +37,6 @@ urlpatterns = [
     path("tags/", MemberTagViewSet.as_view({"get": "list", "post": "create"}), name="tag-list"),
     path("tags/<int:pk>/", MemberTagViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}), name="tag-detail"),
     path("feeds/search/", FeedViewSet.as_view({"get": "search"}), name="feed-search"),
-    path("markdown/format/", MarkdownFormatViewSet.as_view({"post": "create"}), name="markdown-format"),
     path("feeds/subscribe/", FeedViewSet.as_view({"post": "subscribe"}), name="feed-subscribe"),
     path("feeds/sync-batch/", FeedViewSet.as_view({"post": "sync_batch"}), name="feed-sync-batch"),
     path("feeds/<int:pk>/", FeedViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}), name="feed-detail"),

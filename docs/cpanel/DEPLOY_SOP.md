@@ -17,9 +17,8 @@
 | **环境变量文件** | 使用 `.env` | 生产模板是 **`.env.prod`**（由 `.env.prod.example` 复制）。一键脚本 `deploy_cpanel.sh` 也读 `.env.prod`。 |
 | **Django 版本** | 写“Django 5.2” | 实际是 **Django 6.0.6**，要求 Python 3.10+。cPanel 请选 Python **3.12**（或 3.13，若主机提供）。 |
 
-另外两个本项目特有的坑（后文详述）：
+另外一个本项目特有的坑（后文详述）：
 - **Celery**：cPanel 共享主机一般跑不了 Redis + Worker，**必须** `CELERY_ENABLED=false`（任务改为同步执行）。
-- **LLM Gateway**：`LLM_GATEWAY_SKILL_DIRS` 默认指向 Windows 路径 `C:\Users\...`，cPanel 上需通过环境变量覆盖或确认不调用该功能；`llm_gateway` 在 `INSTALLED_APPS` 中，若依赖缺失会在启动期报错——以 `python manage.py check` 为准。
 
 ---
 
@@ -203,16 +202,9 @@ nano .env.prod      # 或 vim
 | `EMAIL_USE_CONSOLE` | 可选 | `false` |
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` / `DEFAULT_FROM_EMAIL` | 可选 | QQ 邮箱地址 + **授权码**（非登录密码） |
 | `WECHAT_APPID` / `WECHAT_SECRET` | 可选 | 不用微信可留空 |
-| `LLM_GATEWAY_AGENT_MODEL` / `BASE_URL` / `API_KEY` | 可选 | 不用 LLM 可留空；**且务必设置 `LLM_GATEWAY_SKILL_DIRS` 覆盖默认 Windows 路径**（见下） |
 | `SITE_URL` | 推荐 | `https://api.yourdomain.com` |
 | `FRONTEND_URL` | 推荐 | `https://admin.yourdomain.com` |
 
-> **LLM Gateway 路径覆盖**（若启用 LLM 功能）：在 `.env.prod` 追加，指向 cPanel 上真实目录或留空列表：
-> ```env
-> LLM_GATEWAY_AGENTS_SKILLS_DIR=/home/USERNAME/.agents/skills
-> LLM_GATEWAY_CODEX_SKILLS_DIR=/home/USERNAME/.codex/skills
-> ```
-> 若不使用 LLM，可不设，但需通过阶段 8 的 `python manage.py check` 确认 `llm_gateway` 能正常导入。
 
 ### 6.4 设置权限（必须）
 
@@ -382,18 +374,13 @@ python manage.py load_initial_menus
 ### ✅ 验证
 
 ```bash
-# 系统检查（关键！能捕获 llm_gateway 等导入/配置错误）
+# 系统检查（关键！能捕获导入/配置错误）
 python manage.py check
 
 # 登录验证超管
 python manage.py shell -c "from users.models import User; u=User.objects.filter(username='admin').first(); print('超管存在:', bool(u), '| is_super_admin:', u.is_super_admin if u else None)"
 ```
 
-> 若 `python manage.py check` 报 `llm_gateway` 相关 `ModuleNotFoundError`（如缺 `openai`）：
-> ```bash
-> pip install openai
-> ```
-> 并在 `.env.prod` 补齐 `LLM_GATEWAY_*` 配置；若不需要 LLM 功能，确认 `check` 通过即可（导入成功 ≠ 必须配置）。
 
 ---
 
@@ -694,7 +681,6 @@ touch ~/lipeaks_backend/tmp/restart.txt
 ### 18.6 `ModuleNotFoundError`（启动/检查期）
 
 - 重新 `pip install -r requirements.txt`（确认在已激活的 venv 内）。
-- 若是 `openai` 等 `llm_gateway` 依赖：`pip install openai`。
 - 确认 `passenger_wsgi.py` 用的 venv 与你装包的 venv 一致（路径见阶段 3）。
 
 ### 18.7 应用跑一会儿就停（内存/进程超限）
@@ -764,8 +750,6 @@ curl -i https://api.yourdomain.com/api/v1/feedbacks/health/
 | `EMAIL_USE_CONSOLE` | 可选 | `false` |
 | `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` / `DEFAULT_FROM_EMAIL` | 可选 | QQ 邮箱 + 授权码 |
 | `WECHAT_APPID` / `WECHAT_SECRET` | 可选 | 微信小程序 |
-| `LLM_GATEWAY_AGENT_MODEL` / `BASE_URL` / `API_KEY` | 可选 | LLM 网关 |
-| `LLM_GATEWAY_AGENTS_SKILLS_DIR` / `LLM_GATEWAY_CODEX_SKILLS_DIR` | 可选 | 覆盖默认 Windows 路径 |
 | `SITE_URL` | 推荐 | `https://api.yourdomain.com` |
 | `FRONTEND_URL` | 推荐 | `https://admin.yourdomain.com` |
 | `FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER` | 可选 | 默认 `True`，灰度时可 `False` |

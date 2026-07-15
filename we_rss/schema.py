@@ -1084,17 +1084,6 @@ WECHAT_ARTICLE_SEARCH_RESPONSE_EXAMPLE = {
     "items": [WECHAT_ARTICLE_SEARCH_ITEM_EXAMPLE],
 }
 
-MARKDOWN_FORMAT_REQUEST_EXAMPLE = {
-    "content": "# Title\nBody",
-    "mode": "gentle",
-}
-
-MARKDOWN_FORMAT_RESPONSE_EXAMPLE = {
-    "formatted_markdown": "# Title\n\nBody",
-    "mode": "gentle",
-    "executor": "codex",
-}
-
 MEMBER_TAG_EXAMPLE = {
     "id": 1,
     "name": "AI",
