@@ -184,7 +184,7 @@ GET /api/v1/we-rss/articles/?favorite_only=true
 GET /api/v1/we-rss/articles/?tag_ids=1,2,3
 ```
 
-`search` 的规则和 `we-mp-rss-main` 保持一致：
+`search` 的关键词拆分规则：
 
 - 只搜 `title`
 - 会先把 `-` 和 `|` 替换为空格

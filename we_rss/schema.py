@@ -278,7 +278,7 @@ ARTICLE_SEARCH_PARAMETER = OpenApiParameter(
     type=OpenApiTypes.STR,
     location=OpenApiParameter.QUERY,
     required=False,
-    description="Search article titles using the same splitting rules as we-mp-rss-main.",
+    description="Search article titles by keyword. The query is split on `|` and `-` into multiple keywords matched with OR (e.g. `Alpha|Beta-Gamma`).",
     examples=[OpenApiExample("Article search example", value="Alpha|Beta-Gamma")],
 )
 
