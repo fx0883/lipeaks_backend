@@ -1373,7 +1373,7 @@ class CategoryViewSet(TenantModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [CategoryPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['parent', 'is_active', 'is_pinned', 'application']
+    filterset_fields = ['parent', 'is_active', 'is_pinned', 'application', 'is_admin_only']
     search_fields = ['translations__name', 'slug', 'translations__description']  # 搜索翻译字段
     ordering_fields = ['sort_order', 'created_at', 'is_pinned']  # 移除name（翻译字段不能直接排序）
     ordering = ['-is_pinned', 'sort_order', 'id']  # 使用id替代name

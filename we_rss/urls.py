@@ -7,6 +7,7 @@ from we_rss.views.credential_views import (
     CredentialViewSet,
 )
 from we_rss.views.feed_views import FeedViewSet
+from we_rss.views.image_proxy_views import image_proxy
 from we_rss.views.markdown_views import MarkdownFormatViewSet
 from we_rss.views.rss_views import ArticleContentView, FeedRssView, TagRssView, TenantRssView
 from we_rss.views.seo_keyword_views import MemberSeoKeywordViewSet
@@ -16,6 +17,7 @@ app_name = "we-rss"
 
 
 urlpatterns = [
+    path("image-proxy/", image_proxy, name="image-proxy"),
     path("credentials/", CredentialViewSet.as_view({"get": "list"}), name="credential-list"),
     path("credentials/<int:pk>/", CredentialViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}), name="credential-detail"),
     path("credentials/<int:pk>/check/", CredentialViewSet.as_view({"post": "check"}), name="credential-check"),
@@ -61,9 +63,19 @@ urlpatterns = [
     ),
     path("articles/batch-delete/", ArticleViewSet.as_view({"post": "batch_delete"}), name="article-batch-delete"),
     path("articles/export/", ArticleViewSet.as_view({"post": "export"}), name="article-export"),
+    path(
+        "articles/export-markdown-images/",
+        ArticleViewSet.as_view({"post": "export_markdown_images"}),
+        name="article-export-markdown-images",
+    ),
     path("articles/import-by-url/", ArticleViewSet.as_view({"post": "import_by_url"}), name="article-import-by-url"),
     path("articles/<int:pk>/", ArticleViewSet.as_view({"get": "retrieve", "delete": "destroy"}), name="article-detail"),
     path("articles/<int:pk>/refresh/", ArticleViewSet.as_view({"post": "refresh"}), name="article-refresh"),
+    path(
+        "articles/<int:pk>/markdown-with-images/",
+        ArticleViewSet.as_view({"get": "markdown_with_images"}),
+        name="article-markdown-with-images",
+    ),
     path("articles/<int:pk>/favorite/", ArticleViewSet.as_view({"put": "update_favorite"}), name="article-favorite"),
     path("articles/<int:pk>/tags/", ArticleViewSet.as_view({"get": "list_tags"}), name="article-tag-list"),
     path("articles/<int:pk>/tags/attach/", ArticleViewSet.as_view({"post": "attach_tags"}), name="article-tag-attach"),

@@ -78,6 +78,8 @@ from we_rss.serializers import (
 from we_rss.renderers import EventStreamRenderer
 from we_rss.services.article_search_service import ArticleSearchService
 from we_rss.services.article_service import ArticleService, WechatArticleGateway, get_article_markdown_service
+from we_rss.services.article_markdown_service import fetch_article_markdown_with_images_from_url
+from we_rss.services.article_markdown_zip_export import stream_articles_markdown_with_images_zip
 from we_rss.services.article_visibility_service import ArticleVisibilityService
 from we_rss.services.feed_service import FeedService
 from we_rss.services.member_article_state_service import MemberArticleStateService
@@ -505,6 +507,31 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
             **common_error_responses,
         },
     )
+    @extend_schema(
+        operation_id="we_rss_articles_markdown_with_images",
+        tags=[WE_RSS_TAG],
+        summary="Get article markdown with images (fresh fetch by url)",
+        description=(
+            "根据文章 url 现抓微信原文，转为保留内联图片的 Markdown 返回；不落库。"
+            f" {WE_RSS_AUTH_DESCRIPTION}"
+        ),
+        parameters=with_tenant_header(ARTICLE_ID_PARAMETER),
+        request=None,
+        responses={200: None, **common_error_responses},
+    )
+    @action(detail=True, methods=["get"])
+    def markdown_with_images(self, request, *args, **kwargs):
+        article = self.get_object()
+        if not (article.url or "").strip():
+            raise ValidationError("该文章缺少 URL，无法获取原文")
+        try:
+            markdown = fetch_article_markdown_with_images_from_url(article.url)
+        except ValueError as exc:
+            raise ValidationError(str(exc))
+        except Exception as exc:  # noqa: BLE001 - 抓取/解析异常统一提示
+            raise ValidationError(f"获取文章原文失败：{exc}")
+        return Response({"markdown": markdown, "title": article.title})
+
     @action(detail=True, methods=["post"])
     def refresh(self, request, *args, **kwargs):
         article = self.get_object()
@@ -614,6 +641,48 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
             member_id=serializer.validated_data.get("member_id"),
             feed_id=serializer.validated_data.get("feed_id"),
         )
+
+    @extend_schema(
+        operation_id="we_rss_articles_export_markdown_images",
+        tags=[WE_RSS_TAG],
+        summary="Export articles as Markdown with images (streaming zip)",
+        description=(
+            "按文章 url 现抓正文+图片，流式打包成 zip 下载；不落库。适合大批量（如 100 篇），"
+            "单篇/单图失败不阻断整体。"
+            f" {WE_RSS_AUTH_DESCRIPTION}"
+        ),
+        request=request_body(
+            ArticleExportSerializer,
+            request_example(
+                "Article markdown-with-images export request",
+                ARTICLE_EXPORT_REQUEST_ARTICLE_IDS_EXAMPLE,
+                description="Export the selected article IDs as a streaming zip.",
+            ),
+        ),
+        responses={200: None, **common_error_responses},
+    )
+    @action(detail=False, methods=["post"], url_path="export-markdown-images")
+    def export_markdown_images(self, request, *args, **kwargs):
+        serializer = ArticleExportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        article_ids = serializer.validated_data.get("article_ids")
+        if not article_ids:
+            raise ValidationError({"article_ids": ["article_ids is required."]})
+        articles = list(
+            ArticleService._build_article_ids_export_queryset(
+                tenant=request.user.tenant,
+                member=request.user,
+                article_ids=article_ids,
+            )
+        )
+        filename = f"we-rss-markdown-images-{datetime.now().strftime('%Y%m%d%H%M%S')}.zip"
+        response = StreamingHttpResponse(
+            stream_articles_markdown_with_images_zip(articles),
+            content_type="application/zip",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["X-Accel-Buffering"] = "no"  # nginx 流式下发，禁用缓冲
+        return response
 
     @extend_schema(
         operation_id="we_rss_articles_update_favorite",

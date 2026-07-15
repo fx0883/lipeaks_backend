@@ -14,15 +14,16 @@
 
 ## 受影响的 API 清单
 
-本次需求共影响以下 5 个 API，详细文档见同目录独立文件：
+本次需求共影响以下 6 个 API，详细文档见同目录独立文件：
 
 | # | API | 文件 | 变更类型 |
 |---|-----|------|---------|
 | 1 | 创建分类 | [01_create_category.md](01_create_category.md) | 新增 `is_admin_only` 字段，Member 设置该字段会被 403 拒绝 |
 | 2 | 更新分类 | [02_update_category.md](02_update_category.md) | 支持修改 `is_admin_only` 字段，仅管理员可改 |
-| 3 | 分类列表/详情 | [03_list_retrieve_category.md](03_list_retrieve_category.md) | 响应新增 `is_admin_only` 字段 |
+| 3 | 分类列表/详情/树 | [03_list_retrieve_category.md](03_list_retrieve_category.md) | 响应新增 `is_admin_only` 字段 |
 | 4 | Member 创建文章 | [04_member_create_article.md](04_member_create_article.md) | 若 `category_ids` 含管理员专属分类，返回 400 |
 | 5 | Member 更新/删除/发布文章 | [05_member_update_delete_publish_article.md](05_member_update_delete_publish_article.md) | 文章关联管理员专属分类时，返回 403 |
+| 6 | 删除分类 | [06_delete_category.md](06_delete_category.md) | 物理删除，前置检查关联文章和子分类（本次补全文档） |
 
 ## 权限规则矩阵
 

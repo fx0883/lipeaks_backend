@@ -116,6 +116,18 @@ def _html_to_markdown(html):
     return converter.handle(html or "").strip()
 
 
+def _html_to_markdown_with_images(html):
+    """与 _html_to_markdown 一致，但保留 <img> 为 ![](url)。"""
+    if html2text is None:
+        raise RuntimeError("html2text is required to convert articles to Markdown.")
+
+    converter = html2text.HTML2Text()
+    converter.ignore_links = False
+    converter.ignore_images = False
+    converter.body_width = 0
+    return converter.handle(html or "").strip()
+
+
 class ArticleMarkdownService:
     def __init__(self, *, session_factory=None, timeout=120):
         self.session_factory = session_factory or requests.Session
@@ -182,6 +194,72 @@ class ArticleMarkdownService:
         sections.append(markdown_body)
         return "\n\n".join(section for section in sections if section).strip()
 
+    def convert_wechat_html_to_markdown_with_images(self, *, html, url):
+        """
+        与 convert_wechat_html_to_markdown 一致，但保留正文内联图片。
+
+        微信 <img> 真实地址在 data-src（src 多为占位图），html2text 只读 src，
+        故先把每个 <img> 的 src 指向 data-src，再用 ignore_images=False 转换，
+        得到 ![](mmbiz_url) 形式的图片引用，供前端本地化。不落库。
+        """
+        normalized_url = normalize_wechat_article_url(url) or str(url or "").strip()
+        payload = parse_wechat_article_html(html, normalized_url)
+        content_html = str(payload.get("content") or "").strip()
+        if payload.get("status") == "deleted" or content_html == "DELETED":
+            raise ValueError("Wechat article is unavailable or has been deleted.")
+        if not content_html:
+            raise ValueError("Wechat article content is empty.")
+
+        soup = BeautifulSoup(content_html, "html.parser")
+        for img in soup.find_all("img"):
+            real = (img.get("data-src") or img.get("src") or "").strip()
+            if real.startswith("//"):
+                real = "https:" + real
+            if real:
+                img["src"] = real
+
+        author = _extract_author(BeautifulSoup(html or "", "html.parser"))
+        markdown_body = _strip_wechat_footer_sections(_html_to_markdown_with_images(str(soup)))
+        if not markdown_body:
+            raise ValueError("Wechat article markdown content is empty.")
+
+        meta_lines = []
+        mp_name = str(payload.get("mp_name") or "").strip()
+        publish_date = _format_publish_date(payload)
+        if mp_name:
+            meta_lines.append(f"> 公众号: {mp_name}")
+        if author:
+            meta_lines.append(f"> 作者: {author}")
+        if publish_date:
+            meta_lines.append(f"> 日期: {publish_date}")
+
+        sections = [f"# {payload.get('title') or 'Untitled'}"]
+        if meta_lines:
+            sections.append("\n".join(meta_lines))
+            sections.append("---")
+        sections.append(markdown_body)
+        return "\n\n".join(section for section in sections if section).strip()
+
+    def fetch_markdown_with_images_from_url(self, url):
+        """现抓文章原文并转为保留内联图片的 Markdown（不落库）。"""
+        raw_url = str(url or "").strip()
+        if not raw_url:
+            raise ValueError("Article URL is required.")
+
+        if self._is_wechat_article_url(raw_url):
+            normalized_url = normalize_wechat_article_url(raw_url) or raw_url
+            response = self._fetch_response(normalized_url, use_wechat_session=True)
+            return self.convert_wechat_html_to_markdown_with_images(
+                html=response.text,
+                url=response.url or normalized_url,
+            )
+
+        response = self._fetch_response(raw_url, use_wechat_session=False)
+        body = _strip_yaml_front_matter(_html_to_markdown_with_images(response.text))
+        if not body:
+            raise ValueError("Article markdown content is empty.")
+        return body
+
     def fetch_markdown_from_url(self, url):
         raw_url = str(url or "").strip()
         if not raw_url:
@@ -195,3 +273,8 @@ class ArticleMarkdownService:
 
 def fetch_article_markdown_from_url(url):
     return ArticleMarkdownService().fetch_markdown_from_url(url)
+
+
+def fetch_article_markdown_with_images_from_url(url):
+    """现抓文章原文并转为保留内联图片的 Markdown（不落库）。"""
+    return ArticleMarkdownService().fetch_markdown_with_images_from_url(url)

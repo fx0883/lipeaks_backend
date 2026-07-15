@@ -345,6 +345,36 @@ CORS_EXPOSE_HEADERS = [
     "content-disposition",
 ]
 
+# We-RSS 微信公众号图片代理配置
+# 允许通过环境变量 WE_RSS_IMAGE_PROXY_ALLOWED_HOSTS 追加额外图床 CDN 域名（逗号分隔）
+_we_rss_extra_hosts = [
+    host.strip()
+    for host in os.getenv("WE_RSS_IMAGE_PROXY_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
+WE_RSS_IMAGE_PROXY = {
+    # 代理白名单：正文图片 + 公众号头像，可经环境变量追加
+    "ALLOWED_HOSTS": ["mmbiz.qpic.cn", "mmbiz.qlogo.cn"] + _we_rss_extra_hosts,
+    # 必须带正常浏览器 UA，否则部分微信图片 403
+    "USER_AGENT": os.getenv(
+        "WE_RSS_IMAGE_PROXY_UA",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    ),
+    # Referer：与 wechat_gateway 一致，个别图片 403 时有帮助；置空则不发送
+    "REFERER": os.getenv("WE_RSS_IMAGE_PROXY_REFERER", "https://mp.weixin.qq.com/"),
+    # 连接 + 读取超时（秒）
+    "TIMEOUT": int(os.getenv("WE_RSS_IMAGE_PROXY_TIMEOUT", "15")),
+    # 成功响应缓存时间（秒）
+    "CACHE_MAX_AGE": int(os.getenv("WE_RSS_IMAGE_PROXY_CACHE_MAX_AGE", "86400")),
+    # 声明大小超过该阈值的图片拒绝代理（字节）
+    "MAX_CONTENT_LENGTH": int(os.getenv("WE_RSS_IMAGE_PROXY_MAX_SIZE", str(25 * 1024 * 1024))),
+    # 跟随重定向最大次数（每次重新做白名单 + 内网校验）
+    "MAX_REDIRECTS": int(os.getenv("WE_RSS_IMAGE_PROXY_MAX_REDIRECTS", "3")),
+    # 流式分块大小（字节）
+    "CHUNK_SIZE": 8192,
+}
+
 # CSRF 安全配置
 CSRF_COOKIE_AGE = 31449600  # 1年
 CSRF_COOKIE_DOMAIN = None
