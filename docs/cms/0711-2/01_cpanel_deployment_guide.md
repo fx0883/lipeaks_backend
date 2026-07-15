@@ -208,11 +208,6 @@ DEFAULT_FROM_EMAIL=your_email@example.com
 WECHAT_APPID=your_wechat_appid
 WECHAT_SECRET=your_wechat_secret
 
-# LLM Gateway 配置（如需使用）
-LLM_GATEWAY_AGENT_MODEL=openai:gpt-4.1-mini
-LLM_GATEWAY_AGENT_BASE_URL=https://your-provider.example.com/v1
-LLM_GATEWAY_AGENT_API_KEY=your_provider_key
-
 # 站点 URL
 SITE_URL=https://api.yourdomain.com
 FRONTEND_URL=https://admin.yourdomain.com
