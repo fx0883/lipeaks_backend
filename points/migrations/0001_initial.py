@@ -186,11 +186,11 @@ class Migration(migrations.Migration):
         # Add constraints and indexes
         migrations.AddConstraint(
             model_name='userlevel',
-            constraint=models.CheckConstraint(check=models.Q(min_points__gte=0), name='valid_min_points'),
+            constraint=models.CheckConstraint(condition=models.Q(min_points__gte=0), name='valid_min_points'),
         ),
         migrations.AddConstraint(
             model_name='userlevel',
-            constraint=models.CheckConstraint(check=models.Q(max_points__isnull=True) | models.Q(max_points__gt=models.F('min_points')), name='valid_max_points'),
+            constraint=models.CheckConstraint(condition=models.Q(max_points__isnull=True) | models.Q(max_points__gt=models.F('min_points')), name='valid_max_points'),
         ),
         migrations.AddConstraint(
             model_name='tenantuserprofile',
@@ -198,27 +198,27 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='tenantuserprofile',
-            constraint=models.CheckConstraint(check=models.Q(total_points__gte=0) & models.Q(available_points__gte=0), name='valid_points'),
+            constraint=models.CheckConstraint(condition=models.Q(total_points__gte=0) & models.Q(available_points__gte=0), name='valid_points'),
         ),
         migrations.AddConstraint(
             model_name='tenantuserprofile',
-            constraint=models.CheckConstraint(check=models.Q(available_points__lte=models.F('total_points')), name='available_points_check'),
+            constraint=models.CheckConstraint(condition=models.Q(available_points__lte=models.F('total_points')), name='available_points_check'),
         ),
         migrations.AddConstraint(
             model_name='tenantuserpoints',
-            constraint=models.CheckConstraint(check=models.Q(points__gt=0) | models.Q(points__lt=0), name='points_not_zero'),
+            constraint=models.CheckConstraint(condition=models.Q(points__gt=0) | models.Q(points__lt=0), name='points_not_zero'),
         ),
         migrations.AddConstraint(
             model_name='tenantuserpoints',
-            constraint=models.CheckConstraint(check=models.Q(balance_after=models.F('balance_before') + models.F('points')), name='valid_balance'),
+            constraint=models.CheckConstraint(condition=models.Q(balance_after=models.F('balance_before') + models.F('points')), name='valid_balance'),
         ),
         migrations.AddConstraint(
             model_name='tenantuserpoints',
-            constraint=models.CheckConstraint(check=models.Q(balance_after__gte=0), name='valid_balance_positive'),
+            constraint=models.CheckConstraint(condition=models.Q(balance_after__gte=0), name='valid_balance_positive'),
         ),
         migrations.AddConstraint(
             model_name='tenantuserpoints',
-            constraint=models.CheckConstraint(check=models.Q(tenant_multiplier__gt=0), name='valid_tenant_multiplier'),
+            constraint=models.CheckConstraint(condition=models.Q(tenant_multiplier__gt=0), name='valid_tenant_multiplier'),
         ),
         migrations.AddConstraint(
             model_name='tenantusertypetag',
@@ -226,15 +226,15 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='tenantusertypetag',
-            constraint=models.CheckConstraint(check=models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=models.F('granted_at')), name='valid_expiry'),
+            constraint=models.CheckConstraint(condition=models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=models.F('granted_at')), name='valid_expiry'),
         ),
         migrations.AddConstraint(
             model_name='tenantusertypetag',
-            constraint=models.CheckConstraint(check=models.Q(original_duration_days__isnull=True) | models.Q(original_duration_days__gt=0), name='valid_duration'),
+            constraint=models.CheckConstraint(condition=models.Q(original_duration_days__isnull=True) | models.Q(original_duration_days__gt=0), name='valid_duration'),
         ),
         migrations.AddConstraint(
             model_name='tenantusertypetag',
-            constraint=models.CheckConstraint(check=models.Q(payment_amount__isnull=True) | models.Q(payment_amount__gte=0), name='valid_payment_amount'),
+            constraint=models.CheckConstraint(condition=models.Q(payment_amount__isnull=True) | models.Q(payment_amount__gte=0), name='valid_payment_amount'),
         ),
         
         # Add indexes

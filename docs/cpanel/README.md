@@ -1,5 +1,11 @@
 # Django项目部署到cPanel指南
 
+## ⭐ 推荐入口：单文件完整 SOP
+
+新用户请直接阅读 **[DEPLOY_SOP.md](DEPLOY_SOP.md)** —— 一份按阶段顺序可逐步执行的权威主文档，已对齐当前代码库（Django 6.0.6、`.env.prod`、`passenger_wsgi.py`、`scripts/deploy_cpanel.sh`），并更正了下方分篇文档中的过时内容（如 `DEBUG` 实际应写 `INFO` 变量、Django 版本等）。**冲突时以 DEPLOY_SOP.md 为准。**
+
+下方的分篇文档可作为按主题深入参考。
+
 这个目录包含了将Django项目部署到cPanel托管环境的详细指南。
 
 ## 快速入门

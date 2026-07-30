@@ -177,7 +177,6 @@ class TenantPathChecker:
             [
                 '/api/v1/cms/',
                 '/api/v1/customers/',
-                '/api/v1/orders/',
                 '/api/v1/licenses/'
             ]
         )

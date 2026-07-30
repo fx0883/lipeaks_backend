@@ -1148,8 +1148,6 @@ class SystemInfoView(APIView):
                 features.append('rbac')
             if 'points' in installed_apps:
                 features.append('points-system')
-            if 'orders' in installed_apps:
-                features.append('order-management')
             if 'customers' in installed_apps:
                 features.append('customer-management')
             if 'cms' in installed_apps:

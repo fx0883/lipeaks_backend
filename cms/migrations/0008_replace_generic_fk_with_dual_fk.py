@@ -168,7 +168,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='article',
             constraint=models.CheckConstraint(
-                check=models.Q(
+                condition=models.Q(
                     models.Q(('user__isnull', False), ('member__isnull', True)),
                     models.Q(('user__isnull', True), ('member__isnull', False)),
                     _connector='OR'

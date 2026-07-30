@@ -2,16 +2,16 @@
 -r requirements.txt
 
 # 测试相关
-pytest==8.3.5
-pytest-django==4.11.1
-coverage==7.8.0
+pytest==9.0.3
+pytest-django==4.12.0
+coverage==7.14.1
 factory-boy==3.3.3
-Faker==37.1.0
+Faker==40.21.0
 
 # 调试工具
-django-debug-toolbar==4.4.0
+django-debug-toolbar==6.3.0
 
 # 代码质量
-black==24.1.1
-flake8==7.0.0
-isort==5.13.2
+black==26.5.1
+flake8==7.3.0
+isort==8.0.1

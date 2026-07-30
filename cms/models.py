@@ -120,7 +120,7 @@ class Article(BaseModel):
         constraints = [
             # 确保user和member有且仅有一个非空
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(user__isnull=False, member__isnull=True) | 
                     models.Q(user__isnull=True, member__isnull=False)
                 ),
@@ -325,6 +325,12 @@ class Category(TranslatableModel):
     )
     is_active = models.BooleanField(_("是否激活"), default=True)
     is_pinned = models.BooleanField(_("是否置顶"), default=False)
+    is_admin_only = models.BooleanField(
+        _("管理员专属"),
+        default=False,
+        db_index=True,
+        help_text="标记为True时，该分类下的文章仅管理员可创建/编辑/删除，Member不可操作"
+    )
     is_deleted = models.BooleanField(_("是否删除"), default=False, db_index=True)
     
     # 使用TranslatableTenantManager以同时支持翻译和租户过滤
@@ -345,6 +351,7 @@ class Category(TranslatableModel):
             models.Index(fields=['tenant', 'is_pinned']),
             models.Index(fields=['tenant', 'application']),
             models.Index(fields=['tenant', 'application', 'is_active']),
+            models.Index(fields=['tenant', 'is_admin_only']),
         ]
     
     def __str__(self):
@@ -515,7 +522,7 @@ class Comment(BaseModel):
         constraints = [
             # 确保至少有一种评论者类型
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(user__isnull=False, member__isnull=True, guest_name__isnull=True) |
                     models.Q(user__isnull=True, member__isnull=False, guest_name__isnull=True) |
                     models.Q(user__isnull=True, member__isnull=True, guest_name__isnull=False)
@@ -965,7 +972,7 @@ class OperationLog(BaseModel):
         constraints = [
             # 确保user和member有且仅有一个非空
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(user__isnull=False, member__isnull=True) |
                     models.Q(user__isnull=True, member__isnull=False)
                 ),

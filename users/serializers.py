@@ -5,6 +5,7 @@ import logging
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
 from users.models import User, Member, PasswordResetToken
 from tenants.models import Tenant
 from common.utils.image_url import add_domain_to_image_url
@@ -440,11 +441,22 @@ class LoginSerializer(serializers.Serializer):
                 except Exception as e:
                     logger.error(f"检查用户状态时出错: {e}")
 
-            # 若命中成员，则因无Header而拒绝
-            if not user:
-                # 不再进行成员查找，直接要求Header
-                logger.warning(f"登录失败且未命中User，抛出TenantHeaderInvalidOrMissing以提示可能需要Header: username={identifier}")
-                raise TenantHeaderInvalidOrMissing()
+        # 若命中成员，则因无Header而拒绝
+        if not user:
+            # 区分两种场景：Member 忘带头 vs 凭据无效
+            member_exists = Member.objects.filter(
+                Q(username=identifier) | Q(email=identifier),
+                is_deleted=False
+            ).exists()
+            if member_exists:
+                # Member 账号未带 X-Tenant-ID 头
+                logger.warning(f"Member账号未带X-Tenant-ID头登录: username={identifier}")
+                raise TenantHeaderInvalidOrMissing(
+                    detail="此账号为成员账号，请通过 X-Tenant-ID 请求头或请求体 tenant_id 指定租户"
+                )
+            # 其他情况：凭据无效或用户不存在
+            logger.warning(f"登录失败，凭据无效或用户不存在: username={identifier}")
+            raise serializers.ValidationError("Invalid username/email or password")
 
         if not user:
             raise serializers.ValidationError("Invalid username/email or password")

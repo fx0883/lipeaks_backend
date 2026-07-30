@@ -3,18 +3,18 @@ Member Feedback Submission Views (Server-side Pages)
 提供基于 HTML 表单的反馈提交流程
 """
 import logging
+import jwt
 from django.views.generic import FormView, TemplateView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.utils.translation import gettext_lazy as _
-from rest_framework_simplejwt.tokens import AccessToken
-from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 
 from feedbacks.forms import FeedbackSubmitForm
 from feedbacks.models import Feedback
 from applications.models import Application
 from users.models import Member
 from tenants.models import Tenant
+from common.authentication.jwt_auth import verify_jwt_token
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +79,12 @@ class FeedbackSubmitPageView(FormView):
         if self.member_token:
             try:
                 # 解析 JWT Token
-                token = AccessToken(self.member_token)
-                member_id = token.get('user_id')
+                payload = verify_jwt_token(self.member_token)
+                member_id = payload.get('user_id')
+                model_type = payload.get('model_type')
+
+                if model_type != 'member':
+                    raise jwt.InvalidTokenError('Token is not a member token')
                 
                 # 获取 Member 用户
                 self.member = Member.objects.get(
@@ -95,7 +99,7 @@ class FeedbackSubmitPageView(FormView):
                 
                 logger.info(f"Member authenticated: {self.member.email}")
                 
-            except (TokenError, InvalidToken, Member.DoesNotExist) as e:
+            except (jwt.InvalidTokenError, Member.DoesNotExist) as e:
                 logger.warning(f"Invalid member token: {str(e)}")
                 # Token 无效，按匿名用户处理
                 self.member_token = None

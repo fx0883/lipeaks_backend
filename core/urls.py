@@ -73,7 +73,7 @@ class LoggingSpectacularRedocView(SpectacularRedocView):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    
+
     # 文档查看应用路由
     path('docs/', include('docs_view.urls')),
     
@@ -105,10 +105,7 @@ urlpatterns = [
         
         # 客户管理系统路由
         path('customers/', include('customers.urls', namespace='customers')),
-        
-        # 订单管理系统路由
-        path('orders/', include('orders.urls', namespace='orders')),
-        
+
         # 应用管理系统路由
         path('', include('applications.urls')),
         
@@ -142,7 +139,8 @@ urlpatterns = [
         
         # 微信小程序登录路由
         path('wechat/', include('wechat.urls', namespace='wechat')),
-        
+        path('we-rss/', include('we_rss.urls', namespace='we-rss')),
+
         # API 文档
         path('schema/', LoggingSpectacularAPIView.as_view(), name='schema'),
         path('docs/', LoggingSpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
