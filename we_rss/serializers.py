@@ -326,6 +326,19 @@ class ArticleStatsBatchRefreshSerializer(serializers.Serializer):
         min_value=1,
         help_text="Refresh all articles under one feed within the current tenant.",
     )
+    window_days = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        help_text="Filter articles from the last N days.",
+    )
+    start_date = serializers.DateTimeField(
+        required=False,
+        help_text="Filter articles published on or after this date (ISO 8601).",
+    )
+    end_date = serializers.DateTimeField(
+        required=False,
+        help_text="Filter articles published on or before this date (ISO 8601).",
+    )
 
     def validate(self, attrs):
         selectors = [
@@ -335,6 +348,17 @@ class ArticleStatsBatchRefreshSerializer(serializers.Serializer):
         ]
         if sum(selectors) != 1:
             raise serializers.ValidationError("Provide exactly one of article_ids, feed_id, or member_id.")
+
+        window_days = attrs.get("window_days")
+        start_date = attrs.get("start_date")
+        end_date = attrs.get("end_date")
+
+        if window_days is not None and (start_date is not None or end_date is not None):
+            raise serializers.ValidationError("Cannot provide both window_days and start_date/end_date.")
+
+        if start_date and end_date and start_date > end_date:
+            raise serializers.ValidationError({"start_date": "start_date must be earlier than or equal to end_date."})
+
         return attrs
 
 

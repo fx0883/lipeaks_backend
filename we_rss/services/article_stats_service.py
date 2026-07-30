@@ -121,20 +121,41 @@ class ArticleStatsRefreshService:
         raise ValidationError(message)
 
     @classmethod
-    def _resolve_selected_article_ids(cls, *, tenant, member, article_ids):
+    def _apply_time_filters(cls, queryset, window_days=None, start_date=None, end_date=None):
+        import datetime
+        from django.db.models.functions import Coalesce
+        from django.utils import timezone
+
+        if window_days is not None:
+            cutoff_date = timezone.now() - datetime.timedelta(days=window_days)
+            queryset = queryset.annotate(effective_time=Coalesce('publish_time', 'created_at'))
+            queryset = queryset.filter(effective_time__gte=cutoff_date)
+        else:
+            if start_date is not None or end_date is not None:
+                queryset = queryset.annotate(effective_time=Coalesce('publish_time', 'created_at'))
+            if start_date is not None:
+                queryset = queryset.filter(effective_time__gte=start_date)
+            if end_date is not None:
+                queryset = queryset.filter(effective_time__lte=end_date)
+        return queryset
+
+    @classmethod
+    def _resolve_selected_article_ids(cls, *, tenant, member, article_ids, window_days=None, start_date=None, end_date=None):
         ordered_ids = cls._dedupe_article_ids(article_ids)
         if not ordered_ids:
             return []
 
+        base_queryset = WechatArticle.objects.filter(tenant=tenant, id__in=ordered_ids)
+        base_queryset = cls._apply_time_filters(base_queryset, window_days=window_days, start_date=start_date, end_date=end_date)
         queryset = ArticleVisibilityService.get_visible_article_queryset(
             tenant=tenant,
             member=member,
-            queryset=WechatArticle.objects.filter(tenant=tenant, id__in=ordered_ids),
+            queryset=base_queryset,
         )
         existing_ids = set(queryset.values_list("id", flat=True))
         missing_ids = [article_id for article_id in ordered_ids if article_id not in existing_ids]
         if missing_ids:
-            raise ValidationError({"article_ids": [f"Articles not found in current member scope: {missing_ids}"]})
+            raise ValidationError({"article_ids": [f"Articles not found or not in date range in current member scope: {missing_ids}"]})
 
         order_expression = Case(
             *[When(pk=article_id, then=Value(index)) for index, article_id in enumerate(ordered_ids)],
@@ -144,30 +165,32 @@ class ArticleStatsRefreshService:
             ArticleVisibilityService.get_visible_article_queryset(
                 tenant=tenant,
                 member=member,
-                queryset=WechatArticle.objects.filter(tenant=tenant, id__in=ordered_ids),
+                queryset=base_queryset,
             )
             .order_by(order_expression)
             .values_list("id", flat=True)
         )
 
-    @staticmethod
-    def _resolve_feed_article_ids(*, tenant, member, feed_id):
+    @classmethod
+    def _resolve_feed_article_ids(cls, *, tenant, member, feed_id, window_days=None, start_date=None, end_date=None):
         feed = WechatFeed.objects.filter(tenant=tenant, id=feed_id).first()
         if feed is None:
             raise ValidationError({"feed_id": ["Feed not found in current tenant."]})
 
+        base_queryset = WechatArticle.objects.filter(tenant=tenant, feed_id=feed_id).exclude(status="deleted")
+        base_queryset = cls._apply_time_filters(base_queryset, window_days=window_days, start_date=start_date, end_date=end_date)
         return list(
             ArticleVisibilityService.get_tenant_visible_article_queryset(
                 tenant=tenant,
                 member=member,
-                queryset=WechatArticle.objects.filter(tenant=tenant, feed_id=feed_id).exclude(status="deleted"),
+                queryset=base_queryset,
             )
             .order_by(*WechatArticle._meta.ordering)
             .values_list("id", flat=True)
         )
 
-    @staticmethod
-    def _resolve_member_article_ids(*, tenant, member_id):
+    @classmethod
+    def _resolve_member_article_ids(cls, *, tenant, member_id, window_days=None, start_date=None, end_date=None):
         member = Member.objects.filter(tenant=tenant, id=member_id).first()
         if member is None:
             raise ValidationError({"member_id": ["Member not found in current tenant."]})
@@ -176,18 +199,20 @@ class ArticleStatsRefreshService:
             tenant=tenant,
             member_id=member_id,
         ).values_list("feed_id", flat=True)
+        base_queryset = WechatArticle.objects.filter(tenant=tenant, feed_id__in=feed_ids).exclude(status="deleted")
+        base_queryset = cls._apply_time_filters(base_queryset, window_days=window_days, start_date=start_date, end_date=end_date)
         return list(
             ArticleVisibilityService.get_visible_article_queryset(
                 tenant=tenant,
                 member=member,
-                queryset=WechatArticle.objects.filter(tenant=tenant, feed_id__in=feed_ids),
+                queryset=base_queryset,
             )
             .order_by(*WechatArticle._meta.ordering)
             .values_list("id", flat=True)
         )
 
     @classmethod
-    def resolve_article_ids(cls, *, tenant, member, article_ids=None, feed_id=None, member_id=None):
+    def resolve_article_ids(cls, *, tenant, member, article_ids=None, feed_id=None, member_id=None, window_days=None, start_date=None, end_date=None):
         selectors = [
             bool(article_ids),
             feed_id is not None,
@@ -197,19 +222,28 @@ class ArticleStatsRefreshService:
             raise ValidationError("Provide exactly one of article_ids, feed_id, or member_id.")
 
         if article_ids:
-            return cls._resolve_selected_article_ids(tenant=tenant, member=member, article_ids=article_ids)
+            return cls._resolve_selected_article_ids(
+                tenant=tenant, member=member, article_ids=article_ids, window_days=window_days, start_date=start_date, end_date=end_date
+            )
         if feed_id is not None:
-            return cls._resolve_feed_article_ids(tenant=tenant, member=member, feed_id=feed_id)
-        return cls._resolve_member_article_ids(tenant=tenant, member_id=member_id)
+            return cls._resolve_feed_article_ids(
+                tenant=tenant, member=member, feed_id=feed_id, window_days=window_days, start_date=start_date, end_date=end_date
+            )
+        return cls._resolve_member_article_ids(
+            tenant=tenant, member_id=member_id, window_days=window_days, start_date=start_date, end_date=end_date
+        )
 
     @classmethod
-    def get_articles_for_refresh(cls, *, tenant, member, article_ids=None, feed_id=None, member_id=None):
+    def get_articles_for_refresh(cls, *, tenant, member, article_ids=None, feed_id=None, member_id=None, window_days=None, start_date=None, end_date=None):
         resolved_article_ids = cls.resolve_article_ids(
             tenant=tenant,
             member=member,
             article_ids=article_ids,
             feed_id=feed_id,
             member_id=member_id,
+            window_days=window_days,
+            start_date=start_date,
+            end_date=end_date,
         )
         if not resolved_article_ids:
             return []
@@ -272,22 +306,37 @@ class ArticleStatsRefreshService:
         if member is None:
             raise ValidationError("Task creator is required to resolve article stats refresh scope.")
 
+        window_days = payload.get("window_days")
+        start_date_str = payload.get("start_date")
+        end_date_str = payload.get("end_date")
+        start_date = parse_datetime(start_date_str) if start_date_str else None
+        end_date = parse_datetime(end_date_str) if end_date_str else None
+
         if selector_type == "feed_id":
             return cls.resolve_article_ids(
                 tenant=tenant,
                 member=member,
                 feed_id=payload.get("feed_id"),
+                window_days=window_days,
+                start_date=start_date,
+                end_date=end_date,
             )
         if selector_type == "member_id":
             return cls.resolve_article_ids(
                 tenant=tenant,
                 member=member,
                 member_id=payload.get("member_id"),
+                window_days=window_days,
+                start_date=start_date,
+                end_date=end_date,
             )
         return cls.resolve_article_ids(
             tenant=tenant,
             member=member,
             article_ids=payload.get("article_ids") or [],
+            window_days=window_days,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     @staticmethod
@@ -358,7 +407,7 @@ class ArticleStatsRefreshService:
         return article
 
     @classmethod
-    def enqueue_batch_refresh(cls, *, tenant, created_by, article_ids=None, feed_id=None, member_id=None):
+    def enqueue_batch_refresh(cls, *, tenant, created_by, article_ids=None, feed_id=None, member_id=None, window_days=None, start_date=None, end_date=None):
         selector_type = cls.determine_selector_type(
             article_ids=article_ids,
             feed_id=feed_id,
@@ -370,6 +419,9 @@ class ArticleStatsRefreshService:
             article_ids=article_ids,
             feed_id=feed_id,
             member_id=member_id,
+            window_days=window_days,
+            start_date=start_date,
+            end_date=end_date,
         )
         task_key = cls._build_task_key(
             article_ids=resolved_article_ids,
@@ -396,6 +448,9 @@ class ArticleStatsRefreshService:
                 "article_ids": resolved_article_ids,
                 "feed_id": feed_id,
                 "member_id": member_id,
+                "window_days": window_days,
+                "start_date": start_date.isoformat() if start_date else None,
+                "end_date": end_date.isoformat() if end_date else None,
             },
         )
         from we_rss.tasks import run_article_stats_refresh_task

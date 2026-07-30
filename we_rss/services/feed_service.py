@@ -47,7 +47,7 @@ class WechatFeedGateway:
         max_pages=None,
         timeout=DEFAULT_TIMEOUT,
         publish_timeout=DEFAULT_PUBLISH_TIMEOUT,
-        sleep_seconds=1.5,
+        sleep_seconds=3,
         sleep_func=None,
     ):
         self.session_factory = session_factory or requests.Session

@@ -234,6 +234,10 @@ class ArticleStatsViewSet(WeRssTenantGenericViewSet):
         article_ids = serializer.validated_data.get("article_ids")
         feed_id = serializer.validated_data.get("feed_id")
         member_id = serializer.validated_data.get("member_id")
+        window_days = serializer.validated_data.get("window_days")
+        start_date = serializer.validated_data.get("start_date")
+        end_date = serializer.validated_data.get("end_date")
+
         selector_type = ArticleStatsRefreshService.determine_selector_type(
             article_ids=article_ids,
             feed_id=feed_id,
@@ -245,6 +249,9 @@ class ArticleStatsViewSet(WeRssTenantGenericViewSet):
             article_ids=article_ids,
             feed_id=feed_id,
             member_id=member_id,
+            window_days=window_days,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         return self._stream_article_stats_refresh(
