@@ -47,6 +47,7 @@ urlpatterns = [
     path("feeds/<int:pk>/tags/detach/", FeedViewSet.as_view({"post": "detach_tags"}), name="feed-tag-detach"),
     path("feeds/<int:pk>/refresh-content/", FeedViewSet.as_view({"post": "refresh_content"}), name="feed-refresh-content"),
     path("feeds/<int:pk>/sync/", FeedViewSet.as_view({"post": "sync"}), name="feed-sync"),
+    path("feeds/<int:pk>/sync_by_history/", FeedViewSet.as_view({"post": "sync_by_history"}), name="feed-sync-by-history"),
     path("articles/", ArticleViewSet.as_view({"get": "list"}), name="article-list"),
     path("articles/search/", ArticleViewSet.as_view({"get": "search"}), name="article-search"),
     path(
