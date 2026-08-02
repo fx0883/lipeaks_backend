@@ -248,7 +248,7 @@ class WechatFeedGateway:
             {
                 "source_id": item.get("fakeid", ""),
                 "faker_id": item.get("fakeid", ""),
-                "biz": item.get("biz", ""),
+                "biz": item.get("biz", "") or item.get("fakeid", ""),
                 "mp_name": item.get("nickname") or item.get("username") or "",
                 "mp_cover": item.get("round_head_img") or item.get("headimgurl") or "",
                 "mp_intro": item.get("signature") or item.get("alias") or "",
@@ -1131,6 +1131,94 @@ class FeedService:
             begin=begin,
             batch_size=batch_size,
             deadline_at=batch_deadline,
+        )
+        scope_result = FeedService._apply_sync_scope_to_batch(
+            tenant=feed.tenant,
+            sync_scope=sync_scope,
+            window_days=window_days,
+            articles=batch_result.get("articles", []),
+        )
+        scoped_articles = scope_result["articles"]
+        persistence_result = FeedService._upsert_articles(
+            feed=feed,
+            articles=scoped_articles,
+            updated_by=updated_by,
+            refresh_markdown=refresh_markdown,
+        )
+        synced_article_ids = persistence_result["article_ids"]
+        combined_failed_articles = [
+            *(batch_result.get("failed_articles", []) or []),
+            *persistence_result["failed_articles"],
+        ]
+        detail_failed_count = int(batch_result.get("detail_failed_count") or 0) + len(
+            persistence_result["failed_articles"]
+        )
+        FeedService._apply_feed_sync_updates(
+            feed=feed,
+            feed_payload=batch_result.get("feed_payload") or {},
+            updated_by=updated_by,
+        )
+        has_more = False if scope_result["stop_sync"] else bool(batch_result.get("has_more", False))
+        next_begin = batch_result.get("next_begin", begin)
+        article_summaries = FeedService._build_batch_article_summaries(article_ids=synced_article_ids)
+
+        result = {
+            "batch_no": batch_no,
+            "begin": begin,
+            "end": next_begin,
+            "has_more": has_more,
+            "next_begin": next_begin,
+            "article_count": len(synced_article_ids),
+            "article_ids": synced_article_ids,
+            "articles": article_summaries,
+            "failed_articles": combined_failed_articles,
+            "detail_success_count": len(synced_article_ids),
+            "detail_failed_count": detail_failed_count,
+            "raw_article_count": len(batch_result.get("articles", []) or []),
+            "stop_sync": scope_result["stop_sync"],
+        }
+        if scope_result["stop_payload"] is not None:
+            result.update(scope_result["stop_payload"])
+        return result
+
+    @staticmethod
+    def execute_history_sync_batch_inline(
+        *,
+        feed,
+        updated_by,
+        batch_no,
+        begin,
+        batch_size,
+        sync_scope,
+        window_days=None,
+        refresh_markdown=False,
+        run_deadline=None,
+    ):
+        """
+        通过公众号历史消息接口（profile_ext?action=getmsg）同步一个 batch 的文章。
+
+        与 execute_sync_batch_inline() 的区别：
+        - 不需要 WechatCredential（使用 mitmproxy 拦截的 session.json 凭证）
+        - gateway 由方法内部创建（WechatHistoryGateway）
+        - 其余逻辑（scope 过滤、写库、Markdown 刷新、feed 元数据更新）全部复用现有静态方法
+
+        begin 参数在历史接口中对应 profile_ext 的 offset 参数。
+        """
+        from we_rss.services.wechat_history_gateway import WechatHistoryGateway
+
+        now = timezone.now()
+        if run_deadline is not None and now >= run_deadline:
+            raise TimeoutError("Feed history sync run timed out.")
+
+        gateway = WechatHistoryGateway()
+        # 确认 runtime 文件就绪（session.json 存在且有效）
+        gateway.ensure_runtime_ready()
+
+        batch_result = gateway.collect_feed_batch(
+            feed,
+            begin=begin,
+            batch_size=batch_size,
+            deadline_at=run_deadline,
         )
         scope_result = FeedService._apply_sync_scope_to_batch(
             tenant=feed.tenant,

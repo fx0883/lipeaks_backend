@@ -14,7 +14,7 @@ from urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 
-WECHAT_ARTICLE_STABLE_QUERY_KEYS = ("__biz", "mid", "idx", "sn", "chksm")
+WECHAT_ARTICLE_STABLE_QUERY_KEYS = ("__biz", "mid", "idx", "sn")
 WECHAT_ARTICLE_TIMEZONE = dt_timezone(timedelta(hours=8))
 WECHAT_MOBILE_HEADERS = {
     "User-Agent": (

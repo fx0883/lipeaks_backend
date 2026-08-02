@@ -62,7 +62,7 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
     serializer_class = WechatFeedSerializer
 
     def get_renderers(self):
-        if getattr(self, "action", None) in {"sync", "sync_batch", "refresh_content"}:
+        if getattr(self, "action", None) in {"sync", "sync_batch", "sync_by_history", "refresh_content"}:
             return [EventStreamRenderer()]
         return super().get_renderers()
 
@@ -720,6 +720,177 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
                             feed=feed,
                             updated_by=request.user,
                             gateway=self.get_gateway(),
+                            batch_no=batch_no,
+                            begin=begin,
+                            batch_size=batch_size,
+                            sync_scope=sync_scope,
+                            window_days=window_days,
+                            refresh_markdown=refresh_markdown,
+                            run_deadline=run_deadline,
+                        )
+                        while True:
+                            try:
+                                batch_result = future.result(
+                                    timeout=FeedService.BATCH_STREAM_HEARTBEAT_INTERVAL_SECONDS
+                                )
+                                break
+                            except FutureTimeoutError:
+                                yield encode_event(
+                                    "heartbeat",
+                                    {
+                                        "feed_id": feed.id,
+                                        "status": "running",
+                                        "ts": int(timezone.now().timestamp()),
+                                    },
+                                )
+                    batches_completed += 1
+                    article_ids = list(dict.fromkeys([*article_ids, *(batch_result.get("article_ids") or [])]))
+                    articles_synced = len(article_ids)
+                    articles_failed += int(batch_result.get("detail_failed_count") or 0)
+                    failed_articles.extend(batch_result.get("failed_articles") or [])
+
+                    payload = FeedService.build_feed_sync_progress_payload(
+                        feed=feed,
+                        batch_result=batch_result,
+                        sync_scope=sync_scope,
+                        window_days=window_days,
+                        refresh_markdown=refresh_markdown,
+                        batches_completed=batches_completed,
+                        articles_synced=articles_synced,
+                        articles_failed=articles_failed,
+                    )
+                    FeedService.log_feed_sync_progress(payload)
+                    yield encode_event("batch", payload)
+
+                    if not batch_result.get("has_more", False):
+                        stop_reason = batch_result.get("stop_reason", "")
+                        yield encode_event(
+                            "done",
+                            {
+                                "feed_id": feed.id,
+                                "feed_name": feed.mp_name,
+                                "sync_scope": sync_scope,
+                                "window_days": window_days,
+                                "refresh_markdown": refresh_markdown,
+                                "status": "done",
+                                "batches_completed": batches_completed,
+                                "articles_synced": articles_synced,
+                                "articles_failed": articles_failed,
+                                "article_ids": article_ids,
+                                "failed_articles": failed_articles,
+                                "next_begin": batch_result.get("next_begin"),
+                                "has_more": False,
+                                "stop_reason": stop_reason,
+                                "stop_article_url": batch_result.get("stop_article_url", ""),
+                                "stop_article_source_id": batch_result.get("stop_article_source_id", ""),
+                                "stop_publish_time": batch_result.get("stop_publish_time"),
+                            },
+                        )
+                        break
+
+                    begin = int(batch_result.get("next_begin") or begin)
+                    batch_no += 1
+            except Exception as exc:
+                error_payload = {
+                    "feed_id": feed.id,
+                    "feed_name": feed.mp_name,
+                    "sync_scope": sync_scope,
+                    "window_days": window_days,
+                    "refresh_markdown": refresh_markdown,
+                    "status": "failed",
+                    "batches_completed": batches_completed,
+                    "articles_synced": articles_synced,
+                    "articles_failed": articles_failed,
+                    "article_ids": article_ids,
+                    "failed_articles": failed_articles,
+                    "next_begin": begin,
+                    "error": str(exc),
+                }
+                FeedService.log_feed_sync_progress(error_payload)
+                yield encode_event("error", error_payload)
+
+        response = StreamingHttpResponse(stream(), content_type="text/event-stream; charset=utf-8")
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
+
+    @extend_schema(
+        operation_id="we_rss_feeds_sync_by_history",
+        tags=[WE_RSS_TAG],
+        summary="Sync feed articles via history API",
+        description=(
+            "Stream feed sync progress for one feed using WeChat history API (profile_ext). "
+            "The response content type is `text/event-stream`; "
+            f"each completed batch emits one batch event. {WE_RSS_AUTH_DESCRIPTION}"
+        ),
+        parameters=with_tenant_header(FEED_ID_PARAMETER),
+        request=request_body(
+            FeedSyncRequestSerializer,
+            request_example(
+                "History feed sync full request",
+                {"sync_scope": "full", "refresh_markdown": False},
+                description="Run a full feed sync from the beginning.",
+            ),
+        ),
+        responses={
+            (200, "text/event-stream"): OpenApiResponse(
+                response=OpenApiTypes.STR,
+                description=(
+                    "Returns `text/event-stream`. The stream starts with `start`, then emits one `batch` "
+                    "event for each completed sync batch, and finishes with `done` or `error`."
+                ),
+            ),
+            **common_error_responses,
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="sync_by_history")
+    def sync_by_history(self, request, *args, **kwargs):
+        feed = self.get_object()
+        serializer = FeedSyncRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        sync_scope = serializer.validated_data["sync_scope"]
+        window_days = serializer.validated_data.get("window_days")
+        refresh_markdown = serializer.validated_data["refresh_markdown"]
+
+        def encode_event(event, payload):
+            return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+        def stream():
+            batch_size = FeedService.BATCH_SIZE
+            batch_no = 1
+            begin = 0
+            batches_completed = 0
+            articles_synced = 0
+            articles_failed = 0
+            article_ids = []
+            failed_articles = []
+            run_deadline = timezone.now() + timedelta(seconds=FeedService.RUN_TIMEOUT_SECONDS)
+
+            yield encode_event(
+                "start",
+                {
+                    "feed_id": feed.id,
+                    "feed_name": feed.mp_name,
+                    "sync_scope": sync_scope,
+                    "window_days": window_days,
+                    "refresh_markdown": refresh_markdown,
+                    "batch_size": batch_size,
+                    "status": "running",
+                    "batches_completed": 0,
+                    "articles_synced": 0,
+                    "articles_failed": 0,
+                    "next_begin": begin,
+                    "has_more": True,
+                },
+            )
+
+            try:
+                while True:
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(
+                            FeedService.execute_history_sync_batch_inline,
+                            feed=feed,
+                            updated_by=request.user,
                             batch_no=batch_no,
                             begin=begin,
                             batch_size=batch_size,
