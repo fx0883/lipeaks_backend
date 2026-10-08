@@ -177,7 +177,7 @@ class MemberLicenseApplicationService:
                 member=member,
                 tenant=member.tenant  # 添加租户过滤，确保租户隔离
             ).select_related(
-                'license', 'license__product', 'license__plan'
+                'license', 'license__application', 'license__plan'
             ).order_by('-created_at')
             
             # 统计信息
@@ -285,7 +285,7 @@ class MemberLicenseApplicationService:
         # 检查重复申请（排除已删除的许可证）
         existing = LicenseAssignment.objects.filter(
             member=member,
-            license__product=product,
+            license__application=product,
             license__is_deleted=False,  # 排除已删除的许可证
             status__in=['active', 'pending'],
             tenant=member.tenant  # 添加租户过滤，确保租户隔离
@@ -582,7 +582,7 @@ class MemberLicenseStatisticsService:
             
             # 按产品分组统计
             product_stats = {}
-            for assignment in queryset.select_related('license__product'):
+            for assignment in queryset.select_related('license__application'):
                 product_name = assignment.license.product.name
                 if product_name not in product_stats:
                     product_stats[product_name] = {
@@ -636,7 +636,7 @@ class MemberLicenseManagementService:
                 member=member,
                 status='active',
                 tenant=member.tenant  # 添加租户过滤，确保租户隔离
-            ).select_related('license', 'license__product', 'license__plan').first()
+            ).select_related('license', 'license__application', 'license__plan').first()
             
             if not assignment:
                 raise LicenseException(
@@ -738,7 +738,7 @@ class MemberLicenseManagementService:
                 member=member,
                 status='active',
                 tenant=member.tenant  # 添加租户过滤，确保租户隔离
-            ).select_related('license', 'license__product').first()
+            ).select_related('license', 'license__application').first()
             
             if not assignment:
                 logger.warning(f"Member {member.username} 尝试访问无权访问的许可证 {license_id}")
@@ -897,7 +897,7 @@ class MemberLicenseManagementService:
                 id=license_id,  # 参数实际是 LicenseAssignment.id
                 member=member,
                 tenant=member.tenant  # 租户隔离
-            ).select_related('license', 'license__product').first()
+            ).select_related('license', 'license__application').first()
             
             if not assignment:
                 logger.warning(f"Member {member.username} 尝试删除无权访问的许可证 {license_id}")

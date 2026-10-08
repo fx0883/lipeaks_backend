@@ -71,7 +71,7 @@ class TaskCategoryViewSet(TenantModelViewSet):
     - 租户管理员：CRUD
     - Member：只读（系统预设 + 租户内类型）
     """
-    queryset = TaskCategory.objects.all()
+    queryset = TaskCategory.objects.all().prefetch_related('translations')
     serializer_class = TaskCategorySerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]

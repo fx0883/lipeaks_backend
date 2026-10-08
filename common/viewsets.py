@@ -91,43 +91,37 @@ class TenantModelViewSet(viewsets.ModelViewSet):
             is_super_admin = bool(is_auth and getattr(request, 'auth_type', None) == 'jwt' and getattr(user, 'is_super_admin', False))
             is_tenant_admin = bool(is_auth and getattr(user, 'is_admin', False) and not is_super_admin)
 
-            # 防御性：管理员/超管禁头（应被中间件拦截，这里再次保障）
             header_tid = get_header_tenant_id(request)
-            if (is_super_admin or is_tenant_admin) and header_tid is not None:
-                logger.warning(f"[TenantModelViewSet] {view_name} 管理员/超管携带X-Tenant-ID被拒绝")
-                raise TenantHeaderInvalidOrMissing()
 
             # 计算有效租户ID
             effective_tenant_id = None
             if is_super_admin:
-                q_tid = request.GET.get('tenant_id')
-                if q_tid is not None:
-                    try:
-                        effective_tenant_id = int(q_tid)
-                    except (TypeError, ValueError):
-                        raise TenantHeaderInvalidOrMissing()
+                if header_tid is not None:
+                    effective_tenant_id = header_tid
                 else:
-                    # 超管必须提供tenant_id参数
-                    logger.warning(f"[TenantModelViewSet] {view_name} 超管未提供tenant_id参数")
-                    raise TenantHeaderInvalidOrMissing("超级管理员必须通过tenant_id参数指定要查看的租户")
+                    q_tid = request.GET.get('tenant_id')
+                    if q_tid is not None:
+                        try:
+                            effective_tenant_id = int(q_tid)
+                        except (TypeError, ValueError):
+                            raise TenantHeaderInvalidOrMissing()
+                # 如果超管指定了租户，按租户过滤；如果未指定租户，超管可以查看全部租户
+                if effective_tenant_id is not None:
+                    logger.debug(f"[TenantModelViewSet] {view_name} 超管按租户过滤: {effective_tenant_id}")
+                    return queryset.filter(tenant_id=effective_tenant_id)
+                logger.debug(f"[TenantModelViewSet] {view_name} 超管未指定租户，返回所有租户数据")
+                return queryset
             elif is_tenant_admin:
-                q_tid = request.GET.get('tenant_id')
-                if q_tid is not None:
-                    try:
-                        effective_tenant_id = int(q_tid)
-                    except (TypeError, ValueError):
-                        raise TenantHeaderInvalidOrMissing()
-                else:
-                    user_tenant = getattr(user, 'tenant', None)
-                    if user_tenant:
-                        effective_tenant_id = int(user_tenant.id)
-                    else:
-                        # 管理员无绑定租户视为无权限
-                        raise TenantMismatchOrNoPermission()
+                user_tenant = getattr(user, 'tenant', None)
+                if not user_tenant:
+                    raise TenantMismatchOrNoPermission()
+                if header_tid is not None and int(header_tid) != int(user_tenant.id):
+                    logger.warning(f"[TenantModelViewSet] {view_name} 租户管理员携带不属于自身的X-Tenant-ID被拒绝")
+                    raise TenantHeaderInvalidOrMissing()
+                effective_tenant_id = int(user_tenant.id)
             else:
                 # 成员或匿名：仅用Header并校验匹配
                 require_member_header_match(request)
-                # 再取到已验证的header作为过滤租户
                 header_tid_val = get_header_tenant_id(request)
                 if header_tid_val is None:
                     raise TenantHeaderInvalidOrMissing()
@@ -371,28 +365,31 @@ class TenantModelViewSet(viewsets.ModelViewSet):
         is_super_admin = bool(is_auth and getattr(request, 'auth_type', None) == 'jwt' and getattr(user, 'is_super_admin', False))
         is_tenant_admin = bool(is_auth and getattr(user, 'is_admin', False) and not is_super_admin)
 
-        header_tid = get_header_tenant_id(request)
-        if (is_super_admin or is_tenant_admin) and header_tid is not None:
-            raise TenantHeaderInvalidOrMissing()
-
-        if is_super_admin:
-            q_tid = request.GET.get('tenant_id')
-            if q_tid is None:
-                # 确认：超管写操作必须提供?tenant_id=
-                raise TenantHeaderInvalidOrMissing()
+        header_tid = get_header_tid_as_int = None
+        raw_header_tid = get_header_tenant_id(request)
+        if raw_header_tid is not None:
             try:
-                return int(q_tid)
+                header_tid = int(raw_header_tid)
             except (TypeError, ValueError):
                 raise TenantHeaderInvalidOrMissing()
-        if is_tenant_admin:
+
+        if is_super_admin:
+            # 超级管理员写操作：支持通过 X-Tenant-ID 请求头或 ?tenant_id= 参数指定目标租户
+            if header_tid is not None:
+                return header_tid
             q_tid = request.GET.get('tenant_id')
             if q_tid is not None:
                 try:
                     return int(q_tid)
                 except (TypeError, ValueError):
                     raise TenantHeaderInvalidOrMissing()
+            raise TenantHeaderInvalidOrMissing("超级管理员执行写操作必须通过 X-Tenant-ID 请求头或 tenant_id 参数指定租户")
+
+        if is_tenant_admin:
             user_tenant = getattr(user, 'tenant', None)
             if user_tenant:
+                if header_tid is not None and header_tid != int(user_tenant.id):
+                    raise TenantHeaderInvalidOrMissing()
                 return int(user_tenant.id)
             raise TenantMismatchOrNoPermission()
 

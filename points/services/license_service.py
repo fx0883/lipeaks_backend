@@ -298,7 +298,7 @@ class TenantAwareLicenseAssignmentService:
         assignments = LicenseAssignment.objects.filter(
             member=member,
             tenant=member.tenant
-        ).select_related('license', 'license__product', 'license__plan')
+        ).select_related('license', 'license__application', 'license__plan')
         
         if not include_inactive:
             assignments = assignments.filter(status='active')
@@ -398,7 +398,7 @@ class TenantAwareLicenseAssignmentService:
         
         # 按产品统计
         product_stats = {}
-        assignments_with_product = queryset.select_related('license__product')
+        assignments_with_product = queryset.select_related('license__application')
         for assignment in assignments_with_product:
             product_name = assignment.license.product.name
             if product_name not in product_stats:

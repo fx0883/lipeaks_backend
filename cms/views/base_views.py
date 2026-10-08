@@ -1378,7 +1378,7 @@ class CategoryViewSet(TenantModelViewSet):
     ordering_fields = ['sort_order', 'created_at', 'is_pinned']  # 移除name（翻译字段不能直接排序）
     ordering = ['-is_pinned', 'sort_order', 'id']  # 使用id替代name
     pagination_class = None  # 禁用分页
-    queryset = Category.objects.all().select_related('parent', 'tenant', 'application')  # 添加select_related优化查询
+    queryset = Category.objects.all().select_related('parent', 'tenant', 'application').prefetch_related('translations')  # 添加select_related和prefetch_related优化查询
     
     def get_queryset(self):
         """

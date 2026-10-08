@@ -45,7 +45,7 @@ class MemberThemeViewSet(TenantModelViewSet):
     
     Member 可以查看系统预设主题和租户内主题
     """
-    queryset = TaskCategory.objects.all()
+    queryset = TaskCategory.objects.all().prefetch_related('translations')
     serializer_class = TaskCategorySerializer
     pagination_class = None  # 返回所有主题，不分页
     permission_classes = [MemberPermission]

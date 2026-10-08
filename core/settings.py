@@ -64,9 +64,12 @@ FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER = get_env_with_validation(
     'FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER', lambda x: x.lower() == 'true', 'True'
 )
 
-# 允许所有主机访问（开发环境）
-# 警告：生产环境应指定具体域名，例如 ['yourdomain.com', 'www.yourdomain.com']
-ALLOWED_HOSTS = ['*']
+# 允许的主机列表：生产环境通过环境变量 ALLOWED_HOSTS 指定具体域名，例如 "example.com,api.example.com"
+ALLOWED_HOSTS = get_env_with_validation(
+    'ALLOWED_HOSTS',
+    lambda x: [host.strip() for host in x.split(',') if host.strip()],
+    ['*'] if DEBUG else ['localhost', '127.0.0.1']
+)
 
 # Application definition
 
@@ -271,17 +274,27 @@ REST_FRAMEWORK = {
 JWT_AUTH = {
     'JWT_SECRET_KEY': SECRET_KEY,
     'JWT_ALGORITHM': 'HS256',
-    'JWT_EXPIRATION_DELTA': 7 * 7 * 24 * 3600,  # 24小时有效期
-    # 'JWT_EXPIRATION_DELTA': 7 * 24 * 3600,  # 24小时有效期
-    # 'JWT_EXPIRATION_DELTA': 60,
-    'JWT_REFRESH_EXPIRATION_DELTA': 28 * 24 * 3600,  # 7天刷新期
+    'JWT_EXPIRATION_DELTA': get_env_with_validation(
+        'JWT_EXPIRATION_DELTA',
+        int,
+        24 * 3600  # 默认24小时有效期
+    ),
+    'JWT_REFRESH_EXPIRATION_DELTA': get_env_with_validation(
+        'JWT_REFRESH_EXPIRATION_DELTA',
+        int,
+        7 * 24 * 3600  # 默认7天刷新期
+    ),
 }
 
 # ============================================
 # CORS 跨域配置
 # ============================================
-# 开发环境允许所有来源，生产环境建议使用白名单
-CORS_ALLOW_ALL_ORIGINS = True  # 允许所有来源（适用于开发和API服务）
+# 开发环境允许所有来源，生产环境默认关闭并使用白名单列表
+CORS_ALLOW_ALL_ORIGINS = get_env_with_validation(
+    'CORS_ALLOW_ALL_ORIGINS',
+    lambda x: x.lower() == 'true',
+    str(DEBUG)
+)
 
 # 如果需要白名单模式，设置 CORS_ALLOW_ALL_ORIGINS = False 并配置以下列表
 CORS_ALLOWED_ORIGINS = [

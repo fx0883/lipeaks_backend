@@ -247,10 +247,23 @@ class TenantPermissionChecker:
             
             return None
             
+        except (ValueError, TypeError):
+            self.logger.warning(f"超级管理员指定的租户ID格式无效: {tenant_id}")
+            return TenantErrorResponseBuilder.build_error_response(
+                TenantErrorTypes.INVALID_TENANT_ID,
+                self.request,
+                tenant_id=tenant_id
+            )
         except Tenant.DoesNotExist:
             self.logger.warning(f"超级管理员指定的租户ID不存在: {tenant_id}")
             return TenantErrorResponseBuilder.build_error_response(
                 TenantErrorTypes.TENANT_NOT_FOUND,
                 self.request,
                 tenant_id=tenant_id
+            )
+        except Exception as e:
+            self.logger.error(f"验证超级管理员租户ID发生未知异常: {str(e)}", exc_info=True)
+            return TenantErrorResponseBuilder.build_error_response(
+                TenantErrorTypes.INTERNAL_ERROR,
+                self.request
             )

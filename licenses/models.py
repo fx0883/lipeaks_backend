@@ -64,6 +64,15 @@ class LicensePlan(BaseModel):
     def __str__(self):
         return f"{self.application.name} - {self.name}"
 
+    @property
+    def product(self):
+        """兼容历史属性名 product -> application"""
+        return self.application
+
+    @product.setter
+    def product(self, value):
+        self.application = value
+
 
 class License(BaseModel):
     """许可证模型"""
@@ -215,6 +224,15 @@ class License(BaseModel):
         logger = logging.getLogger('licenses.business')
         logger.info(f"许可证 {self.id} 延期 {days} 天: {old_expires_at} -> {self.expires_at}")
     
+    @property
+    def product(self):
+        """兼容历史属性名 product -> application"""
+        return self.application
+
+    @product.setter
+    def product(self, value):
+        self.application = value
+
     def upgrade_to_plan(self, new_plan):
         """
         升级到新计划
@@ -222,8 +240,9 @@ class License(BaseModel):
         Args:
             new_plan (LicensePlan): 新的许可证计划
         """
-        if new_plan.product != self.product:
-            raise ValueError(f"New plan {new_plan.id} does not belong to current product {self.product.id}")
+        if new_plan.application != self.application:
+            app_id = self.application.id if self.application else None
+            raise ValueError(f"New plan {new_plan.id} does not belong to current application {app_id}")
         
         old_plan = self.plan
         self.plan = new_plan
@@ -294,7 +313,8 @@ class MachineBinding(BaseModel):
         ]
     
     def __str__(self):
-        return f"{self.license.product.name} - {self.machine_id[:8]}..."
+        app_name = self.license.application.name if (self.license and self.license.application) else "Unknown"
+        return f"{app_name} - {self.machine_id[:8]}..."
 
 
 class LicenseActivation(BaseModel):
@@ -345,7 +365,8 @@ class LicenseActivation(BaseModel):
         ]
     
     def __str__(self):
-        return f"{self.license.product.name} - {self.result} ({self.activated_at})"
+        app_name = self.license.application.name if (self.license and self.license.application) else "Unknown"
+        return f"{app_name} - {self.result} ({self.activated_at})"
 
 
 class LicenseUsageLog(BaseModel):

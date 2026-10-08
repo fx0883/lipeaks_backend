@@ -98,13 +98,13 @@ class MemberPasswordResetRequestPageView(FormView):
         cache_key = f"password_reset_request:{ip}"
         request_count = cache.get(cache_key, 0)
         
-        if request_count >= 13:
+        if request_count >= 3:
             messages.error(self.request, _('Too many requests. Please try again later.'))
             logger.warning(f"IP {ip} 密码重置请求过于频繁")
             return self.form_invalid(form)
         
         # 增加请求计数
-        cache.set(cache_key, request_count + 1, 6)  # 10分钟
+        cache.set(cache_key, request_count + 1, 600)  # 10分钟 (600秒)
         
         # 查找Member用户（必须指定租户）
         member = Member.objects.filter(
