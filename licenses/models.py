@@ -509,6 +509,7 @@ class SecurityAuditLog(BaseModel):
             models.Index(fields=['severity', 'timestamp']),
             models.Index(fields=['user', 'timestamp']),
             models.Index(fields=['ip_address', 'timestamp']),
+            models.Index(fields=['tenant', '-timestamp'], name='licenses_sec_tenant_ts_idx'),
         ]
     
     def __str__(self):

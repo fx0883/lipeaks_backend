@@ -6,7 +6,7 @@ Feedback Attachment APIView Implementation
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
@@ -46,8 +46,13 @@ def get_tenant_from_request(request):
 
 
 class FeedbackAttachmentListView(APIView):
-    """反馈附件列表和上传API - GET不需要认证"""
-    permission_classes = [AllowAny]  # ✅ GET不需要认证
+    """反馈附件列表和上传API - GET不需要认证，写操作需要认证"""
+    
+    def get_permissions(self):
+        if self.request.method in ['GET', 'HEAD', 'OPTIONS']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+    
     parser_classes = (MultiPartParser, FormParser)
     
     @extend_schema(
@@ -100,11 +105,16 @@ class FeedbackAttachmentListView(APIView):
     def post(self, request, feedback_pk):
         """上传反馈附件"""
         tenant = get_tenant_from_request(request)
+        if not tenant:
+            return Response(
+                {'detail': 'Tenant context is required for write operations.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # 检查反馈是否存在且属于当前租户
         try:
             feedback = Feedback.objects.get(pk=feedback_pk, is_deleted=False)
-            if tenant and feedback.tenant != tenant:
+            if feedback.tenant != tenant:
                 return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
         except Feedback.DoesNotExist:
             return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -126,8 +136,12 @@ class FeedbackAttachmentListView(APIView):
 
 
 class FeedbackAttachmentDetailView(APIView):
-    """反馈附件详情API - GET不需要认证"""
-    permission_classes = [AllowAny]  # ✅ GET不需要认证
+    """反馈附件详情API - GET不需要认证，写操作需要认证"""
+    
+    def get_permissions(self):
+        if self.request.method in ['GET', 'HEAD', 'OPTIONS']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
     
     def get_object(self, feedback_pk, pk, request):
         """获取附件对象并检查租户"""
@@ -165,6 +179,13 @@ class FeedbackAttachmentDetailView(APIView):
     )
     def delete(self, request, feedback_pk, pk):
         """删除附件(软删除)"""
+        tenant = get_tenant_from_request(request)
+        if not tenant:
+            return Response(
+                {'detail': 'Tenant context is required for write operations.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         attachment = self.get_object(feedback_pk, pk, request)
         if not attachment:
             return Response({'detail': 'Attachment not found.'}, status=status.HTTP_404_NOT_FOUND)

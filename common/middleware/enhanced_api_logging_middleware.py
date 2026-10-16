@@ -6,13 +6,60 @@ import json
 import logging
 import time
 import traceback
+import concurrent.futures
+import atexit
 from datetime import datetime
+from django.conf import settings
+from django.db import connection
 from django.utils.deprecation import MiddlewareMixin
 from django.urls import resolve
 from django.db.models import F
 from django.core.exceptions import RequestDataTooBig
+from common.utils.sensitive import mask_sensitive_data
+from common.utils.network import get_client_ip
 
 logger = logging.getLogger(__name__)
+
+# 全局后台日志写入工作线程池
+_API_LOG_MAX_WORKERS = getattr(settings, 'API_LOG_MAX_WORKERS', 4)
+_log_executor = concurrent.futures.ThreadPoolExecutor(
+    max_workers=_API_LOG_MAX_WORKERS,
+    thread_name_prefix='api_log_worker_'
+)
+atexit.register(lambda: _log_executor.shutdown(wait=False))
+
+
+def _do_save_log_entry(log_data):
+    """
+    后台线程执行的物理写库操作，显式管理数据库连接
+    """
+    try:
+        from common.models import APILog
+        
+        log_entry = APILog(
+            user_id=log_data.get('user_id'),
+            tenant_id=log_data.get('tenant_id'),
+            request_method=log_data.get('request_method'),
+            request_path=log_data.get('request_path'),
+            view_name=log_data.get('view_info', {}).get('view_name') if isinstance(log_data.get('view_info'), dict) else None,
+            status_code=log_data.get('status_code'),
+            status_type=log_data.get('status_type', 'success'),
+            response_time=log_data.get('response_time', 0),
+            ip_address=log_data.get('ip_address', '127.0.0.1'),
+            user_agent=log_data.get('user_agent'),
+            request_body=mask_sensitive_data(log_data.get('request_body')),
+            query_params=mask_sensitive_data(log_data.get('query_params')),
+            response_body=mask_sensitive_data(log_data.get('response_body')),
+            error_message=log_data.get('error_message')
+        )
+        log_entry.save()
+    except Exception as e:
+        logger.error(f"保存API日志失败: {str(e)}")
+        logger.error(traceback.format_exc())
+    finally:
+        # 确保子线程数据库连接被正确回收，防止连接池泄漏
+        connection.close()
+
 
 class EnhancedAPILoggingMiddleware(MiddlewareMixin):
     """
@@ -79,7 +126,7 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
         
         try:
             if 'application/json' in content_type:
-                return json.loads(request.body.decode('utf-8'))
+                parsed = json.loads(request.body.decode('utf-8'))
             elif 'multipart/form-data' in content_type:
                 # 不记录文件内容，只记录文件名
                 files_info = {}
@@ -90,22 +137,23 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
                             'size': file_obj.size,
                             'content_type': file_obj.content_type
                         }
-                return {
+                parsed = {
                     'form': dict(request.POST.items()),
                     'files': files_info
                 }
             elif 'application/x-www-form-urlencoded' in content_type:
-                return dict(request.POST.items())
+                parsed = dict(request.POST.items())
             else:
                 # 其他内容类型，尝试记录为字符串
-                return {'raw': request.body.decode('utf-8', errors='replace')[:1000]}
+                parsed = {'raw': request.body.decode('utf-8', errors='replace')[:1000]}
+            return mask_sensitive_data(parsed)
         except Exception as e:
             logger.warning(f"无法解析请求体: {str(e)}")
             return {'error': f"无法解析请求体: {str(e)}"}
     
     def _get_response_body(self, response):
         """
-        安全地获取响应体内容
+        安全地获取响应体内容（防流式卡死，递归脱敏）
         
         Args:
             response: HTTP响应对象
@@ -114,14 +162,19 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
             字典或字符串: 响应体内容
         """
         try:
+            # 1. 显式流式拦截，防止读取阻塞或抛异常
+            if getattr(response, 'streaming', False):
+                return {'streaming': True, 'content_type': response.get('Content-Type', '')}
+
             if hasattr(response, 'data'):
                 # DRF响应
-                return response.data
+                return mask_sensitive_data(response.data)
             elif hasattr(response, 'content'):
                 # 标准Django响应
                 content_type = response.get('Content-Type', '')
                 if content_type and 'application/json' in content_type.lower():
-                    return json.loads(response.content.decode('utf-8'))
+                    parsed = json.loads(response.content.decode('utf-8'))
+                    return mask_sensitive_data(parsed)
                 else:
                     # 非JSON响应，返回内容类型
                     return {'content_type': content_type}
@@ -132,7 +185,7 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
     
     def _get_client_ip(self, request):
         """
-        获取客户端IP地址
+        获取客户端真实 IP 地址（防御 X-Forwarded-For 伪造）
         
         Args:
             request: HTTP请求对象
@@ -140,12 +193,7 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
         Returns:
             字符串: 客户端IP地址
         """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR', '')
-        return ip
+        return get_client_ip(request)
     
     def _get_user_info(self, request):
         """
@@ -207,7 +255,7 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
     
     def _save_log(self, log_data):
         """
-        保存日志记录
+        保存日志记录（支持线程池非阻塞异步与测试强制同步）
         
         Args:
             log_data: 日志数据
@@ -215,31 +263,16 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
         Returns:
             None
         """
+        # 测试环境或配置要求同步执行
+        if getattr(settings, 'API_LOG_SYNC', False):
+            _do_save_log_entry(log_data)
+            return
+
+        # 生产/正常运行环境：非阻塞异步提交到工作线程池
         try:
-            from common.models import APILog
-            
-            # 提取需要的字段来创建APILog记录
-            log_entry = APILog(
-                user_id=log_data.get('user_id'),
-                tenant_id=log_data.get('tenant_id'),
-                request_method=log_data.get('request_method'),
-                request_path=log_data.get('request_path'),
-                view_name=log_data.get('view_info', {}).get('view_name'),
-                status_code=log_data.get('status_code'),
-                response_time=log_data.get('response_time'),
-                ip_address=log_data.get('ip_address'),
-                user_agent=log_data.get('user_agent'),
-                request_body=log_data.get('request_body'),
-                query_params=log_data.get('query_params'),
-                response_body=log_data.get('response_body'),
-                error_message=log_data.get('error_message')
-            )
-            log_entry.save()
-            
+            _log_executor.submit(_do_save_log_entry, log_data)
         except Exception as e:
-            # 记录失败不应该影响正常流程
-            logger.error(f"保存API日志失败: {str(e)}")
-            logger.error(traceback.format_exc())
+            logger.error(f"提交API日志保存任务失败: {str(e)}")
     
     def process_request(self, request):
         """
@@ -260,7 +293,7 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
         request.api_log_data = {
             'request_method': request.method,
             'request_path': request.path,
-            'query_params': dict(request.GET.items()),
+            'query_params': mask_sensitive_data(dict(request.GET.items())),
             'request_body': self._get_request_body(request),
             'ip_address': self._get_client_ip(request),
             'user_agent': request.META.get('HTTP_USER_AGENT', ''),
@@ -308,6 +341,15 @@ class EnhancedAPILoggingMiddleware(MiddlewareMixin):
             if isinstance(response_body, dict):
                 error_message = response_body.get('message') or response_body.get('detail')
         
+        # 若进入视图后完成了身份认证（如DRF认证类），补充更新用户信息
+        if hasattr(request, 'api_log_data') and not request.api_log_data.get('authenticated', False):
+            if hasattr(request, 'user') and getattr(request.user, 'is_authenticated', False):
+                user_info = self._get_user_info(request)
+                request.api_log_data.update(user_info)
+                if user_info['authenticated']:
+                    request.api_log_data['user_id'] = user_info['id']
+                    request.api_log_data['tenant_id'] = user_info['tenant_id']
+
         # 构造日志数据
         log_data = {
             **request.api_log_data,

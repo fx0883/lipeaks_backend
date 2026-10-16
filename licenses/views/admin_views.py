@@ -532,7 +532,11 @@ class LicenseViewSet(TenantModelViewSet):
     """
     authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
-    queryset = License.objects.filter(is_deleted=False)
+    queryset = License.objects.filter(is_deleted=False).select_related(
+        'application', 'plan', 'tenant'
+    ).annotate(
+        active_bindings_count=Count('machine_bindings', filter=Q(machine_bindings__status='active'), distinct=True)
+    )
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['application', 'plan', 'status', 'tenant']
     search_fields = ['license_key', 'customer_name', 'customer_email']
@@ -1148,7 +1152,7 @@ class MachineBindingViewSet(viewsets.ReadOnlyModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return MachineBinding.objects.none()
         
-        queryset = MachineBinding.objects.all()
+        queryset = MachineBinding.objects.select_related('license')
         user = self.request.user
         
         # 安全检查：确保用户有is_super_admin属性
@@ -1228,7 +1232,7 @@ class LicenseActivationViewSet(viewsets.ReadOnlyModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return LicenseActivation.objects.none()
         
-        queryset = LicenseActivation.objects.all()
+        queryset = LicenseActivation.objects.select_related('license', 'machine_binding')
         user = self.request.user
         
         # 安全检查
@@ -1271,7 +1275,7 @@ class SecurityAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return SecurityAuditLog.objects.none()
         
-        queryset = SecurityAuditLog.objects.all()
+        queryset = SecurityAuditLog.objects.select_related('user', 'tenant')
         user = self.request.user
         
         # 安全检查
@@ -1327,7 +1331,9 @@ class TenantLicenseQuotaViewSet(TenantModelViewSet):
     """
     authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
-    queryset = TenantLicenseQuota.objects.filter(is_deleted=False)
+    queryset = TenantLicenseQuota.objects.filter(is_deleted=False).select_related(
+        'tenant', 'application'
+    )
     serializer_class = TenantLicenseQuotaSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['tenant', 'application', 'is_active']

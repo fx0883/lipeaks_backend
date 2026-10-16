@@ -1,0 +1,1 @@
+# Licenses tests package

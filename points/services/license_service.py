@@ -137,6 +137,7 @@ class TenantAwareLicenseAssignmentService:
             
         except Exception as e:
             self.logger.error(f"许可证分配失败: {e}")
+            transaction.set_rollback(True)
             return {
                 'success': False,
                 'error': 'assignment_failed',
@@ -206,8 +207,11 @@ class TenantAwareLicenseAssignmentService:
                 })
         
         # 统计摘要
+        total_requested = results['total_requested']
+        success_rate = (results['successful'] / total_requested * 100) if total_requested > 0 else 0.0
+
         results['summary'] = {
-            'success_rate': (results['successful'] / results['total_requested']) * 100,
+            'success_rate': success_rate,
             'points_awarded_count': results['successful'],  # 成功分配的都会获得积分
         }
         
@@ -273,6 +277,7 @@ class TenantAwareLicenseAssignmentService:
             
         except Exception as e:
             self.logger.error(f"许可证分配撤销失败: {e}")
+            transaction.set_rollback(True)
             return {
                 'success': False,
                 'error': 'revoke_failed',

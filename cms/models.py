@@ -351,7 +351,7 @@ class Category(TranslatableModel):
             models.Index(fields=['tenant', 'is_pinned']),
             models.Index(fields=['tenant', 'application']),
             models.Index(fields=['tenant', 'application', 'is_active']),
-            models.Index(fields=['tenant', 'is_admin_only']),
+            models.Index(fields=['tenant', 'is_admin_only'], name='cms_cat_tenant_admin_only_idx'),
         ]
     
     def __str__(self):

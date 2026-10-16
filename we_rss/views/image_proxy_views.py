@@ -52,8 +52,23 @@ def image_proxy(request):
     - 401：未认证（无有效 Bearer token）
     - 502：源图下载失败（超时 / 404 / 重定向越界等）
     """
-    # 鉴权：复用全局中间件解析的 JWT 用户；未认证直接 401。
-    if not getattr(request.user, "is_authenticated", False):
+    # 鉴权：纯 Django 视图按需进行 JWT 认证；未认证直接 401。
+    user = getattr(request, "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
+        from common.authentication.api_auth import APIJWTAuthentication
+        from rest_framework.exceptions import AuthenticationFailed
+        try:
+            auth_res = APIJWTAuthentication().authenticate(request)
+            if auth_res:
+                request.user, request.auth = auth_res
+        except AuthenticationFailed:
+            return _json_error("认证失败：令牌无效或已过期", status.HTTP_401_UNAUTHORIZED, 4001)
+        except Exception as exc:
+            logger.warning("图片代理认证异常: %s", exc)
+            return _json_error("认证失败，请登录", status.HTTP_401_UNAUTHORIZED, 4001)
+
+    user = getattr(request, "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
         return _json_error("认证失败，请登录", status.HTTP_401_UNAUTHORIZED, 4001)
 
     config = get_image_proxy_config()

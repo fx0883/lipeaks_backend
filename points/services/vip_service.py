@@ -164,6 +164,7 @@ class VipExpirationService:
             
         except Exception as e:
             self.logger.error(f"VIP期限延长失败: {e}")
+            transaction.set_rollback(True)
             return False
     
     @transaction.atomic
@@ -200,7 +201,7 @@ class VipExpirationService:
         if duration_days:
             expires_at = timezone.now() + timedelta(days=duration_days)
         
-        # 检查是否已存在同类型标签
+        # 1. 检查是否存在活跃标签，延长期限
         existing_tag = TenantUserTypeTag.objects.filter(
             tenant_user_profile=tenant_user_profile,
             tag=tag,
@@ -218,7 +219,33 @@ class VipExpirationService:
                 )
             return existing_tag
         
-        # 创建新的VIP标签关联
+        # 2. 检查是否存在已失效的历史标签，平滑恢复激活状态
+        inactive_tag = TenantUserTypeTag.objects.filter(
+            tenant_user_profile=tenant_user_profile,
+            tag=tag,
+            is_active=False
+        ).first()
+        
+        if inactive_tag:
+            inactive_tag.is_active = True
+            inactive_tag.status = 'active'
+            inactive_tag.expires_at = expires_at
+            inactive_tag.original_duration_days = duration_days
+            inactive_tag.extended_days = 0
+            inactive_tag.grant_method = grant_method
+            inactive_tag.grant_reason = reason
+            inactive_tag.granted_by_id = operator_id
+            payment_fields = self._extract_payment_info(payment_info or {})
+            for k, v in payment_fields.items():
+                setattr(inactive_tag, k, v)
+            inactive_tag.save()
+            self.logger.info(
+                f"VIP标签平滑恢复: {tenant_user_profile.member.username} "
+                f"恢复激活 {tag.tag_name} 标签，有效期至 {expires_at}"
+            )
+            return inactive_tag
+        
+        # 3. 不存在任何历史标签，创建全新记录
         vip_tag = TenantUserTypeTag.objects.create(
             tenant_user_profile=tenant_user_profile,
             tag=tag,
@@ -610,24 +637,24 @@ class VipBatchOperations:
         
         for member_id in member_ids:
             try:
-                # 获取用户档案
-                profile = TenantUserProfile.objects.get(
-                    member_id=member_id,
-                    tenant=tenant
-                )
-                
-                # 授予VIP
-                self.vip_service.grant_vip_tag(
-                    tenant_user_profile=profile,
-                    tag=tag,
-                    duration_days=duration_days,
-                    grant_method='batch',
-                    reason=f"批量操作 - {reason}",
-                    operator_id=operator_id
-                )
-                
-                results['successful'] += 1
-                
+                with transaction.atomic():
+                    # 获取用户档案
+                    profile = TenantUserProfile.objects.get(
+                        member_id=member_id,
+                        tenant=tenant
+                    )
+                    
+                    # 授予VIP
+                    self.vip_service.grant_vip_tag(
+                        tenant_user_profile=profile,
+                        tag=tag,
+                        duration_days=duration_days,
+                        grant_method='batch',
+                        reason=f"批量操作 - {reason}",
+                        operator_id=operator_id
+                    )
+                    results['successful'] += 1
+                    
             except Exception as e:
                 results['failed'] += 1
                 results['errors'].append({
@@ -679,15 +706,15 @@ class VipBatchOperations:
         
         for vip_tag in vip_tags:
             try:
-                self.vip_service.extend_vip_period(
-                    vip_tag=vip_tag,
-                    extend_days=extend_days,
-                    reason=f"批量延期 - {reason}",
-                    operator_id=operator_id
-                )
-                
-                results['successful'] += 1
-                
+                with transaction.atomic():
+                    self.vip_service.extend_vip_period(
+                        vip_tag=vip_tag,
+                        extend_days=extend_days,
+                        reason=f"批量延期 - {reason}",
+                        operator_id=operator_id
+                    )
+                    results['successful'] += 1
+                    
             except Exception as e:
                 results['failed'] += 1
                 results['errors'].append({

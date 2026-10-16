@@ -492,22 +492,6 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
         return Response(WechatSyncTaskSerializer(task).data)
 
     @extend_schema(
-        operation_id="we_rss_articles_refresh",
-        tags=[WE_RSS_TAG],
-        summary="Refresh article Markdown content",
-        description=(
-            "Stream Markdown content refresh progress for one tenant article unless the current member has hidden it. "
-            "The response content type is `text/event-stream`. "
-            f"{WE_RSS_AUTH_DESCRIPTION}"
-        ),
-        parameters=with_tenant_header(ARTICLE_ID_PARAMETER),
-        request=None,
-        responses={
-            200: None,
-            **common_error_responses,
-        },
-    )
-    @extend_schema(
         operation_id="we_rss_articles_markdown_with_images",
         tags=[WE_RSS_TAG],
         summary="Get article markdown with images (fresh fetch by url)",
@@ -532,6 +516,22 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
             raise ValidationError(f"获取文章原文失败：{exc}")
         return Response({"markdown": markdown, "title": article.title})
 
+    @extend_schema(
+        operation_id="we_rss_articles_refresh",
+        tags=[WE_RSS_TAG],
+        summary="Refresh article Markdown content",
+        description=(
+            "Stream Markdown content refresh progress for one tenant article unless the current member has hidden it. "
+            "The response content type is `text/event-stream`. "
+            f"{WE_RSS_AUTH_DESCRIPTION}"
+        ),
+        parameters=with_tenant_header(ARTICLE_ID_PARAMETER),
+        request=None,
+        responses={
+            200: None,
+            **common_error_responses,
+        },
+    )
     @action(detail=True, methods=["post"])
     def refresh(self, request, *args, **kwargs):
         article = self.get_object()
@@ -651,6 +651,7 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
             "单篇/单图失败不阻断整体。"
             f" {WE_RSS_AUTH_DESCRIPTION}"
         ),
+        parameters=with_tenant_header(),
         request=request_body(
             ArticleExportSerializer,
             request_example(

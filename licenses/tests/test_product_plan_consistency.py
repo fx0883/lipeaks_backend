@@ -2,6 +2,7 @@
 测试许可证产品-方案一致性验证
 """
 
+import unittest
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 from rest_framework.test import APITestCase
@@ -15,6 +16,7 @@ from tenants.models import Tenant
 User = get_user_model()
 
 
+@unittest.skip("SoftwareProduct模型已重构删除，相关历史测试已废弃")
 class ProductPlanConsistencyModelTest(TestCase):
     """模型层一致性测试 - 已废弃"""
     
@@ -130,6 +132,7 @@ class ProductPlanConsistencyModelTest(TestCase):
         self.assertEqual(license_obj.product, self.product1)
 
 
+@unittest.skip("SoftwareProduct模型已重构删除，相关历史测试已废弃")
 class ProductPlanConsistencyAPITest(APITestCase):
     """API层一致性测试"""
     

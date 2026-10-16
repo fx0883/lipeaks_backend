@@ -14,6 +14,7 @@ from tenants.models import Tenant
 from .permissions import IsSuperAdminOnly
 from .utils import (
     get_date_trunc_func, get_cache_key, format_chart_response, empty_chart_response,
+    format_period_key, generate_period_labels,
     get_user_growth_trend, get_user_role_distribution, get_active_users, get_login_heatmap
 )
 from .schema import (
@@ -124,44 +125,34 @@ class TenantTrendChartView(BaseChartView):
             # 转换日期为datetime对象并添加时区信息
             start_datetime = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
             end_datetime = timezone.make_aware(datetime.combine(end_date, datetime.max.time()))
+            trunc_func = get_date_trunc_func(period)
             
-            # 使用Python手动按时间段统计，而不是依赖数据库函数
-            all_tenants = (
+            # 1. 数据库下推截断聚合统计新增租户
+            tenant_counts_qs = (
                 Tenant.objects
                 .filter(created_at__range=(start_datetime, end_datetime))
-                .order_by('created_at')
+                .annotate(period_dt=trunc_func('created_at'))
+                .values('period_dt')
+                .annotate(cnt=Count('id'))
+                .order_by('period_dt')
             )
+            tenant_counts_map = {
+                format_period_key(r['period_dt'], period): r['cnt']
+                for r in tenant_counts_qs if r['period_dt']
+            }
             
-            logger.debug(f"查询到 {all_tenants.count()} 条租户数据")
+            # 2. 生成连续周期标签并补全 0 值
+            dates = generate_period_labels(start_date, end_date, period)
+            if not dates:
+                dates = sorted(tenant_counts_map.keys())
             
-            # 手动按周期分组
-            period_counts = defaultdict(int)
-            for tenant in all_tenants:
-                if period == 'daily':
-                    period_key = tenant.created_at.strftime('%Y-%m-%d')
-                elif period == 'weekly':
-                    # 使用ISO周格式，例如：2025-W16
-                    period_key = f"{tenant.created_at.isocalendar()[0]}-W{tenant.created_at.isocalendar()[1]:02d}"
-                elif period == 'monthly':
-                    period_key = tenant.created_at.strftime('%Y-%m')
-                elif period == 'quarterly':
-                    quarter = (tenant.created_at.month - 1) // 3 + 1
-                    period_key = f"{tenant.created_at.year}-Q{quarter}"
-                else:  # yearly
-                    period_key = str(tenant.created_at.year)
-                
-                period_counts[period_key] += 1
-            
-            # 按时间排序并计算累计值
-            dates = sorted(period_counts.keys())
             counts = []
             cumulative = 0
-            
             for date in dates:
-                cumulative += period_counts[date]
+                cumulative += tenant_counts_map.get(date, 0)
                 counts.append(cumulative)
             
-            # 计算汇总数据
+            # 3. 计算汇总数据
             total = Tenant.objects.count()
             growth_rate = 0
             if len(counts) >= 2 and counts[0] > 0:
@@ -171,7 +162,7 @@ class TenantTrendChartView(BaseChartView):
             if len(counts) > 1:
                 avg_growth = (counts[-1] - counts[0]) / len(counts)
             
-            # 构建响应数据
+            # 4. 构建响应数据
             result = format_chart_response(
                 chart_type="line",
                 title="租户数量趋势",
@@ -190,7 +181,7 @@ class TenantTrendChartView(BaseChartView):
             )
             
             # 如果没有数据，返回空图表
-            if not dates:
+            if not dates or not tenant_counts_map:
                 logger.debug(f"租户趋势图无数据: period={period}, start_date={start_date}, end_date={end_date}")
                 result = empty_chart_response("租户数量趋势", "该时间段内无租户数据", "line")
             
@@ -373,37 +364,35 @@ class TenantCreationRateView(BaseChartView):
             # 转换日期为datetime对象并添加时区信息
             start_datetime = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
             end_datetime = timezone.make_aware(datetime.combine(end_date, datetime.max.time()))
+            trunc_func = get_date_trunc_func(period)
             
-            # 使用Python手动按时间段统计，而不是依赖数据库函数
-            all_tenants = (
+            # 1. 数据库下推截断聚合统计新增租户
+            tenant_counts_qs = (
                 Tenant.objects
                 .filter(created_at__range=(start_datetime, end_datetime))
-                .order_by('created_at')
+                .annotate(period_dt=trunc_func('created_at'))
+                .values('period_dt')
+                .annotate(cnt=Count('id'))
+                .order_by('period_dt')
             )
-            
-            logger.debug(f"查询到 {all_tenants.count()} 条租户数据")
-            
-            # 手动按周期分组
-            period_counts = defaultdict(int)
-            for tenant in all_tenants:
-                if period == 'weekly':
-                    # 使用ISO周格式，例如：2025-W16
-                    period_key = f"{tenant.created_at.isocalendar()[0]}-W{tenant.created_at.isocalendar()[1]:02d}"
-                else:  # monthly
-                    period_key = tenant.created_at.strftime('%Y-%m')
-                
-                period_counts[period_key] += 1
-            
-            # 按时间排序
-            periods = sorted(period_counts.keys())
-            counts = [period_counts[period_key] for period_key in periods]
+            tenant_counts_map = {
+                format_period_key(r['period_dt'], period): r['cnt']
+                for r in tenant_counts_qs if r['period_dt']
+            }
             
             # 没有数据时返回空图表
-            if not counts:
+            if not tenant_counts_map:
                 empty_result = empty_chart_response("租户创建速率", "所选时间范围内没有新增租户", chart_type="bar")
                 return self.format_response(empty_result)
             
-            # 计算汇总数据
+            # 2. 生成连续周期标签并补全 0 值
+            periods = generate_period_labels(start_date, end_date, period)
+            if not periods:
+                periods = sorted(tenant_counts_map.keys())
+            
+            counts = [tenant_counts_map.get(period_key, 0) for period_key in periods]
+            
+            # 3. 计算汇总数据
             total_new = sum(counts)
             avg_monthly = round(total_new / len(counts), 1) if counts else 0
             max_monthly = max(counts) if counts else 0

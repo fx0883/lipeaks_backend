@@ -1,6 +1,7 @@
 """
 用户互动视图
 """
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
@@ -191,7 +192,21 @@ class ArticleFavoriteViewSet(TenantModelViewSet):
     
     提供文章收藏的增删查功能
     """
-    queryset = ArticleFavorite.objects.all().select_related('user', 'article', 'tenant')
+    queryset = ArticleFavorite.objects.all().select_related(
+        'user__tenant',
+        'user',
+        'tenant',
+        'article__user__tenant',
+        'article__member__tenant',
+        'article__user',
+        'article__member',
+        'article__tenant',
+        'article__statistics',
+        'article__parent'
+    ).prefetch_related(
+        'article__article_categories__category',
+        'article__article_tags__tag'
+    )
     serializer_class = ArticleFavoriteSerializer
     permission_classes = [ArticleFavoritePermission]
     authentication_classes = [APIJWTAuthentication]
@@ -536,7 +551,7 @@ class MemberLikeViewSet(TenantModelViewSet):
         """
         queryset = super().get_queryset()
         member = self.request.user
-        return queryset.filter(from_member=member)
+        return queryset.filter(from_member=member, is_deleted=False)
     
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -546,15 +561,36 @@ class MemberLikeViewSet(TenantModelViewSet):
     
     def perform_create(self, serializer):
         """
-        执行点赞创建操作
+        执行点赞创建操作（支持软删除记录平滑恢复）
         
         - 设置当前用户
         - 设置租户
         - 记录点赞时间
         """
         member = self.request.user
+        to_member = serializer.validated_data['to_member']
+        
+        # 平滑恢复历史软删除记录
+        existing = MemberLike.objects.filter(
+            from_member=member,
+            to_member=to_member,
+            tenant=member.tenant
+        ).first()
+        
+        if existing and existing.is_deleted:
+            existing.is_deleted = False
+            existing.created_at = timezone.now()
+            existing.save(update_fields=['is_deleted', 'created_at'])
+            serializer.instance = existing
+            logger.info(f"Member {member.username} re-liked member {to_member.id}")
+            return
+        
         serializer.save(from_member=member, tenant=member.tenant)
-        logger.info(f"Member {member.username} liked member {serializer.instance.to_member_id}")
+        logger.info(f"Member {member.username} liked member {to_member.id}")
+    
+    def perform_destroy(self, instance):
+        instance.soft_delete()
+        logger.info(f"Member {instance.from_member.username} soft-deleted like {instance.id}")
     
     @extend_schema(
         summary="获取收到的点赞列表",
@@ -625,7 +661,8 @@ class MemberLikeViewSet(TenantModelViewSet):
         
         queryset = MemberLike.objects.filter(
             to_member=member,
-            tenant=member.tenant
+            tenant=member.tenant,
+            is_deleted=False
         ).select_related('from_member', 'to_member', 'tenant')
         
         page = self.paginate_queryset(queryset)
@@ -677,11 +714,12 @@ class MemberLikeViewSet(TenantModelViewSet):
             MemberLike,
             from_member=member,
             to_member_id=member_id,
-            tenant=member.tenant
+            tenant=member.tenant,
+            is_deleted=False
         )
         
         # 删除点赞
-        like.delete()
+        like.soft_delete()
         logger.info(f"Member {member.username} unliked member {member_id}")
         
         return Response(
@@ -757,7 +795,8 @@ class MemberLikeViewSet(TenantModelViewSet):
         # 查找点赞记录
         like = MemberLike.objects.filter(
             from_member=member,
-            to_member=target_member
+            to_member=target_member,
+            is_deleted=False
         ).first()
         
         if like:
@@ -952,7 +991,7 @@ class MemberFollowViewSet(TenantModelViewSet):
         """
         queryset = super().get_queryset()
         member = self.request.user
-        return queryset.filter(follower=member)
+        return queryset.filter(follower=member, is_deleted=False)
     
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -962,15 +1001,35 @@ class MemberFollowViewSet(TenantModelViewSet):
     
     def perform_create(self, serializer):
         """
-        执行关注创建操作
+        执行关注创建操作（支持软删除记录平滑恢复）
         
         - 设置当前用户
         - 设置租户
         - 记录关注时间
         """
         member = self.request.user
+        following = serializer.validated_data['following']
+        
+        existing = MemberFollow.objects.filter(
+            follower=member,
+            following=following,
+            tenant=member.tenant
+        ).first()
+        
+        if existing and existing.is_deleted:
+            existing.is_deleted = False
+            existing.created_at = timezone.now()
+            existing.save(update_fields=['is_deleted', 'created_at'])
+            serializer.instance = existing
+            logger.info(f"Member {member.username} re-followed member {following.id}")
+            return
+        
         serializer.save(follower=member, tenant=member.tenant)
         logger.info(f"Member {member.username} followed member {serializer.instance.following_id}")
+    
+    def perform_destroy(self, instance):
+        instance.soft_delete()
+        logger.info(f"Member {instance.follower.username} soft-deleted follow {instance.id}")
     
     @extend_schema(
         summary="获取粉丝列表",
@@ -1043,7 +1102,8 @@ class MemberFollowViewSet(TenantModelViewSet):
         
         queryset = MemberFollow.objects.filter(
             following=member,
-            tenant=member.tenant
+            tenant=member.tenant,
+            is_deleted=False
         ).select_related('follower', 'following', 'tenant')
         
         page = self.paginate_queryset(queryset)
@@ -1095,11 +1155,12 @@ class MemberFollowViewSet(TenantModelViewSet):
             MemberFollow,
             follower=member,
             following_id=member_id,
-            tenant=member.tenant
+            tenant=member.tenant,
+            is_deleted=False
         )
         
         # 删除关注
-        follow.delete()
+        follow.soft_delete()
         logger.info(f"Member {member.username} unfollowed member {member_id}")
         
         return Response(
@@ -1179,14 +1240,16 @@ class MemberFollowViewSet(TenantModelViewSet):
         # 查找关注记录
         follow = MemberFollow.objects.filter(
             follower=member,
-            following=target_member
+            following=target_member,
+            is_deleted=False
         ).first()
         
         if follow:
             # 检查是否互相关注
             is_mutual = MemberFollow.objects.filter(
                 follower=target_member,
-                following=member
+                following=member,
+                is_deleted=False
             ).exists()
             
             return Response({
@@ -1572,7 +1635,20 @@ class ArticleLikeViewSet(TenantModelViewSet):
     
     提供文章点赞的增删查功能
     """
-    queryset = ArticleLike.objects.all().select_related('from_member', 'article', 'tenant')
+    queryset = ArticleLike.objects.all().select_related(
+        'from_member',
+        'tenant',
+        'article__user__tenant',
+        'article__member__tenant',
+        'article__user',
+        'article__member',
+        'article__tenant',
+        'article__statistics',
+        'article__parent'
+    ).prefetch_related(
+        'article__article_categories__category',
+        'article__article_tags__tag'
+    )
     serializer_class = ArticleLikeSerializer
     permission_classes = [ArticleLikePermission]
     authentication_classes = [APIJWTAuthentication]
@@ -1584,7 +1660,7 @@ class ArticleLikeViewSet(TenantModelViewSet):
         """
         queryset = super().get_queryset()
         member = self.request.user
-        return queryset.filter(from_member=member)
+        return queryset.filter(from_member=member, is_deleted=False)
     
     def get_serializer_class(self):
         """根据操作选择序列化器"""
@@ -1594,7 +1670,7 @@ class ArticleLikeViewSet(TenantModelViewSet):
     
     def perform_create(self, serializer):
         """
-        执行点赞创建操作
+        执行点赞创建操作（支持软删除记录平滑恢复）
         
         - TenantModelViewSet自动设置租户
         - 设置当前用户
@@ -1603,6 +1679,24 @@ class ArticleLikeViewSet(TenantModelViewSet):
         """
         member = self.request.user
         article = serializer.validated_data['article']
+        
+        # 平滑恢复历史软删除记录
+        existing = ArticleLike.objects.filter(
+            from_member=member,
+            article=article,
+            tenant=member.tenant
+        ).first()
+        
+        if existing and existing.is_deleted:
+            existing.is_deleted = False
+            existing.created_at = timezone.now()
+            existing.ip_address = self.request.META.get('REMOTE_ADDR')
+            existing.user_agent = self.request.META.get('HTTP_USER_AGENT', '')
+            existing.save(update_fields=['is_deleted', 'created_at', 'ip_address', 'user_agent'])
+            serializer.instance = existing
+            self._update_article_likes_count(article)
+            logger.info(f"Member {member.username} re-liked article {article.id}")
+            return
         
         # 保存点赞记录（需要手动设置 tenant_id，因为 interactions 路径不在租户隔离列表中）
         like = serializer.save(
@@ -1621,14 +1715,14 @@ class ArticleLikeViewSet(TenantModelViewSet):
         """
         执行取消点赞操作
         
-        - 删除点赞记录
+        - 软删除点赞记录
         - 更新文章统计的likes_count
         """
         article = instance.article
         member = instance.from_member
         
-        # 删除点赞记录
-        instance.delete()
+        # 软删除点赞记录
+        instance.soft_delete()
         
         # 更新文章统计
         self._update_article_likes_count(article)
@@ -1647,7 +1741,7 @@ class ArticleLikeViewSet(TenantModelViewSet):
                 article=article,
                 tenant=article.tenant
             )
-            stats.likes_count = ArticleLike.objects.filter(article=article).count()
+            stats.likes_count = ArticleLike.objects.filter(article=article, is_deleted=False).count()
             stats.save(update_fields=['likes_count'])
             logger.debug(f"Updated article {article.id} likes_count to {stats.likes_count}")
         except Exception as e:
@@ -1695,12 +1789,13 @@ class ArticleLikeViewSet(TenantModelViewSet):
             ArticleLike,
             from_member=member,
             article_id=article_id,
-            tenant=member.tenant
+            tenant=member.tenant,
+            is_deleted=False
         )
         
         # 删除点赞并更新统计
         article = like.article
-        like.delete()
+        like.soft_delete()
         self._update_article_likes_count(article)
         
         logger.info(f"Member {member.username} unliked article {article_id}")
@@ -1778,7 +1873,8 @@ class ArticleLikeViewSet(TenantModelViewSet):
         # 查找点赞记录
         like = ArticleLike.objects.filter(
             from_member=member,
-            article=article
+            article=article,
+            is_deleted=False
         ).first()
         
         if like:
@@ -1873,7 +1969,8 @@ class ArticleLikeViewSet(TenantModelViewSet):
         # 获取点赞列表
         queryset = ArticleLike.objects.filter(
             article=article,
-            tenant=member.tenant
+            tenant=member.tenant,
+            is_deleted=False
         ).select_related('from_member', 'article', 'tenant')
         
         page = self.paginate_queryset(queryset)

@@ -758,9 +758,11 @@ class FeedbackService:
             tenant=tenant
         )
         
-        # Send verification email for anonymous users
+        # Send verification email for anonymous users (on commit)
         if not user and feedback.contact_email:
-            EmailService.send_verification(feedback)
+            transaction.on_commit(
+                lambda: EmailService.send_verification(feedback)
+            )
         
         # Update software statistics
         if feedback.application:
@@ -807,8 +809,10 @@ class FeedbackService:
         
         feedback.save()
         
-        # Send notification email
-        EmailService.send_status_notification(history)
+        # Send notification email (on commit)
+        transaction.on_commit(
+            lambda: EmailService.send_status_notification(history)
+        )
         
         # Update software statistics
         if feedback.application:
@@ -840,9 +844,11 @@ class FeedbackService:
             tenant=feedback.tenant
         )
         
-        # Send notification email if not internal
+        # Send notification email if not internal (on commit)
         if not is_internal_note:
-            EmailService.send_reply_notification(reply)
+            transaction.on_commit(
+                lambda: EmailService.send_reply_notification(reply)
+            )
         
         logger.info(f"Added reply {reply.id} to feedback {feedback.id}")
         return reply

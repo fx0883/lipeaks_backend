@@ -196,7 +196,7 @@ class LicenseActivationService:
             # 1. 查找许可证记录
             try:
                 license_hash = self.security_service.hash_manager.hash_data(license_key)
-                license_obj = License.objects.get(license_hash=license_hash)
+                license_obj = License.objects.select_for_update().get(license_hash=license_hash)
             except License.DoesNotExist:
                 return {
                     'success': False,
@@ -339,6 +339,7 @@ class LicenseActivationService:
             
         except Exception as e:
             logger.error(f"许可证激活失败: {str(e)}")
+            transaction.set_rollback(True)
             return {
                 'success': False,
                 'error': f'Activation failed: {str(e)}',
@@ -583,6 +584,7 @@ class LicenseActivationService:
             
         except Exception as e:
             logger.error(f"许可证解绑失败: {str(e)}")
+            transaction.set_rollback(True)
             return {
                 'success': False,
                 'error': f'Unbind failed: {str(e)}',
@@ -739,9 +741,11 @@ class LicenseManagementService:
             
         except License.DoesNotExist:
             logger.error(f"许可证不存在: {license_id}")
+            transaction.set_rollback(True)
             return False
         except Exception as e:
             logger.error(f"许可证撤销失败: {str(e)}")
+            transaction.set_rollback(True)
             return False
     
     def get_license_usage_stats(self, license_id: int) -> Dict[str, Any]:

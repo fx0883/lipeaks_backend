@@ -7,6 +7,7 @@ Member 用户打卡系统视图
 - MemberCheckinViewSet - CRUD 自己的打卡
 - MemberCycleViewSet - CRUD 自己的21天周期
 """
+from django.db import IntegrityError
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets, permissions, status, filters, serializers
@@ -152,7 +153,7 @@ class MemberCheckinViewSet(TenantModelViewSet):
         return queryset.none()
     
     def perform_create(self, serializer):
-        """创建时自动设置 member"""
+        """创建时自动设置 member，双重防御并发重复打卡"""
         user = self.request.user
         tenant = user.tenant if hasattr(user, 'tenant') else None
         
@@ -162,12 +163,15 @@ class MemberCheckinViewSet(TenantModelViewSet):
         check_date = serializer.validated_data.get('check_date')
         
         if task and CheckRecord.objects.filter(member=user, task=task, check_date=check_date).exists():
-            raise serializers.ValidationError(_("您今天已经为该任务打过卡了"))
+            raise serializers.ValidationError({"error": _("您今天已经为该任务打过卡了")})
         
         if theme and CheckRecord.objects.filter(member=user, theme=theme, check_date=check_date).exists():
-            raise serializers.ValidationError(_("您今天已经为该主题打过卡了"))
+            raise serializers.ValidationError({"error": _("您今天已经为该主题打过卡了")})
         
-        serializer.save(member=user, tenant=tenant)
+        try:
+            serializer.save(member=user, tenant=tenant)
+        except IntegrityError:
+            raise serializers.ValidationError({"error": _("今日已打卡，请勿重复打卡")})
         
         target = task.name if task else (theme.name if theme else "未知")
         logger.info(f"Member {user.username} 打卡: {target}")

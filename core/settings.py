@@ -18,7 +18,12 @@ import pymysql
 import logging.handlers  # 导入logging.handlers模块
 
 # 使用pymysql代替mysqlclient
+pymysql.version_info = (2, 2, 1, 'final', 0)
 pymysql.install_as_MySQLdb()
+
+# 兼容本地开发 MySQL 8.0 / 8.1 运行环境
+from django.db.backends.mysql.features import DatabaseFeatures
+DatabaseFeatures.minimum_database_version = (8, 0, 0)
 
 # 加载.env文件
 load_dotenv()
@@ -53,7 +58,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = get_required_env('SECRET_KEY', 'django-insecure-w7&3bzjc1s*bty@)%c3w&#fro!wu5@(9jxac46lqm^klo9^1df')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = get_env_with_validation('INFO', lambda x: x.lower() == 'true', 'True')
+_debug_env_val = os.getenv('DEBUG', os.getenv('INFO', 'False'))
+DEBUG = _debug_env_val.lower() in ('true', '1')
 
 # 从环境变量读取日志输出方式，默认跟随DEBUG设置
 LOG_TO_CONSOLE = os.getenv('LOG_TO_CONSOLE', str(DEBUG)).lower() == 'true'
@@ -124,9 +130,9 @@ MIDDLEWARE = [
     # 自定义中间件放在Django核心中间件之后
     'common.middleware.api_auth_middleware.APIAuthMiddleware',
     'common.middleware.tenant_middleware.TenantMiddleware',
+    'common.middleware.api_cache_middleware.APICacheMiddleware',
     'common.middleware.enhanced_api_logging_middleware.EnhancedAPILoggingMiddleware',
     'common.middleware.browser_console_logging_middleware.BrowserConsoleLoggingMiddleware',
-    'common.middleware.response_standardization_middleware.ResponseStandardizationMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -590,7 +596,7 @@ STORAGES = {
     },
 }
 WHITENOISE_USE_FINDERS = True
-WHITENENOISE_AUTOREFRESH = DEBUG
+WHITENOISE_AUTOREFRESH = DEBUG
 
 # 租户中间件配置（已完成重构，使用新架构）
 # 租户中间件调试模式（启用详细日志）
@@ -684,6 +690,9 @@ TENANT_ISOLATED_API_PATHS = [
     '/api/v1/notifications/',       # 通知系统-成员端
     '/api/v1/admin/notifications/', # 通知系统-管理端
     '/api/v1/we-rss/',        # we_rss 成员接口
+    '/api/v1/points/',        # 积分管理
+    '/api/v1/check-system/',  # 打卡系统
+    '/api/v1/interactions/',  # 社交互动
 ]
 
 # 公开API路径（不需要租户验证）
@@ -722,3 +731,64 @@ WECHAT_DRAFT_THUMB_MAX_BYTES = get_env_with_validation(
     'WECHAT_DRAFT_THUMB_MAX_BYTES', int, 64 * 1024
 )
 WECHAT_API_TIMEOUT = get_env_with_validation('WECHAT_API_TIMEOUT', int, 15)
+
+# ============================================
+# Cache 设置 (PERF-07: 集中式缓存与平滑降级)
+# ============================================
+REDIS_URL = os.getenv('REDIS_URL')
+
+
+def _get_cache_backend_config(redis_url: str) -> dict:
+    """根据依赖安装情况动态选择最佳 Redis 缓存后端"""
+    try:
+        import django_redis  # noqa: F401
+        return {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': redis_url,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,
+            },
+            'TIMEOUT': 300,
+            'KEY_PREFIX': 'lipeaks',
+        }
+    except ImportError:
+        return {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': redis_url,
+            'TIMEOUT': 300,
+            'KEY_PREFIX': 'lipeaks',
+        }
+
+
+import logging
+_logger = logging.getLogger('django')
+
+if REDIS_URL:
+    CACHES = {
+        'default': _get_cache_backend_config(REDIS_URL)
+    }
+    _backend_name = CACHES['default']['BACKEND']
+    _logger.info(f"[Cache] Redis 集中式缓存已启用: {_backend_name} -> {REDIS_URL}")
+else:
+    # 本地未配置 Redis 时优雅降级为进程内内存缓存
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'lipeaks-local-locmem',
+            'TIMEOUT': 300,
+            'KEY_PREFIX': 'lipeaks',
+        }
+    }
+    _logger.info("[Cache] 未配置 REDIS_URL，已降级为本地进程内内存缓存 LocMemCache")
+
+# 全局 API 缓存配置
+API_CACHE_ENABLED = os.getenv('API_CACHE_ENABLED', 'True').lower() in ('true', '1')
+API_CACHE_DEFAULT_TIMEOUT = int(os.getenv('API_CACHE_DEFAULT_TIMEOUT', '120'))
+
+# 租户缓存时长配置（秒）
+TENANT_CACHE_TIMEOUT = int(os.getenv('TENANT_CACHE_TIMEOUT', '1800'))
+# API 日志线程池配置
+API_LOG_MAX_WORKERS = int(os.getenv('API_LOG_MAX_WORKERS', '4'))
+API_LOG_SYNC = os.getenv('API_LOG_SYNC', 'False').lower() in ('true', '1')
+

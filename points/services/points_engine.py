@@ -8,7 +8,8 @@ from typing import Optional, Dict, List, Any
 from decimal import Decimal
 from datetime import datetime, timedelta
 
-from django.db import transaction
+from django.db import models, transaction
+from django.db.models import F
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
@@ -93,27 +94,30 @@ class PointsEngine:
                 points=points
             )
         
-        if not tenant_user_profile.is_points_enabled:
+        # 1. 显式悲观行锁锁定用户档案
+        profile = TenantUserProfile.objects.select_for_update().get(id=tenant_user_profile.id)
+        
+        if not profile.is_points_enabled:
             raise PointsException(
                 error_code='POINTS_NOT_ENABLED',
                 detail='该用户未启用积分功能',
-                user_id=tenant_user_profile.member.id,
-                tenant_id=tenant_user_profile.tenant.id
+                user_id=profile.member.id,
+                tenant_id=profile.tenant.id
             )
         
         # 应用积分倍数
-        actual_points = int(points * tenant_user_profile.points_multiplier)
+        actual_points = int(points * profile.points_multiplier)
         
         # 检查每日限额（如果有配置）
         if category in self.POINTS_SOURCES:
             source_config = self.POINTS_SOURCES[category]
             if 'max_daily' in source_config:
-                today_points = self._get_daily_points(tenant_user_profile, category)
+                today_points = self._get_daily_points(profile, category)
                 if today_points + actual_points > source_config['max_daily']:
                     raise PointsException(
                         error_code='POINTS_DAILY_LIMIT_EXCEEDED',
                         detail=f"今日{source_config['description']}积分已达上限",
-                        user_id=tenant_user_profile.member.id,
+                        user_id=profile.member.id,
                         category=category,
                         today_points=today_points,
                         max_daily=source_config['max_daily']
@@ -126,7 +130,7 @@ class PointsEngine:
         
         # 创建积分记录
         points_record = TenantUserPoints.create_points_record(
-            tenant_user_profile=tenant_user_profile,
+            tenant_user_profile=profile,
             point_type='earn',
             category=category,
             points=actual_points,
@@ -139,14 +143,22 @@ class PointsEngine:
             original_points=points
         )
         
-        # 更新用户积分
-        tenant_user_profile.add_points(actual_points, reason, source_type)
+        # 数据库层原子累加
+        TenantUserProfile.objects.filter(id=profile.id).update(
+            total_points=F('total_points') + actual_points,
+            available_points=F('available_points') + actual_points,
+            points_earned_total=F('points_earned_total') + actual_points,
+            last_points_update=timezone.now()
+        )
+        profile.refresh_from_db(fields=['total_points', 'available_points', 'points_earned_total', 'last_points_update'])
+        if tenant_user_profile is not profile:
+            tenant_user_profile.refresh_from_db(fields=['total_points', 'available_points', 'points_earned_total', 'last_points_update'])
         
         # 检查等级升级
-        self._check_level_upgrade(tenant_user_profile)
+        self._check_level_upgrade(profile)
         
         self.logger.info(
-            f"积分奖励成功: {tenant_user_profile.member.username}@{tenant_user_profile.tenant.name} "
+            f"积分奖励成功: {profile.member.username}@{profile.tenant.name} "
             f"获得 {actual_points} 积分 (原始: {points}) - {reason}"
         )
         
@@ -187,25 +199,29 @@ class PointsEngine:
                 points=points
             )
         
-        if not tenant_user_profile.is_points_enabled:
+        # 1. 显式悲观行锁锁定用户档案
+        profile = TenantUserProfile.objects.select_for_update().get(id=tenant_user_profile.id)
+        
+        if not profile.is_points_enabled:
             raise PointsException(
                 error_code='POINTS_NOT_ENABLED',
                 detail='该用户未启用积分功能',
-                user_id=tenant_user_profile.member.id,
-                tenant_id=tenant_user_profile.tenant.id
+                user_id=profile.member.id,
+                tenant_id=profile.tenant.id
             )
         
-        if tenant_user_profile.available_points < points:
+        # 2. 基于锁后最新可用积分严格校验
+        if profile.available_points < points:
             raise PointsInsufficientException(
-                detail=f'积分余额不足，current可用: {tenant_user_profile.available_points}，Required: {points}',
-                user_id=tenant_user_profile.member.id,
-                available_points=tenant_user_profile.available_points,
+                detail=f'积分余额不足，当前可用: {profile.available_points}，需要: {points}',
+                user_id=profile.member.id,
+                available_points=profile.available_points,
                 required_points=points
             )
         
-        # 创建消费记录（负数）
+        # 3. 创建消费记录（负数）
         points_record = TenantUserPoints.create_points_record(
-            tenant_user_profile=tenant_user_profile,
+            tenant_user_profile=profile,
             point_type='spend',
             category=category,
             points=-points,
@@ -216,11 +232,29 @@ class PointsEngine:
             operator_id=operator_id
         )
         
-        # 扣除用户积分
-        tenant_user_profile.spend_points(points, reason)
+        # 4. 数据库层原子扣减（结合 F 表达式与防御性条件过滤）
+        updated_rows = TenantUserProfile.objects.filter(
+            id=profile.id,
+            available_points__gte=points
+        ).update(
+            available_points=F('available_points') - points,
+            points_spent_total=F('points_spent_total') + points,
+            last_points_update=timezone.now()
+        )
+        if updated_rows == 0:
+            raise PointsInsufficientException(
+                detail='积分扣减冲突或余额不足',
+                user_id=profile.member.id,
+                available_points=profile.available_points,
+                required_points=points
+            )
+        
+        profile.refresh_from_db(fields=['available_points', 'points_spent_total', 'last_points_update'])
+        if tenant_user_profile is not profile:
+            tenant_user_profile.refresh_from_db(fields=['available_points', 'points_spent_total', 'last_points_update'])
         
         self.logger.info(
-            f"积分消费成功: {tenant_user_profile.member.username}@{tenant_user_profile.tenant.name} "
+            f"积分消费成功: {profile.member.username}@{profile.tenant.name} "
             f"消费 {points} 积分 - {reason}"
         )
         
@@ -305,7 +339,7 @@ class PointsEngine:
                 error_code='UNSUPPORTED_LICENSE_ACTION',
                 detail=f'不支持的许可证动作: {action}',
                 action=action,
-                supported_actions=list(points_map.keys())
+                supported_actions=['activation', 'renewal']
             )
         
         # 如果有许可证价值，增加比例奖励
@@ -494,7 +528,26 @@ class PointsEngine:
         Returns:
             bool: 是否发生了等级升级
         """
-        return tenant_user_profile.check_level_upgrade()
+        try:
+            level_service = UserLevelService()
+            new_level = level_service.calculate_user_level(tenant_user_profile.total_points)
+            
+            if new_level and (not tenant_user_profile.current_level or new_level.level_order > tenant_user_profile.current_level.level_order):
+                old_level = tenant_user_profile.current_level
+                tenant_user_profile.current_level = new_level
+                tenant_user_profile.level_updated_at = timezone.now()
+                tenant_user_profile.last_level_check = timezone.now()
+                tenant_user_profile.save(update_fields=['current_level', 'level_updated_at', 'last_level_check'])
+                
+                self.logger.info(f"用户 {tenant_user_profile.member.username}@{tenant_user_profile.tenant.name} 等级升级: {old_level} -> {new_level}")
+                return True
+            
+            tenant_user_profile.last_level_check = timezone.now()
+            tenant_user_profile.save(update_fields=['last_level_check'])
+            return False
+        except Exception as e:
+            self.logger.warning(f"检查用户等级升级失败: {e}")
+            return False
     
     @classmethod
     def get_points_statistics(

@@ -27,6 +27,8 @@ graph TD
         Doc10["10_complete_api_endpoint_catalog.md<br>全系统 112 个 REST API 接口契约目录"]
         Doc11["11_core_algorithms_and_security_mechanisms.md<br>RSA 2048 授权验签 / 指纹算法 / 图片流式代理"]
         Doc12["12_deployment_ops_and_security_audit.md<br>Docker/cPanel 部署拓扑 / 环境变量 / 安全审计"]
+        Doc13["13_redis_and_global_api_cache_architecture.md<br>Redis 基础设施 / 全局 API 缓存 / Celery 异步队列"]
+        Doc14["14_frontend_api_integration_guide.md<br>前端接口全景对接方案 / TS+Axios 封装 / 11 大模块 API"]
     end
 
     Part1 --> Part2
@@ -54,7 +56,7 @@ graph TD
 
 1. [**02_infra_common_tenants.md** - 基础支撑与多租户体系](file:///d:/GitHub/lipeaks_backend/docs/02_infra_common_tenants.md)
    - 涵盖模块：`common`, `tenants`
-   - 核心要点：`BaseModel` 软删除、`TenantManager` 自动查询过滤、`_thread_local.tenant` 线程安全上下文、`TenantQuota` 资源配额拦截器、标准 JSON 渲染器与 API 审计日志。
+   - 核心要点：`BaseModel` 软删除、`TenantManager` 自动查询过滤、`contextvars.ContextVar` 协程与线程安全租户上下文、`TenantQuota` 资源配额拦截器、标准 JSON 渲染器与 API 审计日志。
 
 2. [**03_identity_users_rbac_menus.md** - 双身份用户、认证与 RBAC 权限](file:///d:/GitHub/lipeaks_backend/docs/03_identity_users_rbac_menus.md)
    - 涵盖模块：`users`, `rbac`, `menus`
@@ -102,6 +104,18 @@ graph TD
     - 环境变量全量配置表
     - 多租户横向越权防御与全站安全加固 Checklist
 
+12. [**13_redis_and_global_api_cache_architecture.md** - Redis 基础设施与全局 API 缓存架构](file:///d:/GitHub/lipeaks_backend/docs/13_redis_and_global_api_cache_architecture.md)
+    - Docker Redis 7 容器化编排、健康检查与持久化存储
+    - DB 0 (Celery) 与 DB 1 (Cache) 分库隔离架构
+    - 全局 API 缓存中间件 `APICacheMiddleware`：多租户/用户四重隔离 Key 算法
+    - 缓存主动失效机制（写操作前缀清除）与 `X-Cache: HIT/MISS` 可观测性规范
+
+13. [**14_frontend_api_integration_guide.md** - 前端与后端接口全景对接方案与实践指南](file:///d:/GitHub/lipeaks_backend/docs/14_frontend_api_integration_guide.md)
+    - 统一网络层封装（TypeScript + Axios、多租户 Header 自动注入、JWT 双 Token 无感静默刷新、Redis 缓存穿透）
+    - 管理后台动态工作台路由树解析（`/menus/admin/routes/`）与 `v-permission` 按钮级权限控制
+    - 全系统 11 大业务模块分模块 API Service 封装（Auth、Tenants、RBAC、Check-System、CMS、Points、Licenses 等）
+    - 微信小程序 `js_code` 授权登录、防盗链图片安全反代与 We-RSS 离线知识包导出
+
 ---
 
 ### 阶段四：代码审查与缺陷报告（Code Review Issues）
@@ -125,3 +139,11 @@ graph TD
     - P0 / P1 / P2 阶段式推进计划
     - 针对 4 大阻塞项的自动化回归测试用例清单（Test Cases）
     - 静态类型检查（django-stubs）与 CI/CD 质量防线治理建议
+
+---
+
+### 全局审计与治理结项报告
+- [**CODE_REVIEW_REPORT.md** (项目根目录代码审查与治理结项总报告)](file:///d:/GitHub/lipeaks_backend/CODE_REVIEW_REPORT.md)
+  - 全量 42 项核心生产缺陷修复详情、638 tests 100% 通过验收与 A+ 评级证明。
+- [**README.md** (项目根目录概览与快速上手)](file:///d:/GitHub/lipeaks_backend/README.md)
+  - 核心架构总览、模块拓扑、环境部署与自动化测试运行指引（`--settings=core.settings_test`）。

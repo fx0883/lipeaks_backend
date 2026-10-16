@@ -4,6 +4,7 @@
 import logging
 from django.db import models
 from django.contrib.auth.models import AbstractUser, Group, Permission
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import PermissionDenied
 
@@ -106,6 +107,10 @@ class User(BaseUserModel):
         verbose_name = _('管理员用户')
         verbose_name_plural = _('管理员用户')
         db_table = 'user'
+        indexes = [
+            models.Index(fields=['tenant', 'is_deleted'], name='user_tenant_deleted_idx'),
+            models.Index(fields=['tenant', 'status'], name='user_tenant_status_idx'),
+        ]
     
     def __str__(self):
         return f"{self.username} ({self.display_role})"
@@ -116,8 +121,8 @@ class User(BaseUserModel):
         """
         is_new = self.pk is None
         
-        # 如果是新用户且关联了租户，检查配额
-        if is_new and self.tenant:
+        # 如果是新用户且关联了租户并且是管理员，检查管理员配额
+        if is_new and self.tenant and self.is_admin:
             try:
                 # 确保配额存在
                 quota = self.tenant.ensure_quota()
@@ -125,6 +130,8 @@ class User(BaseUserModel):
                 if not quota.can_add_user(is_admin=True):
                     logger.warning(f"租户 {self.tenant.name} 的管理员配额已满，无法创建更多管理员")
                     raise PermissionDenied("Tenant admin quota is full, cannot create more admins")
+            except PermissionDenied:
+                raise
             except Exception as e:
                 # 出现错误时记录错误
                 logger.error(f"检查租户 {self.tenant.name} 的配额时发生错误: {str(e)}")
@@ -132,27 +139,31 @@ class User(BaseUserModel):
         # 记录日志
         if is_new:
             tenant_name = self.tenant.name if self.tenant else "无租户"
-            logger.info(f"创建新管理员用户: {self.username} (租户: {tenant_name})")
+            logger.info(f"创建新用户: {self.username} (租户: {tenant_name})")
         else:
-            logger.info(f"更新管理员用户: {self.username}")
+            logger.info(f"更新用户: {self.username}")
         
-        # 如果用户是超级管理员，清除租户关联
-        if self.is_super_admin and self.tenant:
-            logger.info(f"用户 {self.username} 被设置为超级管理员，清除租户关联")
-            self.tenant = None
+        # 自动标记超级管理员
+        if self.is_superuser:
+            self.is_super_admin = True
         
-        # 确保is_admin始终为True
-        self.is_admin = True
-        
-        # 管理员用户都设置为staff（可以访问admin和部分API）
-        self.is_staff = True
-        
-        # 超级管理员额外设置Django内置的superuser权限
+        # 超级管理员逻辑
         if self.is_super_admin:
+            self.is_admin = True
+            self.is_staff = True
             self.is_superuser = True
+            # 如果用户是超级管理员，清除租户关联
+            if self.tenant:
+                logger.info(f"用户 {self.username} 被设置为超级管理员，清除租户关联")
+                self.tenant = None
         else:
-            # 租户管理员不是superuser
+            # 非超级管理员绝不强制提升为 superuser
             self.is_superuser = False
+            # 仅当 is_admin 为 True 时设置 is_staff=True，否则为 False
+            if self.is_admin:
+                self.is_staff = True
+            else:
+                self.is_staff = False
         
         super().save(*args, **kwargs)
     
@@ -161,7 +172,7 @@ class User(BaseUserModel):
         """
         判断用户是否是租户管理员
         """
-        return not self.is_super_admin
+        return bool(self.is_admin and not self.is_super_admin)
     
     @property
     def display_role(self):
@@ -170,13 +181,28 @@ class User(BaseUserModel):
         """
         if self.is_super_admin:
             return "超级管理员"
-        else:
+        elif self.is_admin:
             return "租户管理员"
+        else:
+            return "普通用户"
 
 class Member(BaseUserModel):
     """
     普通成员模型，包括普通用户和子账号
     """
+    username = models.CharField(
+        _("username"),
+        max_length=150,
+        unique=False,
+        help_text=_(
+            "Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only."
+        ),
+        validators=[UnicodeUsernameValidator()],
+        error_messages={
+            "unique": _("A user with that username already exists in this tenant."),
+        },
+    )
+    
     # 父账号关联，用于子账号功能
     parent = models.ForeignKey(
         'self',
@@ -191,6 +217,17 @@ class Member(BaseUserModel):
         verbose_name = _('普通成员')
         verbose_name_plural = _('普通成员')
         db_table = 'member'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'username'],
+                condition=models.Q(is_deleted=False),
+                name='unique_tenant_member_username'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['tenant', 'is_deleted'], name='member_tenant_deleted_idx'),
+            models.Index(fields=['tenant', 'status'], name='member_tenant_status_idx'),
+        ]
     
     def __str__(self):
         if self.parent:

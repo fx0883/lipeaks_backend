@@ -19,6 +19,10 @@ class TenantAwarePermission(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
         
+        # 超级管理员跨租户放行
+        if getattr(request.user, 'is_super_admin', False) or request.user.is_superuser:
+            return True
+        
         # 检查用户是否属于某个租户
         if hasattr(request.user, 'tenant') and request.user.tenant:
             return True
@@ -35,7 +39,12 @@ class TenantAwarePermission(BasePermission):
     
     def check_tenant_access(self, user, obj):
         """检查租户访问权限"""
+        if getattr(user, 'is_super_admin', False) or user.is_superuser:
+            return True
+        
         user_tenant = getattr(user, 'tenant', None)
+        if not user_tenant:
+            return False
         
         # 如果对象有tenant字段，直接比较
         if hasattr(obj, 'tenant'):
@@ -43,11 +52,11 @@ class TenantAwarePermission(BasePermission):
         
         # 如果对象有member字段，检查member的租户
         if hasattr(obj, 'member'):
-            return obj.member.tenant == user_tenant
+            return getattr(obj.member, 'tenant', None) == user_tenant
         
         # 如果对象有tenant_user_profile字段，检查档案的租户
         if hasattr(obj, 'tenant_user_profile'):
-            return obj.tenant_user_profile.tenant == user_tenant
+            return getattr(obj.tenant_user_profile, 'tenant', None) == user_tenant
         
         return False
 
@@ -60,9 +69,13 @@ class TenantUserProfilePermission(TenantAwarePermission):
         if not super().has_permission(request, view):
             return False
         
-        # 管理员可以查看所有租户的数据
-        if request.user.is_staff or request.user.is_superuser:
+        # 仅超级管理员可跨租户访问所有租户的数据
+        if getattr(request.user, 'is_super_admin', False) or request.user.is_superuser:
             return True
+        
+        # 租户管理员只能在所属租户内访问
+        if getattr(request.user, 'is_admin', False) or request.user.is_staff:
+            return bool(getattr(request.user, 'tenant', None))
         
         # 普通用户只能访问自己的数据
         return True
@@ -72,15 +85,19 @@ class TenantUserProfilePermission(TenantAwarePermission):
         if not super().has_object_permission(request, view, obj):
             return False
         
-        # 管理员可以访问所有对象
-        if request.user.is_staff or request.user.is_superuser:
+        # 仅超级管理员可以跨租户访问所有对象
+        if getattr(request.user, 'is_super_admin', False) or request.user.is_superuser:
+            return True
+        
+        # 租户管理员可访问本租户对象（super已保证租户一致性）
+        if getattr(request.user, 'is_admin', False) or request.user.is_staff:
             return True
         
         # 用户只能访问自己的档案
         if hasattr(request.user, 'tenant_user_profiles'):
             return obj in request.user.tenant_user_profiles.all()
         
-        return obj.member == request.user
+        return getattr(obj, 'member', None) == request.user
 
 
 class PointsManagementPermission(TenantAwarePermission):
@@ -97,14 +114,18 @@ class PointsManagementPermission(TenantAwarePermission):
         
         # 写操作：需要特殊权限
         if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
-            # 管理员可以进行所有操作
-            if request.user.is_staff or request.user.is_superuser:
+            # 仅超级管理员可以跨租户进行所有操作
+            if getattr(request.user, 'is_super_admin', False) or request.user.is_superuser:
                 return True
             
-            # 检查用户是否有积分管理权限
-            from points.services.permission_service import TenantAwarePermissionService
+            # 租户管理员在本租户内可操作
             user_tenant = getattr(request.user, 'tenant', None)
+            if user_tenant and (getattr(request.user, 'is_admin', False) or request.user.is_staff):
+                return True
+            
+            # 检查普通用户是否有积分管理权限
             if user_tenant:
+                from points.services.permission_service import TenantAwarePermissionService
                 perms = TenantAwarePermissionService.get_effective_permissions(
                     request.user, user_tenant
                 )
@@ -127,14 +148,18 @@ class VipManagementPermission(TenantAwarePermission):
         
         # 写操作：需要管理员权限或特殊权限
         if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
-            # 管理员可以进行所有操作
-            if request.user.is_staff or request.user.is_superuser:
+            # 仅超级管理员可以跨租户进行所有操作
+            if getattr(request.user, 'is_super_admin', False) or request.user.is_superuser:
                 return True
             
-            # 检查用户是否有VIP管理权限
-            from points.services.permission_service import TenantAwarePermissionService
+            # 租户管理员在本租户内可操作
             user_tenant = getattr(request.user, 'tenant', None)
+            if user_tenant and (getattr(request.user, 'is_admin', False) or request.user.is_staff):
+                return True
+            
+            # 检查普通用户是否有VIP管理权限
             if user_tenant:
+                from points.services.permission_service import TenantAwarePermissionService
                 perms = TenantAwarePermissionService.get_effective_permissions(
                     request.user, user_tenant
                 )
@@ -157,14 +182,18 @@ class LicenseAssignmentPermission(TenantAwarePermission):
         
         # 写操作：需要许可证管理权限
         if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
-            # 管理员可以进行所有操作
-            if request.user.is_staff or request.user.is_superuser:
+            # 仅超级管理员可以跨租户进行所有操作
+            if getattr(request.user, 'is_super_admin', False) or request.user.is_superuser:
                 return True
             
-            # 检查用户是否有许可证管理权限
-            from points.services.permission_service import TenantAwarePermissionService
+            # 租户管理员在本租户内可操作
             user_tenant = getattr(request.user, 'tenant', None)
+            if user_tenant and (getattr(request.user, 'is_admin', False) or request.user.is_staff):
+                return True
+            
+            # 检查普通用户是否有许可证管理权限
             if user_tenant:
+                from points.services.permission_service import TenantAwarePermissionService
                 perms = TenantAwarePermissionService.get_effective_permissions(
                     request.user, user_tenant
                 )
@@ -176,18 +205,30 @@ class LicenseAssignmentPermission(TenantAwarePermission):
 class SelfOrAdminPermission(BasePermission):
     """
     自己或管理员权限
-    用户只能访问自己的数据，或管理员可以访问所有数据
+    超级管理员可跨租户访问所有对象，租户管理员仅限本租户，用户只能访问自己的数据
     """
     
     def has_permission(self, request, view):
         """检查基本权限"""
-        return request.user and request.user.is_authenticated
+        return bool(request.user and request.user.is_authenticated)
     
     def has_object_permission(self, request, view, obj):
         """检查对象级权限"""
-        # 管理员可以访问所有对象
-        if request.user.is_staff or request.user.is_superuser:
+        # 超级管理员可以访问所有对象
+        if getattr(request.user, 'is_super_admin', False) or request.user.is_superuser:
             return True
+        
+        # 租户管理员只能访问本租户对象
+        if getattr(request.user, 'is_admin', False) or request.user.is_staff:
+            user_tenant = getattr(request.user, 'tenant', None)
+            if user_tenant:
+                if hasattr(obj, 'tenant') and obj.tenant == user_tenant:
+                    return True
+                if hasattr(obj, 'member') and getattr(obj.member, 'tenant', None) == user_tenant:
+                    return True
+                if hasattr(obj, 'tenant_user_profile') and getattr(obj.tenant_user_profile, 'tenant', None) == user_tenant:
+                    return True
+            return False
         
         # 用户只能访问自己相关的对象
         if hasattr(obj, 'member'):
@@ -206,7 +247,7 @@ class SelfOrAdminPermission(BasePermission):
 class ReadOnlyOrAdminPermission(BasePermission):
     """
     只读或管理员权限
-    普通用户只能读取，管理员可以进行所有操作
+    普通用户只能读取，超级管理员可跨租户操作，租户管理员可在本租户内操作
     """
     
     def has_permission(self, request, view):
@@ -218,8 +259,12 @@ class ReadOnlyOrAdminPermission(BasePermission):
         if request.method in ['GET', 'HEAD', 'OPTIONS']:
             return True
         
-        # 写操作：只有管理员可以
-        return request.user.is_staff or request.user.is_superuser
+        # 写操作：超级管理员或本租户管理员
+        if getattr(request.user, 'is_super_admin', False) or request.user.is_superuser:
+            return True
+        if getattr(request.user, 'is_admin', False) or request.user.is_staff:
+            return getattr(request.user, 'tenant', None) is not None
+        return False
 
 
 class PointsOperationPermission(BasePermission):
@@ -241,12 +286,16 @@ class PointsOperationPermission(BasePermission):
         
         # 积分操作：需要特殊权限
         if action in ['earn_points', 'spend_points', 'adjust_points']:
-            # 管理员可以进行所有操作
-            if request.user.is_staff or request.user.is_superuser:
+            # 仅超级管理员可以跨租户进行所有操作
+            if getattr(request.user, 'is_super_admin', False) or request.user.is_superuser:
                 return True
             
-            # 检查用户的积分操作权限
+            # 租户管理员在本租户内可以进行操作
             user_tenant = getattr(request.user, 'tenant', None)
+            if user_tenant and (getattr(request.user, 'is_admin', False) or request.user.is_staff):
+                return True
+            
+            # 检查普通用户的积分操作权限
             if user_tenant:
                 from points.services.permission_service import TenantAwarePermissionService
                 perms = TenantAwarePermissionService.get_effective_permissions(
@@ -282,16 +331,15 @@ def ensure_tenant_isolation(request, queryset):
     """
     确保查询集只包含current用户租户的数据
     """
-    user_tenant = get_user_tenant(request.user)
+    # 仅超级管理员可以跨租户查看所有租户的数据
+    if request.user.is_superuser or getattr(request.user, 'is_super_admin', False):
+        return queryset
     
+    user_tenant = get_user_tenant(request.user)
     if not user_tenant:
         return queryset.none()
     
-    # 管理员可以查看所有租户的数据（可选）
-    if request.user.is_superuser:
-        return queryset
-    
-    # 普通用户只能查看自己租户的数据
+    # 普通用户或租户管理员只能查看自己租户的数据
     if hasattr(queryset.model, 'tenant'):
         return queryset.filter(tenant=user_tenant)
     

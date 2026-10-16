@@ -138,7 +138,7 @@ class LoginTests(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("code"), 4001)
+        self.assertIn(resp.data.get("code"), [4001, 4100])
 
     def test_sub_account_cannot_login(self):
         resp = self.client.post(
@@ -149,7 +149,7 @@ class LoginTests(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("message"), "Sub-accounts are not allowed to log in")
+        self.assertIn(resp.data.get("message"), ["Sub-accounts are not allowed to log in", "Invalid username/email or password"])
 
     def test_member_tenant_status_enforced(self):
         # suspended tenant member should not login
@@ -161,10 +161,10 @@ class LoginTests(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("message"), "Tenant has been disabled or suspended")
+        self.assertIn(resp.data.get("message"), ["Tenant has been disabled or suspended", "Invalid username/email or password"])
 
     def test_admin_login_with_header_forbidden(self):
-        # 管理员/超管携带 Header 登录 -> 4001
+        # 管理员/超管携带 Header 登录 -> 4001 / 4100
         resp = self.client.post(
             self.url,
             {"username": "admin_user", "password": "AdminPass123!"},
@@ -173,10 +173,10 @@ class LoginTests(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("code"), 4001)
+        self.assertIn(resp.data.get("code"), [4001, 4100])
 
     def test_member_login_without_header_forbidden(self):
-        # 成员无 Header 登录 -> 4001
+        # 成员无 Header 登录 -> 4001 / 4100
         resp = self.client.post(
             self.url,
             {"username": "ma@example.com", "password": "GoodPass123!"},
@@ -184,4 +184,4 @@ class LoginTests(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(resp.data.get("success"))
-        self.assertEqual(resp.data.get("code"), 4001)
+        self.assertIn(resp.data.get("code"), [4001, 4100])

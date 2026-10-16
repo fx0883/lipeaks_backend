@@ -8,6 +8,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiRespon
 from drf_spectacular.openapi import OpenApiTypes
 from django.utils.translation import gettext_lazy as _
 from django.shortcuts import get_object_or_404
+from common.pagination import StandardResultsSetPagination
 
 from ..models import EmailTemplate, FeedbackEmailLog
 from ..serializers import EmailTemplateSerializer, FeedbackEmailLogSerializer
@@ -51,6 +52,7 @@ class EmailTemplateListView(APIView):
     POST: 创建新邮件模板（仅限租户管理员）
     """
     permission_classes = [AllowAny]  # ✅ 所有GET API不需要认证
+    pagination_class = StandardResultsSetPagination
     
     @extend_schema(
         tags=['Email Templates'],
@@ -77,8 +79,8 @@ class EmailTemplateListView(APIView):
         }
     )
     def get(self, request):
-        # 获取当前租户的模板
-        queryset = EmailTemplate.objects.all()
+        # 获取当前租户的模板（预取 tenant）
+        queryset = EmailTemplate.objects.select_related('tenant').all()
         
         # 过滤租户
         tenant = get_tenant_from_request(request)
@@ -98,6 +100,13 @@ class EmailTemplateListView(APIView):
         # 排序
         queryset = queryset.order_by('template_type', 'name')
         
+        # 分页接入 (防 OOM)
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = EmailTemplateSerializer(page, many=True, context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
+            
         serializer = EmailTemplateSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
     

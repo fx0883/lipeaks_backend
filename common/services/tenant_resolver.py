@@ -142,7 +142,20 @@ class TenantIdResolver:
         Returns:
             str|None: 用户关联的租户ID字符串，未关联时返回None
         """
-        if not hasattr(self.request, 'user') or not self.request.user.is_authenticated:
+        # 若用户尚未认证且请求携带 Bearer 认证头，按需进行 JWT 识别
+        if not hasattr(self.request, 'user') or not getattr(self.request.user, 'is_authenticated', False):
+            auth_header = self.request.META.get('HTTP_AUTHORIZATION')
+            if auth_header and auth_header.startswith('Bearer '):
+                from common.authentication.api_auth import APIJWTAuthentication
+                try:
+                    auth_result = APIJWTAuthentication().authenticate(self.request)
+                    if auth_result:
+                        self.request.user, self.request.auth = auth_result
+                        self.request.auth_type = 'jwt'
+                except Exception as e:
+                    self.logger.debug(f"租户解析按需认证未识别用户: {e}")
+
+        if not hasattr(self.request, 'user') or not getattr(self.request.user, 'is_authenticated', False):
             self.logger.info("用户未认证，无法获取用户租户ID")
             return None
             

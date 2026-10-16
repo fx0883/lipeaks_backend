@@ -1,6 +1,7 @@
 """
 CMS系统视图
 """
+from django.db import IntegrityError
 from django.db.models import Q, Count, Avg, F
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
@@ -276,8 +277,14 @@ class ArticleViewSet(TenantModelViewSet):
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['created_at', 'updated_at', 'published_at', 'title']
     ordering = ['-is_pinned', '-created_at']
-    queryset = Article.objects.all().select_related('user', 'member', 'tenant')  # 优化查询：预加载user和member
-    
+    queryset = Article.objects.all().select_related(
+        'user__tenant', 'member__tenant', 'user', 'member', 'tenant', 'statistics', 'parent'
+    ).prefetch_related(
+        'article_categories__category',
+        'article_tags__tag'
+    ).annotate(
+        annotated_children_count=Count('children', distinct=True)
+    )
     def get_queryset(self):
         """
         获取文章查询集，支持多种过滤条件
@@ -799,14 +806,20 @@ class ArticleViewSet(TenantModelViewSet):
         
         # 更新文章统计
         try:
-            stats, created = ArticleStatistics.objects.get_or_create(
-                article=article,
-                tenant=article.tenant
-            )
+            # 并发防御式初始化统计记录
+            try:
+                ArticleStatistics.objects.get_or_create(
+                    article=article,
+                    defaults={'tenant': article.tenant}
+                )
+            except IntegrityError:
+                pass
             
-            # 更新阅读次数
-            stats.views_count += 1
-            stats.save()
+            # 数据库级原子自增 views_count 并刷新时间戳
+            ArticleStatistics.objects.filter(article=article).update(
+                views_count=F('views_count') + 1,
+                updated_at=timezone.now()
+            )
             
         except Exception as e:
             logger.error(f"更新文章统计数据失败: {str(e)}")

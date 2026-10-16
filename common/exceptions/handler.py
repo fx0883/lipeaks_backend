@@ -18,7 +18,6 @@ from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
 from .base import BusinessException
-from .tenant import TenantException
 from .error_codes import ERROR_CODE_TO_STRING
 
 logger = logging.getLogger(__name__)

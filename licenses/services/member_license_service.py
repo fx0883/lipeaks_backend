@@ -106,6 +106,7 @@ class MemberLicenseApplicationService:
             
         except ValueError as e:
             logger.warning(f"试用许可证申请失败 - 业务规则错误: {str(e)}")
+            transaction.set_rollback(True)
             return {
                 'success': False,
                 'error': str(e),
@@ -113,6 +114,7 @@ class MemberLicenseApplicationService:
             }
         except Exception as e:
             logger.error(f"试用许可证申请异常: {str(e)}")
+            transaction.set_rollback(True)
             return {
                 'success': False,
                 'error': '系统内部错误，请稍后重试',
@@ -342,7 +344,7 @@ class MemberLicenseApplicationService:
         # 检查租户配额
         tenant_quota = TenantLicenseQuota.objects.filter(
             tenant=member.tenant,
-            product=product,
+            application=product,
             is_active=True
         ).first()
         

@@ -601,13 +601,12 @@ class RegisterSerializer(serializers.ModelSerializer):
     用户注册序列化器
     """
     password_confirm = serializers.CharField(write_only=True, required=True)
-    tenant_id = serializers.IntegerField(write_only=True, required=False)
     
     class Meta:
         model = User
         fields = [
             'username', 'email', 'phone', 'nick_name', 'wechat_id',
-            'password', 'password_confirm', 'tenant_id'
+            'password', 'password_confirm'
         ]
         extra_kwargs = {
             'password': {'write_only': True},
@@ -619,44 +618,26 @@ class RegisterSerializer(serializers.ModelSerializer):
     
     def validate_email(self, value):
         """
-        验证邮箱是否已被同一租户下使用
+        验证邮箱是否已被使用
         """
-        tenant_id = self.initial_data.get('tenant_id')
-        if tenant_id:
-            if User.objects.filter(email=value, tenant_id=tenant_id, is_deleted=False).exists():
-                raise serializers.ValidationError("Email already registered in this tenant")
-        else:
-            # 对于没有指定租户的情况，只检查超级管理员（无租户用户）中是否有重复
-            if User.objects.filter(email=value, tenant__isnull=True, is_deleted=False).exists():
-                raise serializers.ValidationError("Email already registered")
+        if User.objects.filter(email=value, tenant__isnull=True, is_deleted=False).exists():
+            raise serializers.ValidationError("Email already registered")
         return value
     
     def validate_username(self, value):
         """
-        验证用户名是否已被同一租户下使用
+        验证用户名是否已被使用
         """
-        tenant_id = self.initial_data.get('tenant_id')
-        if tenant_id:
-            if User.objects.filter(username=value, tenant_id=tenant_id, is_deleted=False).exists():
-                raise serializers.ValidationError("Username already used in this tenant")
-        else:
-            # 对于没有指定租户的情况，只检查超级管理员（无租户用户）中是否有重复
-            if User.objects.filter(username=value, tenant__isnull=True, is_deleted=False).exists():
-                raise serializers.ValidationError("Username already in use")
+        if User.objects.filter(username=value, tenant__isnull=True, is_deleted=False).exists():
+            raise serializers.ValidationError("Username already in use")
         return value
     
     def validate_phone(self, value):
         """
-        验证手机号是否已被同一租户下使用
+        验证手机号是否已被使用
         """
-        tenant_id = self.initial_data.get('tenant_id')
-        if value and tenant_id:
-            if User.objects.filter(phone=value, tenant_id=tenant_id, is_deleted=False).exists():
-                raise serializers.ValidationError("Phone number already registered in this tenant")
-        elif value and not tenant_id:
-            # 对于没有指定租户的情况，只检查超级管理员（无租户用户）中是否有重复
-            if User.objects.filter(phone=value, tenant__isnull=True, is_deleted=False).exists():
-                raise serializers.ValidationError("Phone number already registered")
+        if value and User.objects.filter(phone=value, tenant__isnull=True, is_deleted=False).exists():
+            raise serializers.ValidationError("Phone number already registered")
         return value
     
     def validate(self, data):
@@ -674,14 +655,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         # 验证密码强度
         validate_password(data['password'])
         
-        # 处理租户ID
-        tenant_id = data.pop('tenant_id', None)
-        if tenant_id:
-            try:
-                tenant = Tenant.objects.get(id=tenant_id, status='active', is_deleted=False)
-                data['tenant'] = tenant
-            except Tenant.DoesNotExist:
-                raise serializers.ValidationError({"tenant_id": "Invalid tenant ID"})
+        # 移除任何可能传入的 tenant_id，防止未授权租户绑定
+        data.pop('tenant_id', None)
         
         return data
     
@@ -696,12 +671,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
         
         # 设置其他字段
-        for field in ['phone', 'nick_name', 'tenant']:
+        for field in ['phone', 'nick_name', 'wechat_id']:
             if field in validated_data:
                 setattr(user, field, validated_data[field])
         
-        # 设置管理员状态
+        # 普通注册用户默认非管理员
         user.is_admin = False
+        user.is_staff = False
         user.status = 'active'
         
         user.save()
@@ -726,9 +702,14 @@ class SubAccountCreateSerializer(ImageFieldNormalizerMixin, serializers.ModelSer
     
     def validate_username(self, value):
         """
-        验证用户名是否已存在
+        验证用户名是否在当前租户内已存在
         """
-        if Member.objects.filter(username=value).exists():
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        tenant = getattr(request.user, 'tenant', None) if request and hasattr(request, 'user') else None
+        qs = Member.objects.filter(username=value, is_deleted=False)
+        if tenant:
+            qs = qs.filter(tenant=tenant)
+        if qs.exists():
             raise serializers.ValidationError("Username already in use")
         return value
 
@@ -1149,9 +1130,14 @@ class SubAccountCreateSerializer(serializers.ModelSerializer):
     
     def validate_username(self, value):
         """
-        验证用户名是否已存在
+        验证用户名是否在当前租户内已存在
         """
-        if Member.objects.filter(username=value).exists():
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        tenant = getattr(request.user, 'tenant', None) if request and hasattr(request, 'user') else None
+        qs = Member.objects.filter(username=value, is_deleted=False)
+        if tenant:
+            qs = qs.filter(tenant=tenant)
+        if qs.exists():
             raise serializers.ValidationError("Username already in use")
         return value
 

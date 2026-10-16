@@ -5,9 +5,10 @@
 - TaskCategory/TaskTemplate: 租户管理员 CRUD，Member 只读
 - Task/CheckRecord/CheckinCycle: Member CRUD 自己的数据
 """
+from django.db import IntegrityError
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
-from rest_framework import viewsets, permissions, status, filters
+from rest_framework import viewsets, permissions, status, filters, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -201,13 +202,16 @@ class CheckRecordViewSet(TenantModelViewSet):
         return queryset.none()
     
     def perform_create(self, serializer):
-        """创建时自动设置 member 和 tenant"""
+        """创建时自动设置 member 和 tenant，并捕获数据库重复打卡异常"""
         user = self.request.user
         if not isinstance(user, Member):
             raise permissions.PermissionDenied(_("只有Member用户可以打卡"))
         
         tenant = user.tenant if hasattr(user, 'tenant') else None
-        serializer.save(member=user, tenant=tenant)
+        try:
+            serializer.save(member=user, tenant=tenant)
+        except IntegrityError:
+            raise serializers.ValidationError({"error": _("今日已打卡，请勿重复打卡")})
         
         target = serializer.validated_data.get('task') or serializer.validated_data.get('theme')
         target_name = target.name if target else "未知"

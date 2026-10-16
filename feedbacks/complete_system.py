@@ -147,6 +147,20 @@ class FeedbackVoteView(APIView):
         # 获取租户
         tenant = self._get_tenant_from_request(request)
         
+        # 防刷/幂等：如果用户已经投了完全相同类型的票，直接返回无需重复操作
+        existing_vote = FeedbackVote.objects.filter(
+            feedback=feedback,
+            user=request.user
+        ).first()
+        
+        if existing_vote and existing_vote.vote_type == vote_type:
+            feedback.refresh_from_db(fields=['vote_count'])
+            return Response({
+                'message': 'Vote already recorded',
+                'vote_type': vote_type,
+                'total_votes': feedback.vote_count
+            })
+        
         vote, created = FeedbackVote.objects.update_or_create(
             feedback=feedback,
             user=request.user,
@@ -154,7 +168,7 @@ class FeedbackVoteView(APIView):
         )
         
         # 刷新获取最新的vote_count
-        feedback.refresh_from_db()
+        feedback.refresh_from_db(fields=['vote_count'])
         
         return Response({
             'message': 'Vote recorded',

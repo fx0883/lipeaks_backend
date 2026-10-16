@@ -11,6 +11,7 @@ from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 from django.utils import timezone
+from common.pagination import StandardResultsSetPagination
 
 from ..models import Feedback, FeedbackStatusHistory
 from ..serializers import (
@@ -61,6 +62,7 @@ def get_tenant_from_request(request):
 class FeedbackListView(APIView):
     """反馈列表和创建API - GET和POST都不需要认证"""
     permission_classes = [AllowAny]  # ✅ 允许匿名访问和提交反馈
+    pagination_class = StandardResultsSetPagination
     
     @extend_schema(
         tags=['Feedback System'],
@@ -88,8 +90,8 @@ class FeedbackListView(APIView):
         tenant = get_tenant_from_request(request)
         user = request.user
         
-        # 基础查询集（TenantManager已自动过滤is_deleted=False）
-        queryset = Feedback.objects.all()
+        # 基础查询集（预加载 application, user, tenant 消除 N+1）
+        queryset = Feedback.objects.select_related('application', 'user', 'tenant').all()
         
         # 租户过滤
         if tenant:
@@ -137,6 +139,13 @@ class FeedbackListView(APIView):
         ordering = request.query_params.get('ordering', '-created_at')
         queryset = queryset.order_by(ordering)
         
+        # 分页接入 (防 OOM)
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = FeedbackListSerializer(page, many=True, context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
+            
         serializer = FeedbackListSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
     

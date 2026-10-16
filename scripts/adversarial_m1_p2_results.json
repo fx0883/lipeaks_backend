@@ -1,0 +1,199 @@
+{
+  "total_tests": 32,
+  "passed_tests": 32,
+  "failed_tests": 0,
+  "details": [
+    {
+      "name": "stub_absent_customers",
+      "passed": true,
+      "message": "File confirmed deleted: D:\\Github\\lipeaks_backend\\customers\\views.py",
+      "data": null
+    },
+    {
+      "name": "stub_absent_feedbacks",
+      "passed": true,
+      "message": "File confirmed deleted: D:\\Github\\lipeaks_backend\\feedbacks\\views.py",
+      "data": null
+    },
+    {
+      "name": "stub_absent_licenses",
+      "passed": true,
+      "message": "File confirmed deleted: D:\\Github\\lipeaks_backend\\licenses\\views.py",
+      "data": null
+    },
+    {
+      "name": "stub_absent_users",
+      "passed": true,
+      "message": "File confirmed deleted: D:\\Github\\lipeaks_backend\\users\\views.py",
+      "data": null
+    },
+    {
+      "name": "no_pyc_shadowing_customers",
+      "passed": true,
+      "message": "Zero shadowing bytecode in customers/__pycache__",
+      "data": null
+    },
+    {
+      "name": "no_pyc_shadowing_feedbacks",
+      "passed": true,
+      "message": "Zero shadowing bytecode in feedbacks/__pycache__",
+      "data": null
+    },
+    {
+      "name": "no_pyc_shadowing_licenses",
+      "passed": true,
+      "message": "Zero shadowing bytecode in licenses/__pycache__",
+      "data": null
+    },
+    {
+      "name": "no_pyc_shadowing_users",
+      "passed": true,
+      "message": "Zero shadowing bytecode in users/__pycache__",
+      "data": null
+    },
+    {
+      "name": "import_customers_views",
+      "passed": true,
+      "message": "Is package: True, CustomerViewSet found: True",
+      "data": null
+    },
+    {
+      "name": "import_feedbacks_views",
+      "passed": true,
+      "message": "Is package: True, FeedbackListView found: True",
+      "data": null
+    },
+    {
+      "name": "import_licenses_views",
+      "passed": true,
+      "message": "Is package: True, LicenseViewSet found in admin_views: True",
+      "data": null
+    },
+    {
+      "name": "import_users_views",
+      "passed": true,
+      "message": "Is package: True, LoginView & AdminUserListCreateView found: True",
+      "data": null
+    },
+    {
+      "name": "orders_dir_absent",
+      "passed": true,
+      "message": "Directory exists: False",
+      "data": null
+    },
+    {
+      "name": "import_orders_raises_modulenotfound",
+      "passed": true,
+      "message": "Correctly raised ModuleNotFoundError: No module named 'orders'",
+      "data": null
+    },
+    {
+      "name": "orders_not_in_installed_apps",
+      "passed": true,
+      "message": "Orders found in INSTALLED_APPS: False",
+      "data": null
+    },
+    {
+      "name": "orders_not_in_urls",
+      "passed": true,
+      "message": "orders keyword in urls.py: False",
+      "data": null
+    },
+    {
+      "name": "whitenoise_setting_runtime",
+      "passed": true,
+      "message": "WHITENOISE_AUTOREFRESH=True (bool=True), typo exists=False",
+      "data": null
+    },
+    {
+      "name": "whitenoise_setting_source",
+      "passed": true,
+      "message": "Source has 'WHITENOISE_AUTOREFRESH = DEBUG': True, typo absent: True",
+      "data": null
+    },
+    {
+      "name": "whitenoise_middleware_configured",
+      "passed": true,
+      "message": "WhiteNoiseMiddleware present in MIDDLEWARE: True",
+      "data": null
+    },
+    {
+      "name": "handler_dip_decoupling",
+      "passed": true,
+      "message": "No TenantException import: True, No reverse biz app imports: True",
+      "data": null
+    },
+    {
+      "name": "all_19_domain_exceptions_handler_contract",
+      "passed": true,
+      "message": "Successfully tested all 19 domain exceptions across 5 modules. Status codes & envelopes 100% conform.",
+      "data": null
+    },
+    {
+      "name": "handler_robustness_empty_context",
+      "passed": true,
+      "message": "Handler handles empty context robustly",
+      "data": null
+    },
+    {
+      "name": "circular_import_topology_1",
+      "passed": true,
+      "message": "Topology 1 clean without circular import. Output: === Running tenants/admin.py ===\n=== tenants/admin.py execution completed ===\n=== admin._registry contains Tenant model: True ===\n=== admin._registry contains TenantQuota model: True ===\n=== Running users/admin.py ===\n=== users/admin.py execution completed ===\n=== admin._registry contains User model: True ===\n=== admin._registry contains Member model: True ===\nTOPOLOGY_1_OK",
+      "data": null
+    },
+    {
+      "name": "circular_import_topology_2",
+      "passed": true,
+      "message": "Topology 2 clean without circular import. Output: === Running tenants/admin.py ===\n=== tenants/admin.py execution completed ===\n=== admin._registry contains Tenant model: True ===\n=== admin._registry contains TenantQuota model: True ===\n=== Running users/admin.py ===\n=== users/admin.py execution completed ===\n=== admin._registry contains User model: True ===\n=== admin._registry contains Member model: True ===\nTOPOLOGY_2_OK",
+      "data": null
+    },
+    {
+      "name": "circular_import_topology_3",
+      "passed": true,
+      "message": "Topology 3 clean without circular import. Output: === Running tenants/admin.py ===\n=== tenants/admin.py execution completed ===\n=== admin._registry contains Tenant model: True ===\n=== admin._registry contains TenantQuota model: True ===\n=== Running users/admin.py ===\n=== users/admin.py execution completed ===\n=== admin._registry contains User model: True ===\n=== admin._registry contains Member model: True ===\nTOPOLOGY_3_OK",
+      "data": null
+    },
+    {
+      "name": "circular_import_topology_4",
+      "passed": true,
+      "message": "Topology 4 clean without circular import. Output: === Running tenants/admin.py ===\n=== tenants/admin.py execution completed ===\n=== admin._registry contains Tenant model: True ===\n=== admin._registry contains TenantQuota model: True ===\n=== Running users/admin.py ===\n=== users/admin.py execution completed ===\n=== admin._registry contains User model: True ===\n=== admin._registry contains Member model: True ===\nTOPOLOGY_4_OK",
+      "data": null
+    },
+    {
+      "name": "circular_import_stress_harness",
+      "passed": true,
+      "message": "All 4 circular import topologies cleanly executed in isolated processes",
+      "data": null
+    },
+    {
+      "name": "protected_file_.env",
+      "passed": true,
+      "message": "Intact (size=366 bytes)",
+      "data": null
+    },
+    {
+      "name": "protected_file_.env.prod",
+      "passed": true,
+      "message": "Intact (size=441 bytes)",
+      "data": null
+    },
+    {
+      "name": "protected_file_wechat\\wechat_config.json",
+      "passed": true,
+      "message": "Intact (size=908 bytes)",
+      "data": null
+    },
+    {
+      "name": "protected_file_CODE_REVIEW_REPORT.md",
+      "passed": true,
+      "message": "Intact (size=83437 bytes)",
+      "data": null
+    },
+    {
+      "name": "protected_files_not_modified_in_git",
+      "passed": true,
+      "message": "Protected files modified in git diff: []",
+      "data": null
+    }
+  ]
+}

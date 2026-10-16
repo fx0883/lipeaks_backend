@@ -322,17 +322,23 @@ class ArticleListSerializer(serializers.ModelSerializer):
         return None
     
     def get_categories(self, obj) -> list:
-        """获取文章关联的分类"""
-        categories = Category.objects.filter(
-            article_categories__article=obj
-        )
+        """获取文章关联的分类（优先使用 prefetch 缓存）"""
+        if hasattr(obj, '_prefetched_objects_cache') and 'article_categories' in obj._prefetched_objects_cache:
+            categories = [ac.category for ac in obj.article_categories.all() if ac.category]
+        else:
+            categories = Category.objects.filter(
+                article_categories__article=obj
+            )
         return SimpleCategorySerializer(categories, many=True).data
     
     def get_tags(self, obj) -> list:
-        """获取文章关联的标签"""
-        tags = Tag.objects.filter(
-            article_tags__article=obj
-        )
+        """获取文章关联的标签（优先使用 prefetch 缓存）"""
+        if hasattr(obj, '_prefetched_objects_cache') and 'article_tags' in obj._prefetched_objects_cache:
+            tags = [at.tag for at in obj.article_tags.all() if at.tag]
+        else:
+            tags = Tag.objects.filter(
+                article_tags__article=obj
+            )
         return SimpleTagSerializer(tags, many=True).data
     
     def get_comments_count(self, obj) -> int:
@@ -391,7 +397,9 @@ class ArticleListSerializer(serializers.ModelSerializer):
         return None
     
     def get_children_count(self, obj) -> int:
-        """获取子文章数量"""
+        """获取子文章数量（优先使用 annotate 聚合结果）"""
+        if hasattr(obj, 'annotated_children_count'):
+            return obj.annotated_children_count
         return obj.children.count()
 
 
@@ -444,17 +452,23 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
         return None
     
     def get_categories(self, obj) -> list:
-        """获取文章关联的分类"""
-        categories = Category.objects.filter(
-            article_categories__article=obj
-        )
+        """获取文章关联的分类（优先使用 prefetch 缓存）"""
+        if hasattr(obj, '_prefetched_objects_cache') and 'article_categories' in obj._prefetched_objects_cache:
+            categories = [ac.category for ac in obj.article_categories.all() if ac.category]
+        else:
+            categories = Category.objects.filter(
+                article_categories__article=obj
+            )
         return SimpleCategorySerializer(categories, many=True).data
     
     def get_tags(self, obj) -> list:
-        """获取文章关联的标签"""
-        tags = Tag.objects.filter(
-            article_tags__article=obj
-        )
+        """获取文章关联的标签（优先使用 prefetch 缓存）"""
+        if hasattr(obj, '_prefetched_objects_cache') and 'article_tags' in obj._prefetched_objects_cache:
+            tags = [at.tag for at in obj.article_tags.all() if at.tag]
+        else:
+            tags = Tag.objects.filter(
+                article_tags__article=obj
+            )
         return SimpleTagSerializer(tags, many=True).data
     
     def get_version_info(self, obj) -> dict:

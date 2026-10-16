@@ -1,0 +1,103 @@
+{
+  "total_tests": 16,
+  "passed_tests": 16,
+  "failed_tests": 0,
+  "details": [
+    {
+      "name": "makemigrations_points_dry_run",
+      "passed": true,
+      "message": "Successfully ran makemigrations points --dry-run without DisableMigrations error",
+      "data": null
+    },
+    {
+      "name": "makemigrations_users_dry_run",
+      "passed": true,
+      "message": "Successfully ran makemigrations users --dry-run",
+      "data": null
+    },
+    {
+      "name": "showmigrations_points",
+      "passed": true,
+      "message": "Successfully ran showmigrations points",
+      "data": null
+    },
+    {
+      "name": "renderer_raw_dict_wrapping",
+      "passed": true,
+      "message": "Valid envelope: True, Double wrapped: False",
+      "data": null
+    },
+    {
+      "name": "renderer_prewrapped_dict_no_double_wrap",
+      "passed": true,
+      "message": "Double wrapped: False, Inner data preserved: True",
+      "data": null
+    },
+    {
+      "name": "renderer_list_wrapping",
+      "passed": true,
+      "message": "List wrapped properly: True",
+      "data": null
+    },
+    {
+      "name": "renderer_none_handling",
+      "passed": true,
+      "message": "None wrapped correctly with data=None: True",
+      "data": null
+    },
+    {
+      "name": "renderer_validation_error_wrapping",
+      "passed": true,
+      "message": "Error envelope valid: True",
+      "data": null
+    },
+    {
+      "name": "renderer_business_exception_wrapping",
+      "passed": true,
+      "message": "Business error envelope valid: True",
+      "data": null
+    },
+    {
+      "name": "http_endpoint__api_v1_common_system-info_",
+      "passed": true,
+      "message": "Status: 200, Outer envelope: True, Double wrapped: False",
+      "data": null
+    },
+    {
+      "name": "http_endpoint__api_v1_common_test-format-class_",
+      "passed": true,
+      "message": "Status: 200, Outer envelope: True, Double wrapped: False",
+      "data": null
+    },
+    {
+      "name": "http_endpoint__api_v1_common_test-error-class_",
+      "passed": true,
+      "message": "Status: 400, Outer envelope: True, Double wrapped: False",
+      "data": null
+    },
+    {
+      "name": "http_endpoint__api_v1_common_test-pagination-class_",
+      "passed": true,
+      "message": "Status: 200, Outer envelope: True, Double wrapped: False",
+      "data": null
+    },
+    {
+      "name": "contextvar_100_thread_stress",
+      "passed": true,
+      "message": "100 threads, 20 iterations each. Errors detected: 0",
+      "data": null
+    },
+    {
+      "name": "contextvar_100_async_stress",
+      "passed": true,
+      "message": "100 coroutines, 20 iterations each. Zero bleed.",
+      "data": null
+    },
+    {
+      "name": "contextvar_nested_exception_recovery",
+      "passed": true,
+      "message": "3 levels nested exception correctly restored each outer frame",
+      "data": null
+    }
+  ]
+}

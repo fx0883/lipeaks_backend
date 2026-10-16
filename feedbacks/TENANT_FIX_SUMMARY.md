@@ -129,7 +129,7 @@ FeedbackAttachment.objects.create(
 
 ## 测试验证
 
-创建了测试脚本 `feedbacks/test_tenant_fix.py`，用于验证所有实体的租户ID设置是否正确。
+创建了测试脚本 `feedbacks/fix_tenant_script.py`，用于验证所有实体的租户ID设置是否正确。
 
 ### 测试覆盖的模型：
 - SoftwareCategory
@@ -143,7 +143,7 @@ FeedbackAttachment.objects.create(
 
 ### 运行测试：
 ```bash
-python manage.py shell < feedbacks/test_tenant_fix.py
+python manage.py shell < feedbacks/fix_tenant_script.py
 ```
 
 ## 影响范围
@@ -193,4 +193,4 @@ instance.save()
 
 ## 相关文档
 - 任务详情：`.tasks/feedbacks_tenant_id_fix_20241121.md`
-- 测试脚本：`feedbacks/test_tenant_fix.py`
+- 测试脚本：`feedbacks/fix_tenant_script.py`

@@ -212,7 +212,9 @@ class LicenseSerializer(serializers.ModelSerializer):
     
     @extend_schema_field(serializers.IntegerField())
     def get_machine_bindings_count(self, obj):
-        """获取活跃机器绑定数量"""
+        """获取活跃机器绑定数量（优先读取 annotate 聚合结果）"""
+        if hasattr(obj, 'active_bindings_count'):
+            return obj.active_bindings_count
         return obj.machine_bindings.filter(status='active').count()
     
     @extend_schema_field(serializers.IntegerField(allow_null=True))

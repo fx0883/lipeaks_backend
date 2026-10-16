@@ -248,6 +248,18 @@ class CheckRecord(BaseModel):
         verbose_name_plural = _('打卡记录')
         db_table = 'check_record'
         ordering = ['-check_date', '-check_time']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['member', 'task', 'check_date'],
+                condition=models.Q(task__isnull=False, is_deleted=False),
+                name='unique_member_task_check_date'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['member', 'check_date'], name='check_rec_member_date_idx'),
+            models.Index(fields=['tenant', 'check_date'], name='check_rec_tenant_date_idx'),
+            models.Index(fields=['check_date'], name='check_rec_date_idx'),
+        ]
     
     def __str__(self):
         target = self.task.name if self.task else (self.theme.name if self.theme else "未知")

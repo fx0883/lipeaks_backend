@@ -832,7 +832,8 @@ class TenantUserTypeTag(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=['tenant', 'member', 'tag'],
-                name='unique_tenant_member_tag'
+                condition=models.Q(is_active=True),
+                name='unique_active_tenant_member_tag'
             ),
             models.CheckConstraint(
                 condition=models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=models.F('granted_at')),

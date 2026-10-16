@@ -5,10 +5,28 @@
 """
 import logging
 from django.conf import settings
+from django.core.cache import cache
 from common.utils.error_response_builder import TenantErrorResponseBuilder, TenantErrorTypes
 from common.utils.tenant_context import set_current_tenant
 
 logger = logging.getLogger(__name__)
+
+TENANT_CACHE_KEY_PREFIX = "tenant:obj:"
+
+
+def invalidate_tenant_cache(tenant_id):
+    """
+    清除指定租户的缓存
+    
+    Args:
+        tenant_id: 租户ID
+    """
+    try:
+        if tenant_id:
+            cache_key = f"{TENANT_CACHE_KEY_PREFIX}{int(tenant_id)}"
+            cache.delete(cache_key)
+    except Exception as e:
+        logger.warning(f"清除租户缓存失败 (ID: {tenant_id}): {e}")
 
 
 class TenantValidator:
@@ -65,24 +83,40 @@ class TenantValidator:
     
     def _get_tenant_by_id(self, tenant_id):
         """
-        根据ID获取租户对象
+        根据ID获取租户对象（带缓存优化）
         
         Args:
-            tenant_id: 租户ID字符串
+            tenant_id: 租户ID字符串或整数
         
         Returns:
             Tenant|None: 租户对象，不存在时返回None
         """
         try:
+            tenant_id_int = int(tenant_id)
+        except (ValueError, TypeError) as e:
+            self.logger.error(f"租户ID格式错误: {tenant_id}, 错误: {e}")
+            return None
+
+        cache_key = f"{TENANT_CACHE_KEY_PREFIX}{tenant_id_int}"
+        
+        # 1. 优先尝试从缓存获取
+        cached_tenant = cache.get(cache_key)
+        if cached_tenant is not None:
+            self.logger.debug(f"命中租户缓存: {cached_tenant.name} (ID: {tenant_id_int})")
+            return cached_tenant
+
+        # 2. 缓存未命中，查库
+        try:
             from tenants.models import Tenant
-            tenant = Tenant.objects.get(id=int(tenant_id))
-            self.logger.info(f"找到租户: {tenant.name} (ID: {tenant_id}, 状态: {tenant.status})")
+            tenant = Tenant.objects.get(id=tenant_id_int)
+            self.logger.info(f"找到租户: {tenant.name} (ID: {tenant_id_int}, 状态: {tenant.status})")
+            
+            # 3. 写入缓存（默认 1800 秒 / 30 分钟）
+            timeout = getattr(settings, 'TENANT_CACHE_TIMEOUT', 1800)
+            cache.set(cache_key, tenant, timeout)
             return tenant
         except Tenant.DoesNotExist:
             self.logger.warning(f"指定的租户ID不存在: {tenant_id}")
-            return None
-        except (ValueError, TypeError) as e:
-            self.logger.error(f"租户ID格式错误: {tenant_id}, 错误: {e}")
             return None
     
     def set_request_attributes(self, tenant_info):
