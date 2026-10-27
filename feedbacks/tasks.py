@@ -36,7 +36,7 @@ def send_feedback_reply_email(self, reply_id: int) -> Dict[str, any]:
     """
     try:
         reply = FeedbackReply.objects.select_related(
-            'feedback', 'feedback__software', 'user'
+            'feedback', 'feedback__application', 'user'
         ).get(pk=reply_id)
         
         feedback = reply.feedback
@@ -77,8 +77,8 @@ def send_feedback_reply_email(self, reply_id: int) -> Dict[str, any]:
             'feedback_id': feedback.id,
             'reply_content': reply.content,
             'reply_user': reply.user.username if reply.user else 'Support Team',
-            'software_name': feedback.application.name,
-            'application_version': feedback.application_version.version if feedback.application_version else 'N/A',
+            'software_name': feedback.application.name if feedback.application else 'N/A',
+            'application_version': feedback.app_version or 'N/A',
             'view_url': f"{settings.FRONTEND_URL}/feedback/{feedback.id}",
             'unsubscribe_url': f"{settings.FRONTEND_URL}/feedback/{feedback.id}/unsubscribe",
         }
@@ -165,7 +165,7 @@ def send_status_change_email(self, status_history_id: int) -> Dict[str, any]:
     """
     try:
         history = FeedbackStatusHistory.objects.select_related(
-            'feedback', 'feedback__software', 'changed_by'
+            'feedback', 'feedback__application', 'changed_by'
         ).get(pk=status_history_id)
         
         feedback = history.feedback
@@ -198,7 +198,7 @@ def send_status_change_email(self, status_history_id: int) -> Dict[str, any]:
             'new_status': history.get_to_status_display(),
             'changed_by': history.changed_by.username if history.changed_by else 'System',
             'change_reason': history.reason or 'Status updated',
-            'software_name': feedback.application.name,
+            'software_name': feedback.application.name if feedback.application else 'N/A',
             'view_url': f"{settings.FRONTEND_URL}/feedback/{feedback.id}",
         }
         
@@ -269,7 +269,7 @@ def send_verification_email(self, feedback_id: int) -> Dict[str, any]:
         Dictionary with task result
     """
     try:
-        feedback = Feedback.objects.select_related('software').get(pk=feedback_id)
+        feedback = Feedback.objects.select_related('application').get(pk=feedback_id)
         
         # Skip if already verified or has user
         if feedback.email_verified or feedback.user:
@@ -287,13 +287,15 @@ def send_verification_email(self, feedback_id: int) -> Dict[str, any]:
             is_active=True
         ).first()
         
+        app_name = feedback.application.name if feedback.application else 'N/A'
+        
         if not template:
             # Use default template
             subject = "Verify your email for feedback submission"
             verification_url = f"{settings.FRONTEND_URL}/feedback/{feedback.id}/verify?token={feedback.email_verification_token}"
             body_html = f"""
             <h2>Email Verification Required</h2>
-            <p>Thank you for submitting feedback for {feedback.application.name}.</p>
+            <p>Thank you for submitting feedback for {app_name}.</p>
             <p>Please verify your email address to receive updates about your feedback:</p>
             <p><a href="{verification_url}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Verify Email</a></p>
             <p>Or copy this link: {verification_url}</p>
@@ -302,7 +304,7 @@ def send_verification_email(self, feedback_id: int) -> Dict[str, any]:
             body_text = f"""
             Email Verification Required
             
-            Thank you for submitting feedback for {feedback.application.name}.
+            Thank you for submitting feedback for {app_name}.
             
             Please verify your email address by visiting:
             {verification_url}
@@ -314,7 +316,7 @@ def send_verification_email(self, feedback_id: int) -> Dict[str, any]:
             context = {
                 'feedback_title': feedback.title,
                 'feedback_id': feedback.id,
-                'software_name': feedback.application.name,
+                'software_name': app_name,
                 'verification_url': f"{settings.FRONTEND_URL}/feedback/{feedback.id}/verify?token={feedback.email_verification_token}",
                 'contact_name': feedback.contact_name or 'User',
             }

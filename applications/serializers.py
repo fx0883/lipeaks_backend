@@ -55,10 +55,12 @@ class ApplicationCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Application
         fields = [
-            'name', 'code', 'description', 'logo', 'website',
+            'id', 'name', 'code', 'description', 'logo', 'website',
             'contact_email', 'current_version', 'owner', 'team',
-            'status', 'is_active', 'tags', 'metadata'
+            'status', 'is_active', 'tags', 'metadata',
+            'created_at', 'updated_at'
         ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
     
     def validate_code(self, value):
         """验证应用代码唯一性（租户内）"""

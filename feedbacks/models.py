@@ -5,7 +5,8 @@ This module contains all data models for the feedback management system,
 including software management, feedback tracking, and email management.
 """
 
-from django.db import models
+from django.db import models, transaction
+from django.db.models.functions import Greatest
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import FileExtensionValidator, MinValueValidator, MaxValueValidator
@@ -445,29 +446,43 @@ class FeedbackVote(BaseModel):
         vote_display = "👍" if self.vote_type == 1 else "👎"
         return f"{self.user.username} {vote_display} {self.feedback.title[:30]}"
     
+    @transaction.atomic
     def save(self, *args, **kwargs):
-        """Update feedback vote count"""
+        """Update feedback vote count atomically using F expressions"""
         is_new = self.pk is None
-        old_vote = None
-        
+        old_vote = 0
         if not is_new:
-            old_vote = FeedbackVote.objects.get(pk=self.pk).vote_type
+            old_vote = FeedbackVote.objects.filter(pk=self.pk).values_list('vote_type', flat=True).first() or 0
         
         super().save(*args, **kwargs)
         
-        # Update vote count
-        if is_new:
-            self.feedback.vote_count += self.vote_type
-        elif old_vote != self.vote_type:
-            self.feedback.vote_count = self.feedback.vote_count - old_vote + self.vote_type
-        
-        self.feedback.save(update_fields=['vote_count'])
+        diff = self.vote_type if is_new else (self.vote_type - old_vote)
+        if diff != 0:
+            Feedback.objects.filter(id=self.feedback_id).update(
+                vote_count=Greatest(models.F('vote_count') + diff, 0)
+            )
+            if hasattr(self, '_feedback_cache') or 'feedback' in self.__dict__:
+                try:
+                    self.feedback.refresh_from_db(fields=['vote_count'])
+                except Exception:
+                    pass
     
+    @transaction.atomic
     def delete(self, *args, **kwargs):
-        """Update feedback vote count when deleting"""
-        self.feedback.vote_count -= self.vote_type
-        self.feedback.save(update_fields=['vote_count'])
+        """Atomically decrement vote count when deleting vote"""
+        vote_type = self.vote_type
+        feedback_id = self.feedback_id
+        
         super().delete(*args, **kwargs)
+        
+        Feedback.objects.filter(id=feedback_id).update(
+            vote_count=Greatest(models.F('vote_count') - vote_type, 0)
+        )
+        if hasattr(self, '_feedback_cache') or 'feedback' in self.__dict__:
+            try:
+                self.feedback.refresh_from_db(fields=['vote_count'])
+            except Exception:
+                pass
 
 
 # ===================== Email Management Models =====================

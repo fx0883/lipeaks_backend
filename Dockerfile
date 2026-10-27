@@ -1,51 +1,32 @@
-FROM python:3.13-slim-bullseye
+FROM python:3.13-slim
 
 WORKDIR /app
 
-# 更改apt源为中国镜像源并安装系统依赖
-RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list && \
-    sed -i 's|security.debian.org/debian-security|mirrors.ustc.edu.cn/debian-security|g' /etc/apt/sources.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends --fix-missing \
-    default-libmysqlclient-dev \
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 安装基础运行与构建依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    python3-dev \
-    gcc \
-    netcat-openbsd \
+    default-libmysqlclient-dev \
     pkg-config \
-    libxml2-dev \
-    libxslt1-dev \
-    libssl-dev \
-    libffi-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# 复制项目文件
+# 先复制依赖文件并安装
 COPY requirements.txt .
+RUN pip install -r requirements.txt
+RUN pip install django-celery-beat==2.8.1 --no-deps
 
-# 分步安装 Python 依赖 - 先安装基础工具
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir setuptools wheel
-
-# 尝试使用国内镜像源安装依赖
-RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ || \
-    pip install --no-cache-dir -r requirements.txt
-
+# 复制项目所有文件
 COPY . .
 
-# 创建必要的目录
-RUN mkdir -p logs
-RUN mkdir -p staticfiles
-RUN mkdir -p media
-
-# 使容器可执行
-RUN chmod +x /app/docker-entrypoint.sh
-
-# 环境变量
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV DJANGO_SETTINGS_MODULE=core.settings
+# 赋予入口脚本可执行权限
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8000
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"] 
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

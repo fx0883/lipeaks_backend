@@ -8,7 +8,6 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
-from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.core.cache import cache
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter, OpenApiExample
@@ -313,7 +312,6 @@ def available_products(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsMemberUser, CanApplyTrialLicense])
 @throttle_classes([MemberTrialApplicationThrottle])
-@csrf_exempt
 def apply_trial_license(request):
     """
     申请试用许可证
@@ -890,7 +888,6 @@ def my_license_devices(request, license_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsMemberUser])
 @throttle_classes([MemberAPIThrottle])
-@csrf_exempt
 def unbind_device(request):
     """
     解绑设备

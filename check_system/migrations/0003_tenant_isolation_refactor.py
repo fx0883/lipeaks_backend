@@ -12,12 +12,13 @@ class Migration(migrations.Migration):
     1. 所有模型添加 is_deleted 字段（BaseModel）
     2. TaskCategory：移除 user FK
     3. Task：移除 user FK，添加 member FK
-    4. CheckRecord：移除 user FK，添加 member FK，task 改为可选
+    4. CheckRecord：移除 user FK，添加 member FK，添加 tenant FK，task 改为可选
     5. TaskTemplate：移除 user FK
     6. CheckinCycle：移除 user FK，添加 member FK，移除独立的 tenant/created_at/updated_at
     """
 
     dependencies = [
+        ('tenants', '__first__'),
         ('users', '__first__'),
         ('check_system', '0002_add_21day_checkin_fields'),
     ]
@@ -55,7 +56,7 @@ class Migration(migrations.Migration):
             field=models.BooleanField(db_index=True, default=False, verbose_name='是否删除'),
         ),
 
-        # ============ 2. 添加 member FK 到需要的模型（先添加后删除 user）============
+        # ============ 2. 添加 member / tenant FK 到需要的模型 ============
         migrations.AddField(
             model_name='task',
             name='member',
@@ -81,6 +82,18 @@ class Migration(migrations.Migration):
             ),
         ),
         migrations.AddField(
+            model_name='checkrecord',
+            name='tenant',
+            field=models.ForeignKey(
+                null=True,
+                blank=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='check_records',
+                to='tenants.tenant',
+                verbose_name='所属租户'
+            ),
+        ),
+        migrations.AddField(
             model_name='checkincycle',
             name='member',
             field=models.ForeignKey(
@@ -93,7 +106,17 @@ class Migration(migrations.Migration):
             ),
         ),
 
-        # ============ 3. 移除 user FK ============
+        # ============ 3. 先更新 unique_together（避免先删 user 字段时报 KeyError: user） ============
+        migrations.AlterUniqueTogether(
+            name='taskcategory',
+            unique_together={('name', 'tenant')},
+        ),
+        migrations.AlterUniqueTogether(
+            name='checkrecord',
+            unique_together=set(),
+        ),
+
+        # ============ 4. 移除 user FK ============
         migrations.RemoveField(
             model_name='taskcategory',
             name='user',
@@ -115,7 +138,7 @@ class Migration(migrations.Migration):
             name='user',
         ),
 
-        # ============ 4. 修改 task 字段为可选 ============
+        # ============ 5. 修改 task 字段为可选 ============
         migrations.AlterField(
             model_name='checkrecord',
             name='task',
@@ -127,15 +150,5 @@ class Migration(migrations.Migration):
                 to='check_system.task',
                 verbose_name='所属任务'
             ),
-        ),
-
-        # ============ 5. 更新 unique_together ============
-        migrations.AlterUniqueTogether(
-            name='taskcategory',
-            unique_together={('name', 'tenant')},
-        ),
-        migrations.AlterUniqueTogether(
-            name='checkrecord',
-            unique_together=set(),
         ),
     ]

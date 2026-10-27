@@ -14,6 +14,8 @@ from django.urls import reverse, reverse_lazy
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_protect
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
@@ -24,10 +26,12 @@ from django.utils.translation import gettext_lazy as _
 from users.forms import MemberPasswordResetRequestForm, MemberPasswordResetConfirmForm
 from users.models import Member, PasswordResetToken
 from tenants.models import Tenant
+from common.utils.network import get_client_ip
 
 logger = logging.getLogger(__name__)
 
 
+@method_decorator(csrf_protect, name='dispatch')
 class MemberPasswordResetRequestPageView(FormView):
     """
     Member 密码重置请求页面视图
@@ -79,32 +83,34 @@ class MemberPasswordResetRequestPageView(FormView):
         return context
     
     def get_client_ip(self):
-        """获取客户端IP地址"""
-        x_forwarded_for = self.request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = self.request.META.get('REMOTE_ADDR')
-        return ip
+        """安全获取客户端真实IP地址"""
+        return get_client_ip(self.request)
     
     def form_valid(self, form):
         """处理有效的表单提交"""
-        email = form.cleaned_data['email']
+        email = form.cleaned_data['email'].strip().lower()
         # tenant_id 已经在表单中处理（来自用户选择或URL参数）
         tenant_id = int(form.cleaned_data['tenant_id'])
         
-        # Rate limiting: 同一IP每10分钟最多3次请求
+        # Rate limiting: 双维度限流（IP 限制与目标邮箱限制，防御伪造IP穿透和邮件轰炸）
         ip = self.get_client_ip()
-        cache_key = f"password_reset_request:{ip}"
-        request_count = cache.get(cache_key, 0)
+        ip_cache_key = f"password_reset_request:{ip}"
+        email_cache_key = f"password_reset_request:email:{tenant_id}:{email}"
         
-        if request_count >= 13:
+        ip_count = cache.get(ip_cache_key, 0)
+        email_count = cache.get(email_cache_key, 0)
+        
+        if ip_count >= 3 or email_count >= 3:
             messages.error(self.request, _('Too many requests. Please try again later.'))
-            logger.warning(f"IP {ip} 密码重置请求过于频繁")
+            logger.warning(
+                f"密码重置请求过于频繁: IP={ip} (count={ip_count}), "
+                f"Email={email} (tenant={tenant_id}, count={email_count})"
+            )
             return self.form_invalid(form)
         
-        # 增加请求计数
-        cache.set(cache_key, request_count + 1, 6)  # 10分钟
+        # 增加请求计数 (10分钟 / 600秒)
+        cache.set(ip_cache_key, ip_count + 1, 600)
+        cache.set(email_cache_key, email_count + 1, 600)
         
         # 查找Member用户（必须指定租户）
         member = Member.objects.filter(
@@ -200,6 +206,7 @@ class MemberPasswordResetRequestPageView(FormView):
         return super().form_valid(form)
 
 
+@method_decorator(csrf_protect, name='dispatch')
 class MemberPasswordResetFormView(FormView):
     """
     Member 密码重置表单页面视图

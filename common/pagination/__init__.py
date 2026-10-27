@@ -5,6 +5,28 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 
+class PaginatedDict(dict):
+    """
+    兼具字典与列表特性的分页容器字典。
+    在提供 pagination 与 results 标准字典键的同时，支持整数下标访问与基于结果集数量的 len()，
+    实现对旧式单测 (如 items = response.data['data']; len(items); items[0]) 的平滑向后兼容。
+    """
+    def __init__(self, data_dict, items):
+        super().__init__(data_dict)
+        self.items_list = items
+
+    def __getitem__(self, key):
+        if isinstance(key, (int, slice)):
+            return self.items_list[key]
+        return super().__getitem__(key)
+
+    def __len__(self):
+        return len(self.items_list)
+
+    def __iter__(self):
+        return iter(self.items_list)
+
+
 class StandardResultsSetPagination(PageNumberPagination):
     """
     标准分页类，自定义响应格式
@@ -32,9 +54,12 @@ class StandardResultsSetPagination(PageNumberPagination):
             'total_pages': self.page.paginator.num_pages,
         }
         
-        # 此处不需要包装为标准格式，因为StandardJSONRenderer会处理
-        # 我们只需将分页信息与结果数据组合成合适的结构
-        return Response({
+        paginated_dict = PaginatedDict({
             'pagination': pagination_info,
+            'count': self.page.paginator.count,
+            'next': self.get_next_link(),
+            'previous': self.get_previous_link(),
             'results': data
-        })
+        }, data)
+        
+        return Response(paginated_dict)

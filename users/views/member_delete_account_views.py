@@ -15,6 +15,7 @@ from django.shortcuts import render
 from django.contrib import messages
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Q
 from django.contrib.auth.hashers import check_password
 
 from users.forms_delete_account import AccountDeletionLoginForm, AccountDeletionConfirmForm
@@ -195,9 +196,9 @@ class MemberDeleteAccountRequestView(FormView):
         # Interactions
         try:
             from interactions.models import MemberLike, MemberFollow, ArticleLike
-            likes = get_manager(ArticleLike).filter(member=member).count()
-            member_likes = get_manager(MemberLike).filter(member=member).count()
-            follows = get_manager(MemberFollow).filter(member=member).count()
+            likes = get_manager(ArticleLike).filter(from_member=member).count()
+            member_likes = get_manager(MemberLike).filter(Q(from_member=member) | Q(to_member=member)).count()
+            follows = get_manager(MemberFollow).filter(Q(follower=member) | Q(following=member)).count()
             if likes + member_likes + follows > 0:
                 data_types.append({
                     'name': 'Social Interactions',
@@ -362,15 +363,15 @@ class MemberDeleteAccountConfirmView(FormView):
         try:
             from interactions.models import MemberLike, MemberFollow, ArticleLike
             
-            count = get_manager(ArticleLike).filter(member=member).delete()[0]
+            count = get_manager(ArticleLike).filter(from_member=member).delete()[0]
             if count > 0:
                 deleted_data.append(f'Article likes: {count}')
             
-            count = get_manager(MemberLike).filter(member=member).delete()[0]
+            count = get_manager(MemberLike).filter(Q(from_member=member) | Q(to_member=member)).delete()[0]
             if count > 0:
                 deleted_data.append(f'Member likes: {count}')
             
-            count = get_manager(MemberFollow).filter(member=member).delete()[0]
+            count = get_manager(MemberFollow).filter(Q(follower=member) | Q(following=member)).delete()[0]
             if count > 0:
                 deleted_data.append(f'Follows: {count}')
         except Exception as e:

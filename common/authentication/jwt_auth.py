@@ -50,6 +50,15 @@ class JWTAuthentication(authentication.BaseAuthentication):
         
         token = parts[1]
         
+        # 优化：如果该请求此前已经完成了合法的JWT认证，直接复用已认证用户，杜绝重复解码与重复查库
+        raw_req = getattr(request, '_request', request)
+        if (
+            getattr(raw_req, 'auth_type', None) == 'jwt'
+            and hasattr(raw_req, 'user')
+            and getattr(raw_req.user, 'is_authenticated', False)
+        ):
+            return (raw_req.user, token)
+        
         # 验证令牌
         try:
             payload = jwt.decode(
@@ -67,14 +76,18 @@ class JWTAuthentication(authentication.BaseAuthentication):
         # 获取用户
         try:
             user_id = payload.get('user_id')
+            if type(user_id) is not int or user_id <= 0:
+                logger.warning(f"令牌中用户ID非法: {user_id}")
+                raise exceptions.AuthenticationFailed('Invalid token payload: user ID must be a positive integer')
+
             model_type = payload.get('model_type', 'user')  # 默认为User模型
             
             if model_type == 'member' and Member:
-                user = Member.objects.get(pk=user_id, is_active=True, is_deleted=False)
+                user = Member.objects.select_related('tenant').get(pk=user_id, is_active=True, is_deleted=False)
             else:
-                user = User.objects.get(pk=user_id, is_active=True, is_deleted=False)
+                user = User.objects.select_related('tenant').get(pk=user_id, is_active=True, is_deleted=False)
                 
-        except (User.DoesNotExist, Member.DoesNotExist) if Member else User.DoesNotExist:
+        except (User.DoesNotExist, Member.DoesNotExist, ValueError, TypeError, OverflowError) if Member else (User.DoesNotExist, ValueError, TypeError, OverflowError):
             logger.warning(f"用户不存在或已被禁用: {user_id}")
             raise exceptions.AuthenticationFailed('User not found or disabled')
         
@@ -93,6 +106,11 @@ class JWTAuthentication(authentication.BaseAuthentication):
             if user.tenant.status != 'active' or user.tenant.is_deleted:
                 logger.warning(f"用户 {user.username} 的租户 {user.tenant.name} 状态异常")
                 raise exceptions.AuthenticationFailed('Your tenant has been disabled or deleted')
+        
+        # 标记使用的是JWT认证
+        request.auth_type = 'jwt'
+        if hasattr(request, '_request') and request._request is not None:
+            request._request.auth_type = 'jwt'
         
         return (user, token)
     
@@ -229,14 +247,18 @@ def refresh_jwt_token(refresh_token):
         # 获取用户
         try:
             user_id = payload.get('user_id')
+            if type(user_id) is not int or user_id <= 0:
+                logger.warning(f"刷新令牌中用户ID非法: {user_id}")
+                raise exceptions.ValidationError('Invalid token payload: user ID must be a positive integer')
+
             model_type = payload.get('model_type', 'user')  # 默认为User模型
             
             if model_type == 'member' and Member:
-                user = Member.objects.get(pk=user_id, is_active=True, is_deleted=False)
+                user = Member.objects.select_related('tenant').get(pk=user_id, is_active=True, is_deleted=False)
             else:
-                user = User.objects.get(pk=user_id, is_active=True, is_deleted=False)
+                user = User.objects.select_related('tenant').get(pk=user_id, is_active=True, is_deleted=False)
                 
-        except (User.DoesNotExist, Member.DoesNotExist) if Member else User.DoesNotExist:
+        except (User.DoesNotExist, Member.DoesNotExist, ValueError, TypeError, OverflowError) if Member else (User.DoesNotExist, ValueError, TypeError, OverflowError):
             logger.warning(f"刷新令牌对应的用户不存在或已被禁用: {user_id}")
             raise exceptions.ValidationError('User not found or disabled')
         

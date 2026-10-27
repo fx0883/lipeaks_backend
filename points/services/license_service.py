@@ -137,6 +137,7 @@ class TenantAwareLicenseAssignmentService:
             
         except Exception as e:
             self.logger.error(f"许可证分配失败: {e}")
+            transaction.set_rollback(True)
             return {
                 'success': False,
                 'error': 'assignment_failed',
@@ -206,8 +207,11 @@ class TenantAwareLicenseAssignmentService:
                 })
         
         # 统计摘要
+        total_requested = results['total_requested']
+        success_rate = (results['successful'] / total_requested * 100) if total_requested > 0 else 0.0
+
         results['summary'] = {
-            'success_rate': (results['successful'] / results['total_requested']) * 100,
+            'success_rate': success_rate,
             'points_awarded_count': results['successful'],  # 成功分配的都会获得积分
         }
         
@@ -273,6 +277,7 @@ class TenantAwareLicenseAssignmentService:
             
         except Exception as e:
             self.logger.error(f"许可证分配撤销失败: {e}")
+            transaction.set_rollback(True)
             return {
                 'success': False,
                 'error': 'revoke_failed',
@@ -298,7 +303,7 @@ class TenantAwareLicenseAssignmentService:
         assignments = LicenseAssignment.objects.filter(
             member=member,
             tenant=member.tenant
-        ).select_related('license', 'license__product', 'license__plan')
+        ).select_related('license', 'license__application', 'license__plan')
         
         if not include_inactive:
             assignments = assignments.filter(status='active')
@@ -398,7 +403,7 @@ class TenantAwareLicenseAssignmentService:
         
         # 按产品统计
         product_stats = {}
-        assignments_with_product = queryset.select_related('license__product')
+        assignments_with_product = queryset.select_related('license__application')
         for assignment in assignments_with_product:
             product_name = assignment.license.product.name
             if product_name not in product_stats:

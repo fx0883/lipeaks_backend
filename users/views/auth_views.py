@@ -17,6 +17,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 
 from common.authentication.jwt_auth import generate_jwt_token
 from common.utils.image_url import add_domain_to_image_url
+from common.utils.network import get_client_ip
 from users.models import User
 from users.serializers import (
     LoginSerializer, TokenRefreshSerializer, RegisterSerializer,
@@ -350,6 +351,13 @@ class TokenRefreshView(APIView):
             user_id = payload.get('user_id')
             if not user_id:
                 raise jwt.InvalidTokenError('User ID is missing in token')
+            if type(user_id) is not int or user_id <= 0:
+                return Response({
+                    'success': False,
+                    'code': 4001,
+                    'message': 'Invalid user ID in token',
+                    'data': None
+                }, status=status.HTTP_401_UNAUTHORIZED)
             
             # 根据model_type确定用户模型
             model_type = payload.get('model_type', 'user')
@@ -359,9 +367,9 @@ class TokenRefreshView(APIView):
             
             # 根据模型类型查询用户
             if model_type == 'member':
-                user = Member.objects.get(id=user_id, is_active=True, is_deleted=False)
+                user = Member.objects.select_related('tenant').get(id=user_id, is_active=True, is_deleted=False)
             else:
-                user = User.objects.get(id=user_id, is_active=True, is_deleted=False)
+                user = User.objects.select_related('tenant').get(id=user_id, is_active=True, is_deleted=False)
             
             # 检查用户状态
             if user.status != 'active':
@@ -403,7 +411,7 @@ class TokenRefreshView(APIView):
                 'message': 'Invalid refresh token',
                 'data': None
             }, status=status.HTTP_401_UNAUTHORIZED)
-        except (User.DoesNotExist, Member.DoesNotExist) as e:
+        except (User.DoesNotExist, Member.DoesNotExist, ValueError, TypeError, OverflowError) as e:
             logger.warning(f"刷新令牌对应的用户不存在或已被禁用: {str(e)}")
             return Response({
                 'success': False,
@@ -719,14 +727,9 @@ class PasswordResetRequestView(APIView):
     
     def get_client_ip(self, request):
         """
-        获取客户端IP地址
+        安全获取客户端真实IP地址
         """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
+        return get_client_ip(request)
     
     @extend_schema(
         summary="请求密码重置",
@@ -738,24 +741,33 @@ class PasswordResetRequestView(APIView):
     )
     def post(self, request):
         """
-        处理密码重置请求
+        处理密码重置请求（防伪造IP穿透与邮件轰炸双维度频控）
         """
-        # 获取客户端IP
+        # 获取客户端IP与目标邮箱
         ip = self.get_client_ip(request)
+        raw_email = str(request.data.get('email', '')).strip().lower()
         
-        # 检查请求限制（同一IP每10分钟最多3次请求）
+        # 检查请求限制（同一IP或同一目标邮箱每10分钟最多3次请求）
         from django.core.cache import cache
         from rest_framework.exceptions import Throttled
         
-        cache_key = f"password_reset_request:{ip}"
-        request_count = cache.get(cache_key, 0)
+        ip_cache_key = f"password_reset_request:{ip}"
+        ip_count = cache.get(ip_cache_key, 0)
         
-        if request_count >= 3:
-            logger.warning(f"IP {ip} 请求密码重置过于频繁")
+        email_cache_key = f"password_reset_request:email:{raw_email}" if raw_email else None
+        email_count = cache.get(email_cache_key, 0) if email_cache_key else 0
+        
+        if ip_count >= 3 or email_count >= 3:
+            logger.warning(
+                f"密码重置请求过于频繁: IP={ip} (count={ip_count}), "
+                f"Email={raw_email} (count={email_count})"
+            )
             raise Throttled(detail="Too many requests, please try again later")
         
-        # 增加请求计数并设置过期时间
-        cache.set(cache_key, request_count + 1, 600)  # 10分钟 = 600秒
+        # 增加请求计数并设置过期时间（10分钟 = 600秒）
+        cache.set(ip_cache_key, ip_count + 1, 600)
+        if email_cache_key:
+            cache.set(email_cache_key, email_count + 1, 600)
         
         serializer = PasswordResetRequestSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():

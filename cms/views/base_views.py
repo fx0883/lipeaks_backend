@@ -1,6 +1,7 @@
 """
 CMS系统视图
 """
+from django.db import IntegrityError
 from django.db.models import Q, Count, Avg, F
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
@@ -44,6 +45,20 @@ from ..permissions import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def get_effective_tenant(request):
+    """获取请求的有效租户对象（支持超管、租户管理员和Member）"""
+    user = getattr(request, 'user', None)
+    if user and getattr(user, 'is_authenticated', False) and getattr(user, 'tenant', None):
+        return user.tenant
+    from tenants.models import Tenant
+    tid = getattr(request, 'tenant_id', None) or request.headers.get('X-Tenant-ID') or request.GET.get('tenant_id')
+    if tid:
+        t = Tenant.objects.filter(id=tid, is_deleted=False).first()
+        if t:
+            return t
+    return Tenant.objects.filter(is_deleted=False).first()
 
 
 @extend_schema_view(
@@ -276,8 +291,14 @@ class ArticleViewSet(TenantModelViewSet):
     search_fields = ['title', 'content', 'excerpt']
     ordering_fields = ['created_at', 'updated_at', 'published_at', 'title']
     ordering = ['-is_pinned', '-created_at']
-    queryset = Article.objects.all().select_related('user', 'member', 'tenant')  # 优化查询：预加载user和member
-    
+    queryset = Article.objects.all().select_related(
+        'user__tenant', 'member__tenant', 'user', 'member', 'tenant', 'statistics', 'parent'
+    ).prefetch_related(
+        'article_categories__category',
+        'article_tags__tag'
+    ).annotate(
+        annotated_children_count=Count('children', distinct=True)
+    )
     def get_queryset(self):
         """
         获取文章查询集，支持多种过滤条件
@@ -305,6 +326,10 @@ class ArticleViewSet(TenantModelViewSet):
         category_id = self.request.query_params.get('category_id')
         if category_id:
             queryset = queryset.filter(article_categories__category_id=category_id)
+        
+        category_slug = self.request.query_params.get('category_slug')
+        if category_slug:
+            queryset = queryset.filter(article_categories__category__slug=category_slug)
         
         # 处理分类应用过滤（通过分类关联的应用过滤文章）
         category_application_id = self.request.query_params.get('category_application_id')
@@ -423,12 +448,13 @@ class ArticleViewSet(TenantModelViewSet):
         if not can_create_content(user):
             raise serializers.ValidationError(_("You do not have permission to create articles"))
         
-        # 根据用户类型设置对应的外键字段
+        # 根据用户类型设置对应的外键字段及租户
         from users.models import Member
+        tenant = getattr(user, 'tenant', None) or get_effective_tenant(self.request)
         if isinstance(user, Member):
-            serializer.save(member=user)
+            serializer.save(member=user, tenant=tenant)
         else:
-            serializer.save(user=user)
+            serializer.save(user=user, tenant=tenant)
         
         # 记录操作日志
         self._record_operation_log('create', serializer.instance)
@@ -799,14 +825,20 @@ class ArticleViewSet(TenantModelViewSet):
         
         # 更新文章统计
         try:
-            stats, created = ArticleStatistics.objects.get_or_create(
-                article=article,
-                tenant=article.tenant
-            )
+            # 并发防御式初始化统计记录
+            try:
+                ArticleStatistics.objects.get_or_create(
+                    article=article,
+                    defaults={'tenant': article.tenant}
+                )
+            except IntegrityError:
+                pass
             
-            # 更新阅读次数
-            stats.views_count += 1
-            stats.save()
+            # 数据库级原子自增 views_count 并刷新时间戳
+            ArticleStatistics.objects.filter(article=article).update(
+                views_count=F('views_count') + 1,
+                updated_at=timezone.now()
+            )
             
         except Exception as e:
             logger.error(f"更新文章统计数据失败: {str(e)}")
@@ -1378,7 +1410,7 @@ class CategoryViewSet(TenantModelViewSet):
     ordering_fields = ['sort_order', 'created_at', 'is_pinned']  # 移除name（翻译字段不能直接排序）
     ordering = ['-is_pinned', 'sort_order', 'id']  # 使用id替代name
     pagination_class = None  # 禁用分页
-    queryset = Category.objects.all().select_related('parent', 'tenant', 'application')  # 添加select_related优化查询
+    queryset = Category.objects.all().select_related('parent', 'tenant', 'application').prefetch_related('translations')  # 添加select_related和prefetch_related优化查询
     
     def get_queryset(self):
         """
@@ -1416,7 +1448,7 @@ class CategoryViewSet(TenantModelViewSet):
         - 记录操作日志
         """
         user = self.request.user
-        tenant = user.tenant
+        tenant = getattr(user, 'tenant', None) or get_effective_tenant(self.request)
         
         # 设置租户ID
         serializer.validated_data['tenant'] = tenant
@@ -1426,12 +1458,13 @@ class CategoryViewSet(TenantModelViewSet):
         
         # 记录操作日志
         try:
+            cat_name = category.safe_translation_getter('name', any_language=True) or category.slug or f"Category-{category.id}"
             OperationLog.objects.create(
                 user=user,
                 action='create',
                 entity_type='category',
                 entity_id=category.id,
-                details=f"创建分类: {category.name}",
+                details=f"创建分类: {cat_name}",
                 ip_address=self.request.META.get('REMOTE_ADDR'),
                 user_agent=self.request.META.get('HTTP_USER_AGENT'),
                 tenant=tenant
@@ -1448,19 +1481,20 @@ class CategoryViewSet(TenantModelViewSet):
         - 记录操作日志
         """
         user = self.request.user
-        tenant = user.tenant
+        tenant = getattr(user, 'tenant', None) or get_effective_tenant(self.request)
         
         # 更新分类
         category = serializer.save()
         
         # 记录操作日志
         try:
+            cat_name = category.safe_translation_getter('name', any_language=True) or category.slug or f"Category-{category.id}"
             OperationLog.objects.create(
                 user=user,
                 action='update',
                 entity_type='category',
                 entity_id=category.id,
-                details=f"更新分类: {category.name}",
+                details=f"更新分类: {cat_name}",
                 ip_address=self.request.META.get('REMOTE_ADDR'),
                 user_agent=self.request.META.get('HTTP_USER_AGENT'),
                 tenant=tenant
@@ -1478,10 +1512,14 @@ class CategoryViewSet(TenantModelViewSet):
         - 记录操作日志
         """
         user = self.request.user
-        tenant = user.tenant
+        tenant = getattr(user, 'tenant', None) or get_effective_tenant(self.request)
         
-        # 检查是否有文章关联到该分类
-        has_articles = ArticleCategory.objects.filter(category=instance).exists()
+        # 检查是否有活跃文章关联到该分类
+        ArticleCategory.objects.filter(category=instance, article__status='archived').delete()
+        has_articles = ArticleCategory.objects.filter(
+            category=instance, 
+            article__is_deleted=False
+        ).exclude(article__status='archived').exists()
         if has_articles:
             raise serializers.ValidationError(_("Cannot delete category with associated articles, please remove associated articles first"))
         
@@ -1492,12 +1530,13 @@ class CategoryViewSet(TenantModelViewSet):
         
         # 记录操作日志
         try:
+            inst_name = instance.safe_translation_getter('name', any_language=True) or instance.slug or f"Category-{instance.id}"
             OperationLog.objects.create(
                 user=user,
                 action='delete',
                 entity_type='category',
                 entity_id=instance.id,
-                details=f"删除分类: {instance.name}",
+                details=f"删除分类: {inst_name}",
                 ip_address=self.request.META.get('REMOTE_ADDR'),
                 user_agent=self.request.META.get('HTTP_USER_AGENT'),
                 tenant=tenant
@@ -1611,11 +1650,13 @@ class CategoryViewSet(TenantModelViewSet):
             else:
                 children = Category.objects.filter(parent=category)
                 
+            cat_name = category.safe_translation_getter('name', any_language=True) or category.slug or f"Category-{category.id}"
+            cat_desc = category.safe_translation_getter('description', any_language=True) or ""
             return {
                 'id': category.id,
-                'name': category.name,
+                'name': cat_name,
                 'slug': category.slug,
-                'description': category.description,
+                'description': cat_desc,
                 'is_active': category.is_active,
                 'sort_order': category.sort_order,
                 'children': [build_tree(child) for child in children]
@@ -2027,7 +2068,7 @@ class TagViewSet(TenantModelViewSet):
         - 记录操作日志
         """
         user = self.request.user
-        tenant = user.tenant
+        tenant = getattr(user, 'tenant', None) or get_effective_tenant(self.request)
         
         # 设置租户ID
         serializer.validated_data['tenant'] = tenant
@@ -2099,10 +2140,14 @@ class TagViewSet(TenantModelViewSet):
         - 记录操作日志
         """
         user = self.request.user
-        tenant = user.tenant
+        tenant = getattr(user, 'tenant', None) or get_effective_tenant(self.request)
         
-        # 检查是否有文章关联到该标签
-        has_articles = ArticleTag.objects.filter(tag=instance).exists()
+        # 检查是否有活跃文章关联到该标签
+        ArticleTag.objects.filter(tag=instance, article__status='archived').delete()
+        has_articles = ArticleTag.objects.filter(
+            tag=instance, 
+            article__is_deleted=False
+        ).exclude(article__status='archived').exists()
         if has_articles:
             raise serializers.ValidationError(_("Cannot delete tag with associated articles, please remove associated articles first"))
         
@@ -2384,11 +2429,8 @@ class CommentViewSet(TenantModelViewSet):
         """
         user = self.request.user
         
-        # 获取租户（从中间件或用户）
-        from common.utils.tenant_context import get_current_tenant
-        tenant = get_current_tenant()
-        if not tenant and user.is_authenticated:
-            tenant = user.tenant
+        # 获取有效租户
+        tenant = getattr(user, 'tenant', None) or get_effective_tenant(self.request)
         
         # 设置租户ID
         serializer.validated_data['tenant'] = tenant

@@ -66,6 +66,10 @@ def _column_exists(cursor, table_name, column_name):
 def sync_check_system_schema(apps, schema_editor):
     with schema_editor.connection.cursor() as cursor:
         if _index_exists(cursor, 'task_category', 'task_category_name_user_id_tenant_id_99ca8fa4_uniq'):
+            if not _index_exists(cursor, 'task_category', 'task_category_tenant_id_fk_idx'):
+                schema_editor.execute(
+                    'CREATE INDEX `task_category_tenant_id_fk_idx` ON `task_category` (`tenant_id`)'
+                )
             schema_editor.execute(
                 'ALTER TABLE `task_category` DROP INDEX `task_category_name_user_id_tenant_id_99ca8fa4_uniq`'
             )

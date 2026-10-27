@@ -142,7 +142,20 @@ class TenantIdResolver:
         Returns:
             str|None: 用户关联的租户ID字符串，未关联时返回None
         """
-        if not hasattr(self.request, 'user') or not self.request.user.is_authenticated:
+        # 若用户尚未认证且请求携带 Bearer 认证头，按需进行 JWT 识别
+        if not hasattr(self.request, 'user') or not getattr(self.request.user, 'is_authenticated', False):
+            auth_header = self.request.META.get('HTTP_AUTHORIZATION')
+            if auth_header and auth_header.startswith('Bearer '):
+                from common.authentication.api_auth import APIJWTAuthentication
+                try:
+                    auth_result = APIJWTAuthentication().authenticate(self.request)
+                    if auth_result:
+                        self.request.user, self.request.auth = auth_result
+                        self.request.auth_type = 'jwt'
+                except Exception as e:
+                    self.logger.debug(f"租户解析按需认证未识别用户: {e}")
+
+        if not hasattr(self.request, 'user') or not getattr(self.request.user, 'is_authenticated', False):
             self.logger.info("用户未认证，无法获取用户租户ID")
             return None
             
@@ -198,20 +211,20 @@ class TenantIdResolver:
         # 检查用户类型
         is_super_admin = self._is_super_admin(user)
         
-        # 如果请求头中有租户ID，验证与用户租户是否匹配
-        if header_tenant_id and user_tenant_id and header_tenant_id != user_tenant_id:
+        # 无论来自请求头还是查询参数，如果生效的租户ID与用户所属租户不符，非超级管理员一律拦截
+        if effective_tenant_id and user_tenant_id and str(effective_tenant_id) != str(user_tenant_id):
             # 只有非超级管理员才需要验证租户匹配
             if not is_super_admin:
                 self.logger.warning(
                     f"用户 {user.username} 尝试访问不属于其租户的资源，"
-                    f"租户ID不匹配: 用户租户={user_tenant_id}, 请求头租户={header_tenant_id}"
+                    f"租户ID不匹配: 用户租户={user_tenant_id}, 目标生效租户={effective_tenant_id}"
                 )
                 
                 return TenantErrorResponseBuilder.build_error_response(
                     TenantErrorTypes.TENANT_ACCESS_DENIED,
                     self.request,
                     user_tenant_id=user_tenant_id,
-                    header_tenant_id=header_tenant_id
+                    header_tenant_id=effective_tenant_id
                 )
         
         return None

@@ -1,7 +1,9 @@
 """
 租户中间件，用于处理请求中的租户上下文
 
-重构后的简化版本，使用服务类架构
+重构后的安全版本：
+1. 全面基于 ContextVar 上下文管理；
+2. 在 sync/async 生命周期、正常响应与异常分支均保证可靠执行 clear_current_tenant()。
 """
 import logging
 from django.utils.deprecation import MiddlewareMixin
@@ -19,43 +21,39 @@ logger = logging.getLogger(__name__)
 class TenantMiddleware(MiddlewareMixin):
     """
     租户中间件，用于从请求中提取租户信息并设置租户上下文
-    
-    使用服务类架构，职责清晰：
-    - TenantIdResolver: 解析租户ID
-    - TenantPermissionChecker: 检查权限
-    - TenantValidator: 验证租户并设置上下文
-    
-    处理以下租户信息来源:
-    1. X-Tenant-ID 请求头
-    2. 用户关联的租户
-    
-    权限控制规则：
-    - GET请求允许匿名访问，但需要租户ID（从X-Tenant-ID或用户token获取）
-    - 非GET请求需要认证，并且用户必须关联租户
-    - 超级管理员可以通过X-Tenant-ID请求头指定租户进行操作
-    - 只有真正的API路径才需要进行租户ID验证，Admin路径不需要
     """
     
     def __init__(self, get_response):
-        """
-        初始化中间件
-        
-        Args:
-            get_response: Django中间件响应函数
-        """
         super().__init__(get_response)
         self.path_checker = TenantPathChecker()
         logger.info("租户中间件：已初始化（使用新架构）")
+
+    def __call__(self, request):
+        """
+        同步请求入口：
+        如果处于 async 模式，直接转交 __acall__ 处理，避免在同步栈提前触发 finally；
+        如果处于 sync 模式，通过 try...finally 确保不论正常返回还是未捕获异常均清理租户。
+        """
+        if self.async_mode:
+            return self.__acall__(request)
+        try:
+            return super().__call__(request)
+        finally:
+            clear_current_tenant()
+
+    async def __acall__(self, request):
+        """
+        异步请求入口：
+        等待异步响应完全生成后，通过 finally 可靠清理租户。
+        """
+        try:
+            return await super().__acall__(request)
+        finally:
+            clear_current_tenant()
     
     def process_request(self, request):
         """
         处理请求，设置current租户
-        
-        Args:
-            request: HTTP请求对象
-        
-        Returns:
-            JsonResponse|None: 处理失败时返回错误响应，成功时返回None
         """
         logger.info(f"TenantMiddleware - 处理请求: {request.path}")
         
@@ -113,24 +111,24 @@ class TenantMiddleware(MiddlewareMixin):
             
         except ValidationError as e:
             logger.warning(f"租户验证失败: {str(e)}")
-            # ValidationError会被后续中间件处理
+            clear_current_tenant()
             raise
         except Exception as e:
             logger.error(f"租户中间件处理异常: {str(e)}", exc_info=True)
-            # 重新抛出异常，让Django处理
+            clear_current_tenant()
             raise
+
+    def process_exception(self, request, exception):
+        """
+        异常处理钩子：当视图或后续中间件抛出未捕获异常时触发清理
+        """
+        logger.debug(f"TenantMiddleware - 捕获未处理异常，清理租户上下文: {str(exception)}")
+        clear_current_tenant()
+        return None
     
     def process_response(self, request, response):
         """
         处理响应，清除current租户
-        
-        Args:
-            request: HTTP请求对象
-            response: HTTP响应对象
-        
-        Returns:
-            HTTP响应对象
         """
-        # 请求结束后清除租户上下文
         clear_current_tenant()
         return response

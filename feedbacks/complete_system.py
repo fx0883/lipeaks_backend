@@ -141,11 +141,29 @@ class FeedbackVoteView(APIView):
             return Response({'error': 'Feedback not found'}, status=404)
         
         vote_type = request.data.get('vote_type')
+        if vote_type in ['upvote', 'up', '1']:
+            vote_type = 1
+        elif vote_type in ['downvote', 'down', '-1']:
+            vote_type = -1
         if vote_type not in [1, -1]:
             return Response({'error': 'Invalid vote type'}, status=400)
         
         # 获取租户
         tenant = self._get_tenant_from_request(request)
+        
+        # 防刷/幂等：如果用户已经投了完全相同类型的票，直接返回无需重复操作
+        existing_vote = FeedbackVote.objects.filter(
+            feedback=feedback,
+            user=request.user
+        ).first()
+        
+        if existing_vote and existing_vote.vote_type == vote_type:
+            feedback.refresh_from_db(fields=['vote_count'])
+            return Response({
+                'message': 'Vote already recorded',
+                'vote_type': vote_type,
+                'total_votes': feedback.vote_count
+            })
         
         vote, created = FeedbackVote.objects.update_or_create(
             feedback=feedback,
@@ -154,7 +172,7 @@ class FeedbackVoteView(APIView):
         )
         
         # 刷新获取最新的vote_count
-        feedback.refresh_from_db()
+        feedback.refresh_from_db(fields=['vote_count'])
         
         return Response({
             'message': 'Vote recorded',

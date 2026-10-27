@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-from common.permissions import IsTenantAdmin
+from common.permissions import IsSuperAdminOrTenantAdmin
 from common.viewsets import TenantModelViewSet
 
 from .models import Application
@@ -27,7 +27,7 @@ class ApplicationViewSet(TenantModelViewSet):
     
     权限：
     - GET请求：所有认证用户（包括member）
-    - POST/PUT/PATCH/DELETE：仅租户管理员
+    - POST/PUT/PATCH/DELETE：超级管理员或租户管理员
     """
     permission_classes = [IsAuthenticated]
     queryset = Application.objects.all()
@@ -42,8 +42,8 @@ class ApplicationViewSet(TenantModelViewSet):
     def get_permissions(self):
         """根据操作类型设置权限"""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # 写操作需要管理员权限
-            return [IsAuthenticated(), IsTenantAdmin()]
+            # 写操作需要管理员权限（超级管理员或租户管理员）
+            return [IsAuthenticated(), IsSuperAdminOrTenantAdmin()]
         # 读操作只需要认证
         return [IsAuthenticated()]
     

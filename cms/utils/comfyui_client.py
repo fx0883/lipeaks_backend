@@ -12,20 +12,28 @@ import logging
 import websocket
 import threading
 
+try:
+    from django.conf import settings
+    DEFAULT_COMFYUI_TIMEOUT = getattr(settings, 'COMFYUI_TIMEOUT', (5, 30))
+except Exception:
+    DEFAULT_COMFYUI_TIMEOUT = (5, 30)
+
 logger = logging.getLogger(__name__)
 
 
 class ComfyUIClient:
     """ComfyUI API客户端"""
     
-    def __init__(self, base_url: str = "http://127.0.0.1:8188"):
+    def __init__(self, base_url: str = "http://127.0.0.1:8188", timeout: tuple = None):
         """
         初始化ComfyUI客户端
         
         Args:
             base_url: ComfyUI服务器地址
+            timeout: 请求超时设置 (连接超时, 读取超时)，默认 (5, 30)
         """
         self.base_url = base_url.rstrip('/')
+        self.timeout = timeout if timeout is not None else DEFAULT_COMFYUI_TIMEOUT
         self.client_id = str(uuid.uuid4())
         self.workflow_template = None
         self._ws = None
@@ -163,7 +171,8 @@ class ComfyUIClient:
         try:
             response = requests.post(
                 f"{self.base_url}/prompt",
-                json=payload
+                json=payload,
+                timeout=self.timeout
             )
             response.raise_for_status()
             
@@ -312,7 +321,7 @@ class ComfyUIClient:
         while time.time() - start_time < timeout:
             try:
                 # 检查队列状态
-                response = requests.get(f"{self.base_url}/queue")
+                response = requests.get(f"{self.base_url}/queue", timeout=self.timeout)
                 response.raise_for_status()
                 
                 queue_data = response.json()
@@ -334,7 +343,7 @@ class ComfyUIClient:
                             break
                     else:
                         # 既不在运行队列也不在等待队列，检查历史
-                        history_response = requests.get(f"{self.base_url}/history/{prompt_id}")
+                        history_response = requests.get(f"{self.base_url}/history/{prompt_id}", timeout=self.timeout)
                         if history_response.status_code == 200:
                             history_data = history_response.json()
                             if prompt_id in history_data:
@@ -369,7 +378,7 @@ class ComfyUIClient:
         """
         try:
             # 获取历史记录
-            response = requests.get(f"{self.base_url}/history/{prompt_id}")
+            response = requests.get(f"{self.base_url}/history/{prompt_id}", timeout=self.timeout)
             response.raise_for_status()
             
             history = response.json()
@@ -398,14 +407,19 @@ class ComfyUIClient:
                             'type': folder_type
                         }
                         
-                        image_response = requests.get(
+                        with requests.get(
                             f"{self.base_url}/view",
-                            params=params
-                        )
-                        image_response.raise_for_status()
-                        
-                        logger.info(f"成功获取图片: {filename}")
-                        return image_response.content
+                            params=params,
+                            timeout=self.timeout,
+                            stream=True
+                        ) as image_response:
+                            image_response.raise_for_status()
+                            content_chunks = []
+                            for chunk in image_response.iter_content(chunk_size=65536):
+                                if chunk:
+                                    content_chunks.append(chunk)
+                            logger.info(f"成功获取图片: {filename}")
+                            return b"".join(content_chunks)
                         
             logger.error(f"任务 {prompt_id} 没有生成图片")
             return None
@@ -480,7 +494,7 @@ class ComfyUIClient:
             连接是否正常
         """
         try:
-            response = requests.get(f"{self.base_url}/system_stats")
+            response = requests.get(f"{self.base_url}/system_stats", timeout=self.timeout)
             response.raise_for_status()
             logger.info("ComfyUI服务器连接正常")
             return True

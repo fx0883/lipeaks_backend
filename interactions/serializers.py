@@ -118,7 +118,7 @@ class MemberLikeCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("您无法点赞其他租户的用户")
         
         # 检查是否已经点赞
-        if MemberLike.objects.filter(from_member=from_member, to_member=value).exists():
+        if MemberLike.objects.filter(from_member=from_member, to_member=value, is_deleted=False).exists():
             raise serializers.ValidationError("您已经点赞过该用户")
         
         return value
@@ -194,7 +194,7 @@ class MemberFollowCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("您无法关注其他租户的用户")
         
         # 检查是否已经关注
-        if MemberFollow.objects.filter(follower=follower, following=value).exists():
+        if MemberFollow.objects.filter(follower=follower, following=value, is_deleted=False).exists():
             raise serializers.ValidationError("您已经关注过该用户")
         
         return value
@@ -249,7 +249,7 @@ class ArticleLikeCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("您无法点赞其他租户的文章")
         
         # 检查是否已经点赞
-        if ArticleLike.objects.filter(from_member=from_member, article=value).exists():
+        if ArticleLike.objects.filter(from_member=from_member, article=value, is_deleted=False).exists():
             raise serializers.ValidationError("您已经点赞过这篇文章")
         
         return value

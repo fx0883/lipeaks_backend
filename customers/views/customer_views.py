@@ -219,10 +219,29 @@ class CustomerViewSet(TenantModelViewSet):
     
     def perform_create(self, serializer):
         """
-        创建客户时记录创建者
-        TenantModelViewSet自动设置租户
+        创建客户时记录创建者，并自动设置租户
         """
-        serializer.save(created_by=self.request.user.username)
+        tenant_id = self._effective_tenant_id_for_write()
+        save_kwargs = {'created_by': self.request.user.username}
+        if tenant_id and hasattr(serializer.Meta.model, 'tenant'):
+            save_kwargs['tenant_id'] = tenant_id
+        instance = serializer.save(**save_kwargs)
+        
+        # 自动建立 CustomerTenantRelation 关联
+        if tenant_id:
+            try:
+                from customers.models import CustomerTenantRelation
+                from tenants.models import Tenant
+                tenant_obj = Tenant.objects.filter(id=tenant_id).first()
+                if tenant_obj:
+                    CustomerTenantRelation.objects.get_or_create(
+                        customer=instance,
+                        tenant=tenant_obj,
+                        relation_type='client',
+                        defaults={'is_primary': True}
+                    )
+            except Exception as e:
+                logger.warning(f"自动创建客户租户关联异常: {str(e)}")
     
     def perform_update(self, serializer):
         """

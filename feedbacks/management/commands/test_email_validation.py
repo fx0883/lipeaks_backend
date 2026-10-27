@@ -1,7 +1,7 @@
 # feedbacks/management/commands/test_email_validation.py
 
 from django.core.management.base import BaseCommand
-from ...utils import EmailValidator
+from feedbacks.utils import EmailValidator
 
 
 class Command(BaseCommand):

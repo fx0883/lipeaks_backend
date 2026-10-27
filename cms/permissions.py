@@ -40,7 +40,20 @@ class CMSBasePermission(permissions.BasePermission):
             logger.debug(f"非CMS路径，跳过租户验证: {request.path}")
             return True
             
-        # 允许所有GET请求访问（租户ID验证已在中间件中完成）
+        # 统一确保 request.tenant_id 具备有效值
+        if not getattr(request, 'tenant_id', None):
+            header_tid = request.headers.get('X-Tenant-ID') or request.GET.get('tenant_id')
+            if header_tid:
+                request.tenant_id = str(header_tid)
+            elif getattr(request.user, 'is_authenticated', False) and getattr(request.user, 'tenant', None):
+                request.tenant_id = str(request.user.tenant.id)
+            elif getattr(request.user, 'is_authenticated', False) and getattr(request.user, 'is_super_admin', False):
+                from tenants.models import Tenant
+                first_tenant = Tenant.objects.filter(is_deleted=False).first()
+                if first_tenant:
+                    request.tenant_id = str(first_tenant.id)
+
+        # 允许所有GET请求访问（租户ID验证已在中间件或上述兜底中完成）
         if request.method in permissions.SAFE_METHODS:
             # 确保请求中有租户ID
             if not hasattr(request, 'tenant_id') or not request.tenant_id:
@@ -63,7 +76,6 @@ class CMSBasePermission(permissions.BasePermission):
         
         # 超级管理员特殊处理：允许通过X-Tenant-ID请求头指定租户进行操作
         if getattr(user, 'is_super_admin', False):
-            # 确保请求中有租户ID（由中间件设置）
             if not hasattr(request, 'tenant_id') or not request.tenant_id:
                 logger.warning(f"超级管理员 {user.username} 尝试操作CMS数据但未指定租户ID")
                 raise CMSException(

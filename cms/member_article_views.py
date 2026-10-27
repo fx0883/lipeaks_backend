@@ -1,7 +1,7 @@
 """
 Member用户文章管理视图
 """
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from rest_framework import viewsets, status
@@ -174,7 +174,14 @@ class MemberArticleViewSet(TenantModelViewSet):
     - 只能操作自己创建的文章
     - 支持草稿、发布、归档等状态管理
     """
-    queryset = Article.objects.all()
+    queryset = Article.objects.all().select_related(
+        'user', 'member', 'tenant', 'statistics', 'parent'
+    ).prefetch_related(
+        'article_categories__category',
+        'article_tags__tag'
+    ).annotate(
+        annotated_children_count=Count('children', distinct=True)
+    )
     permission_classes = [ArticlePermission]
     pagination_class = StandardResultsSetPagination
     
@@ -191,8 +198,15 @@ class MemberArticleViewSet(TenantModelViewSet):
         if is_member(user):
             queryset = queryset.filter(member_id=user.id)
         
-        # 优化查询：预加载member关系
-        queryset = queryset.select_related('member', 'tenant')
+        # 优化查询：全量预加载与注解
+        queryset = queryset.select_related(
+            'user', 'member', 'tenant', 'statistics', 'parent'
+        ).prefetch_related(
+            'article_categories__category',
+            'article_tags__tag'
+        ).annotate(
+            annotated_children_count=Count('children', distinct=True)
+        )
         
         # 处理搜索
         search = self.request.query_params.get('search')

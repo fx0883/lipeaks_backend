@@ -203,7 +203,7 @@ class MenuViewSet(viewsets.ModelViewSet):
                 
         if search:
             queryset = queryset.filter(
-                Q(name__icontains=search) | Q(code__icontains=search)
+                Q(name__icontains=search) | Q(code__icontains=search) | Q(title__icontains=search)
             )
             
         return queryset.order_by('rank', 'id')

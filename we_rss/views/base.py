@@ -21,8 +21,9 @@ class WeRssTenantApiView(WeRssTenantContextMixin, TenantApiView):
 
 
 class WeRssTenantModelViewSet(WeRssTenantContextMixin, TenantModelViewSet):
-    pagination_class = None
+    pass
 
 
 class WeRssTenantGenericViewSet(WeRssTenantContextMixin, viewsets.GenericViewSet):
-    pagination_class = None
+    pass
+

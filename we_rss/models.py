@@ -154,6 +154,12 @@ class WechatArticle(BaseModel):
     class Meta:
         db_table = "we_rss_wechat_article"
         ordering = ["-publish_time", "-created_at"]
+        indexes = [
+            models.Index(fields=["tenant", "-publish_time"], name="we_rss_art_tenant_pub_idx"),
+            models.Index(fields=["feed", "-publish_time"], name="we_rss_art_feed_pub_idx"),
+            models.Index(fields=["status", "-publish_time"], name="we_rss_art_status_pub_idx"),
+            models.Index(fields=["-publish_time", "-created_at"], name="we_rss_art_pub_created_idx"),
+        ]
 
 
 class MemberFeedSubscription(models.Model):

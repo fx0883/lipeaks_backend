@@ -85,6 +85,75 @@ def generate_date_range(start_date, end_date, period='monthly'):
     
     return result
 
+def format_period_key(dt, period):
+    """
+    统一将截断聚合的 datetime 或 date 对象格式化为周期字符串
+    """
+    if dt is None:
+        return ""
+    if period == 'daily':
+        return dt.strftime('%Y-%m-%d')
+    elif period == 'weekly':
+        iso_year, iso_week, _ = dt.isocalendar()
+        return f"{iso_year}-W{iso_week:02d}"
+    elif period == 'monthly':
+        return dt.strftime('%Y-%m')
+    elif period == 'quarterly':
+        quarter = (dt.month - 1) // 3 + 1
+        return f"{dt.year}-Q{quarter}"
+    elif period == 'yearly':
+        return str(dt.year)
+    return dt.strftime('%Y-%m-%d')
+
+def generate_period_labels(start_date, end_date, period='monthly'):
+    """
+    生成指定时间段内所有连续周期的有序标签列表（用于补齐缺失数据）
+    """
+    if start_date > end_date:
+        return []
+    
+    labels = []
+    if period == 'daily':
+        curr = start_date
+        while curr <= end_date:
+            labels.append(curr.strftime('%Y-%m-%d'))
+            curr += timedelta(days=1)
+    elif period == 'weekly':
+        curr = start_date
+        while curr <= end_date:
+            iso_year, iso_week, _ = curr.isocalendar()
+            key = f"{iso_year}-W{iso_week:02d}"
+            if key not in labels:
+                labels.append(key)
+            curr += timedelta(days=1)
+    elif period == 'monthly':
+        curr = start_date.replace(day=1)
+        while curr <= end_date:
+            labels.append(curr.strftime('%Y-%m'))
+            if curr.month == 12:
+                curr = curr.replace(year=curr.year + 1, month=1)
+            else:
+                curr = curr.replace(month=curr.month + 1)
+    elif period == 'quarterly':
+        curr = start_date.replace(day=1, month=((start_date.month - 1) // 3) * 3 + 1)
+        while curr <= end_date:
+            q = (curr.month - 1) // 3 + 1
+            labels.append(f"{curr.year}-Q{q}")
+            if curr.month > 9:
+                curr = curr.replace(year=curr.year + 1, month=1)
+            else:
+                curr = curr.replace(month=curr.month + 3)
+    elif period == 'yearly':
+        for y in range(start_date.year, end_date.year + 1):
+            labels.append(str(y))
+    else:
+        curr = start_date
+        while curr <= end_date:
+            labels.append(curr.strftime('%Y-%m-%d'))
+            curr += timedelta(days=1)
+    return labels
+
+
 def get_cache_key(prefix, **params):
     """
     根据参数生成缓存键
@@ -174,50 +243,44 @@ def get_user_growth_trend(start_date, end_date, period='monthly'):
         # 转换日期为datetime对象并添加时区信息
         start_datetime = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
         end_datetime = timezone.make_aware(datetime.combine(end_date, datetime.max.time()))
+        trunc_func = get_date_trunc_func(period)
         
-        # 使用Python手动按时间段统计，而不是依赖数据库函数
-        all_users = (
+        # 1. 查询时间区间内的新增用户，按周期下推数据库分组统计
+        user_increments_qs = (
             User.objects
             .filter(date_joined__range=(start_datetime, end_datetime), is_deleted=False)
-            .order_by('date_joined')
+            .annotate(period_dt=trunc_func('date_joined'))
+            .values('period_dt')
+            .annotate(cnt=Count('id'))
+            .order_by('period_dt')
         )
+        increments_map = {
+            format_period_key(r['period_dt'], period): r['cnt']
+            for r in user_increments_qs if r['period_dt']
+        }
         
-        # 手动按周期分组
-        period_counts = defaultdict(int)
-        for user in all_users:
-            if period == 'daily':
-                period_key = user.date_joined.strftime('%Y-%m-%d')
-            elif period == 'weekly':
-                # 使用ISO周格式，例如：2025-W16
-                period_key = f"{user.date_joined.isocalendar()[0]}-W{user.date_joined.isocalendar()[1]:02d}"
-            elif period == 'monthly':
-                period_key = user.date_joined.strftime('%Y-%m')
-            elif period == 'quarterly':
-                quarter = (user.date_joined.month - 1) // 3 + 1
-                period_key = f"{user.date_joined.year}-Q{quarter}"
-            else:  # yearly
-                period_key = str(user.date_joined.year)
-            
-            period_counts[period_key] += 1
-        
-        # 按时间排序
-        dates = sorted(period_counts.keys())
-        new_counts = [period_counts[date] for date in dates]
-        
-        # 计算累计值
+        # 2. 查询起始时间之前的存量用户总数（仅 1 次 COUNT 查询）
         total_before_start = User.objects.filter(
             date_joined__lt=start_datetime,
             is_deleted=False
         ).count()
         
+        # 3. 生成完整连续周期列表并补全 0 值
+        dates = generate_period_labels(start_date, end_date, period)
+        if not dates:
+            dates = sorted(increments_map.keys())
+        
+        new_counts = []
         cumulative_counts = []
         running_total = total_before_start
         
         for date in dates:
-            running_total += period_counts[date]
+            cnt = increments_map.get(date, 0)
+            new_counts.append(cnt)
+            running_total += cnt
             cumulative_counts.append(running_total)
         
-        # 计算汇总数据
+        # 4. 计算汇总数据
         total_users = User.objects.filter(is_deleted=False).count()
         growth_rate = 0
         if len(cumulative_counts) >= 2 and cumulative_counts[0] > 0:
@@ -227,7 +290,7 @@ def get_user_growth_trend(start_date, end_date, period='monthly'):
         if len(new_counts) > 0:
             avg_growth = sum(new_counts) / len(new_counts)
         
-        # 构建响应数据
+        # 5. 构建响应数据
         result = format_chart_response(
             chart_type="line",
             title="用户总量与增长趋势",
@@ -266,6 +329,7 @@ def get_user_growth_trend(start_date, end_date, period='monthly'):
         logger = logging.getLogger(__name__)
         logger.error(f"获取用户增长趋势数据出错: {str(e)}")
         return empty_chart_response("用户总量与增长趋势", f"获取数据出错: {str(e)}", "line")
+
 
 def get_user_role_distribution():
     """
@@ -360,60 +424,59 @@ def get_active_users(start_date, end_date, period='daily'):
         # 转换日期为datetime对象并添加时区信息
         start_datetime = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
         end_datetime = timezone.make_aware(datetime.combine(end_date, datetime.max.time()))
+        trunc_func = get_date_trunc_func(period)
         
-        # 不使用数据库时区功能，直接获取所有记录并在Python中处理
-        api_logs = (
+        # 1. 活跃用户数聚合：下推数据库 Count('user', distinct=True)
+        active_users_qs = (
             APILog.objects
             .filter(created_at__range=(start_datetime, end_datetime), user__isnull=False)
-            .select_related('user')
-            .values('created_at', 'user')
-            .order_by('created_at')
+            .annotate(period_dt=trunc_func('created_at'))
+            .values('period_dt')
+            .annotate(active_count=Count('user', distinct=True))
+            .order_by('period_dt')
         )
+        active_counts_map = {
+            format_period_key(r['period_dt'], period): r['active_count']
+            for r in active_users_qs if r['period_dt']
+        }
         
-        # 手动按周期分组
-        period_user_sets = defaultdict(set)
+        # 2. 存量用户基准数（仅 1 次 COUNT 查询）
+        base_total_users = User.objects.filter(
+            date_joined__lt=start_datetime,
+            is_deleted=False
+        ).count()
         
-        for log in api_logs:
-            created_at = log['created_at']
-            user_id = log['user']
-            
-            if period == 'daily':
-                period_key = created_at.strftime('%Y-%m-%d')
-            elif period == 'weekly':
-                period_key = f"{created_at.isocalendar()[0]}-W{created_at.isocalendar()[1]:02d}"
-            elif period == 'monthly':
-                period_key = created_at.strftime('%Y-%m')
-            else:
-                period_key = created_at.strftime('%Y-%m-%d')
-            
-            period_user_sets[period_key].add(user_id)
+        # 3. 区间内新增用户分组统计（仅 1 次聚合查询）
+        user_increments_qs = (
+            User.objects
+            .filter(date_joined__range=(start_datetime, end_datetime), is_deleted=False)
+            .annotate(period_dt=trunc_func('date_joined'))
+            .values('period_dt')
+            .annotate(cnt=Count('id'))
+            .order_by('period_dt')
+        )
+        increments_map = {
+            format_period_key(r['period_dt'], period): r['cnt']
+            for r in user_increments_qs if r['period_dt']
+        }
         
-        # 按时间排序
-        dates = sorted(period_user_sets.keys())
-        active_counts = [len(period_user_sets[date]) for date in dates]
+        # 4. 生成完整连续周期列表并补全 0 值
+        dates = generate_period_labels(start_date, end_date, period)
+        if not dates:
+            dates = sorted(set(list(active_counts_map.keys()) + list(increments_map.keys())))
+        
+        active_counts = []
         active_rates = []
+        running_total_users = base_total_users
         
-        # 计算每个时间段的活跃率
-        for date in dates:
-            if period == 'daily':
-                period_date = datetime.strptime(date, '%Y-%m-%d').date()
-            elif period == 'weekly':
-                year, week = date.split('-W')
-                period_date = datetime.strptime(f"{year}-{week}-1", '%Y-%W-%w').date()
-            elif period == 'monthly':
-                period_date = datetime.strptime(date + '-01', '%Y-%m-%d').date()
-            else:
-                period_date = datetime.strptime(date, '%Y-%m-%d').date()
+        # 5. 内存 O(1) 累加计算累计用户与活跃率，彻底消除 365 次数据库 COUNT
+        for date_key in dates:
+            active_count = active_counts_map.get(date_key, 0)
+            active_counts.append(active_count)
             
-            # 获取该时间段之前注册的总用户数
-            period_datetime = timezone.make_aware(datetime.combine(period_date, datetime.max.time()))
-            total_users = User.objects.filter(
-                date_joined__lte=period_datetime,
-                is_deleted=False
-            ).count()
-            
-            active_rate = (len(period_user_sets[date]) / total_users) * 100 if total_users > 0 else 0
-            active_rates.append(round(active_rate, 1))
+            running_total_users += increments_map.get(date_key, 0)
+            rate = (active_count / running_total_users * 100) if running_total_users > 0 else 0
+            active_rates.append(round(rate, 1))
         
         # 计算汇总数据
         avg_active_users = round(sum(active_counts) / len(active_counts), 1) if active_counts else 0

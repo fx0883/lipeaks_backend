@@ -212,7 +212,9 @@ class LicenseSerializer(serializers.ModelSerializer):
     
     @extend_schema_field(serializers.IntegerField())
     def get_machine_bindings_count(self, obj):
-        """获取活跃机器绑定数量"""
+        """获取活跃机器绑定数量（优先读取 annotate 聚合结果）"""
+        if hasattr(obj, 'active_bindings_count'):
+            return obj.active_bindings_count
         return obj.machine_bindings.filter(status='active').count()
     
     @extend_schema_field(serializers.IntegerField(allow_null=True))
@@ -972,8 +974,22 @@ class LicenseApplicationSerializer(serializers.Serializer):
     """许可证申请序列化器"""
     
     application_id = serializers.IntegerField(
+        required=False,
         help_text="产品ID"
     )
+    product_id = serializers.IntegerField(
+        required=False,
+        help_text="兼容前端历史字段名"
+    )
+
+    def validate(self, attrs):
+        if 'application_id' in attrs and 'product_id' not in attrs:
+            attrs['product_id'] = attrs['application_id']
+        elif 'product_id' in attrs and 'application_id' not in attrs:
+            attrs['application_id'] = attrs['product_id']
+        elif 'application_id' not in attrs and 'product_id' not in attrs:
+            raise serializers.ValidationError({"application_id": "请指定要申请的产品ID"})
+        return attrs
     plan_id = serializers.IntegerField(
         required=False,
         help_text="方案ID（可选）。如果产品有多个试用方案，可以指定要申请的方案ID；如果不指定，系统会自动选择有效期最长的方案"

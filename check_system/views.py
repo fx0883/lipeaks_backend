@@ -5,9 +5,10 @@
 - TaskCategory/TaskTemplate: 租户管理员 CRUD，Member 只读
 - Task/CheckRecord/CheckinCycle: Member CRUD 自己的数据
 """
+from django.db import IntegrityError
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
-from rest_framework import viewsets, permissions, status, filters
+from rest_framework import viewsets, permissions, status, filters, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -71,7 +72,7 @@ class TaskCategoryViewSet(TenantModelViewSet):
     - 租户管理员：CRUD
     - Member：只读（系统预设 + 租户内类型）
     """
-    queryset = TaskCategory.objects.all()
+    queryset = TaskCategory.objects.all().prefetch_related('translations')
     serializer_class = TaskCategorySerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -99,7 +100,14 @@ class TaskCategoryViewSet(TenantModelViewSet):
     def perform_create(self, serializer):
         """创建时自动设置租户"""
         user = self.request.user
-        tenant = user.tenant if hasattr(user, 'tenant') else None
+        tenant = getattr(user, 'tenant', None)
+        if not tenant:
+            header_tid = self.request.headers.get('X-Tenant-ID') or self.request.query_params.get('tenant_id')
+            from tenants.models import Tenant
+            if header_tid:
+                tenant = Tenant.objects.filter(id=header_tid, is_deleted=False).first()
+            if not tenant:
+                tenant = Tenant.objects.filter(is_deleted=False).first()
         serializer.save(tenant=tenant)
         logger.info(f"租户管理员 {user.username} 创建类型")
 
@@ -201,13 +209,16 @@ class CheckRecordViewSet(TenantModelViewSet):
         return queryset.none()
     
     def perform_create(self, serializer):
-        """创建时自动设置 member 和 tenant"""
+        """创建时自动设置 member 和 tenant，并捕获数据库重复打卡异常"""
         user = self.request.user
         if not isinstance(user, Member):
             raise permissions.PermissionDenied(_("只有Member用户可以打卡"))
         
         tenant = user.tenant if hasattr(user, 'tenant') else None
-        serializer.save(member=user, tenant=tenant)
+        try:
+            serializer.save(member=user, tenant=tenant)
+        except IntegrityError:
+            raise serializers.ValidationError({"error": _("今日已打卡，请勿重复打卡")})
         
         target = serializer.validated_data.get('task') or serializer.validated_data.get('theme')
         target_name = target.name if target else "未知"
@@ -255,7 +266,14 @@ class TaskTemplateViewSet(TenantModelViewSet):
     def perform_create(self, serializer):
         """创建时自动设置租户"""
         user = self.request.user
-        tenant = user.tenant if hasattr(user, 'tenant') else None
+        tenant = getattr(user, 'tenant', None)
+        if not tenant:
+            header_tid = self.request.headers.get('X-Tenant-ID') or self.request.query_params.get('tenant_id')
+            from tenants.models import Tenant
+            if header_tid:
+                tenant = Tenant.objects.filter(id=header_tid, is_deleted=False).first()
+            if not tenant:
+                tenant = Tenant.objects.filter(is_deleted=False).first()
         serializer.save(tenant=tenant)
         logger.info(f"租户管理员 {user.username} 创建模板")
 

@@ -53,7 +53,7 @@ class FeedbackSubmitPageView(FormView):
         # 验证租户
         try:
             self.tenant = Tenant.objects.get(id=self.tenant_id, status='active', is_deleted=False)
-        except Tenant.DoesNotExist:
+        except (Tenant.DoesNotExist, ValueError, TypeError, OverflowError):
             messages.error(request, _('Invalid tenant'))
             return self.render_to_response(self.get_context_data(
                 form=None,
@@ -68,7 +68,7 @@ class FeedbackSubmitPageView(FormView):
                 is_active=True,
                 is_deleted=False
             )
-        except Application.DoesNotExist:
+        except (Application.DoesNotExist, ValueError, TypeError, OverflowError):
             messages.error(request, _('Invalid software'))
             return self.render_to_response(self.get_context_data(
                 form=None,
@@ -81,6 +81,8 @@ class FeedbackSubmitPageView(FormView):
                 # 解析 JWT Token
                 payload = verify_jwt_token(self.member_token)
                 member_id = payload.get('user_id')
+                if type(member_id) is not int or member_id <= 0:
+                    raise jwt.InvalidTokenError('Invalid member ID in token')
                 model_type = payload.get('model_type')
 
                 if model_type != 'member':
@@ -99,7 +101,7 @@ class FeedbackSubmitPageView(FormView):
                 
                 logger.info(f"Member authenticated: {self.member.email}")
                 
-            except (jwt.InvalidTokenError, Member.DoesNotExist) as e:
+            except (jwt.InvalidTokenError, Member.DoesNotExist, ValueError, TypeError, OverflowError) as e:
                 logger.warning(f"Invalid member token: {str(e)}")
                 # Token 无效，按匿名用户处理
                 self.member_token = None

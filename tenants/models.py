@@ -17,8 +17,8 @@ class Tenant(models.Model):
         ('deleted', '已删除'),
     )
     
-    name = models.CharField(_("租户名称"), max_length=100, unique=True)
-    code = models.CharField(_("租户代码"), max_length=50, unique=True, null=True, blank=True, help_text="用于API和集成的唯一标识符")
+    name = models.CharField(_("租户名称"), max_length=100)
+    code = models.CharField(_("租户代码"), max_length=50, null=True, blank=True, help_text="用于API和集成的唯一标识符")
     status = models.CharField(_("状态"), max_length=20, choices=STATUS_CHOICES, default='active')
     
     # 联系人信息
@@ -35,6 +35,18 @@ class Tenant(models.Model):
         verbose_name_plural = _('租户')
         db_table = 'tenant'
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['name'],
+                condition=models.Q(is_deleted=False),
+                name='unique_active_tenant_name'
+            ),
+            models.UniqueConstraint(
+                fields=['code'],
+                condition=models.Q(is_deleted=False, code__isnull=False),
+                name='unique_active_tenant_code'
+            ),
+        ]
     
     def __str__(self):
         return f"{self.name} ({self.get_status_display()})"

@@ -11,6 +11,7 @@ from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 from django.utils import timezone
+from common.pagination import StandardResultsSetPagination
 
 from ..models import Feedback, FeedbackStatusHistory
 from ..serializers import (
@@ -54,13 +55,22 @@ def get_tenant_from_request(request):
         tenant = getattr(user, 'tenant', None)
         if tenant:
             return tenant
-    
+            
+    # 4. 尝试从 X-Tenant-ID 请求头获取
+    header_tid = request.headers.get('X-Tenant-ID') or request.GET.get('tenant_id')
+    if header_tid:
+        from tenants.models import Tenant
+        tenant = Tenant.objects.filter(id=header_tid, is_deleted=False).first()
+        if tenant:
+            return tenant
+
     return None
 
 
 class FeedbackListView(APIView):
     """反馈列表和创建API - GET和POST都不需要认证"""
     permission_classes = [AllowAny]  # ✅ 允许匿名访问和提交反馈
+    pagination_class = StandardResultsSetPagination
     
     @extend_schema(
         tags=['Feedback System'],
@@ -88,8 +98,8 @@ class FeedbackListView(APIView):
         tenant = get_tenant_from_request(request)
         user = request.user
         
-        # 基础查询集（TenantManager已自动过滤is_deleted=False）
-        queryset = Feedback.objects.all()
+        # 基础查询集（预加载 application, user, tenant 消除 N+1）
+        queryset = Feedback.objects.select_related('application', 'user', 'tenant').all()
         
         # 租户过滤
         if tenant:
@@ -137,6 +147,13 @@ class FeedbackListView(APIView):
         ordering = request.query_params.get('ordering', '-created_at')
         queryset = queryset.order_by(ordering)
         
+        # 分页接入 (防 OOM)
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        if page is not None:
+            serializer = FeedbackListSerializer(page, many=True, context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
+            
         serializer = FeedbackListSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
     
@@ -288,7 +305,7 @@ class FeedbackChangeStatusView(APIView):
             return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
         
         new_status = request.data.get('status')
-        reason = request.data.get('reason', '')
+        reason = request.data.get('reason') or request.data.get('comment', '')
         
         if not new_status:
             return Response({'detail': 'Status is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -312,6 +329,10 @@ class FeedbackChangeStatusView(APIView):
         
         serializer = FeedbackDetailSerializer(feedback, context={'request': request})
         return Response(serializer.data)
+    
+    def post(self, request, pk):
+        """兼容POST方式更新状态"""
+        return self.patch(request, pk)
 
 
 class FeedbackVerifyEmailView(APIView):

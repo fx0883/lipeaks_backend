@@ -532,7 +532,11 @@ class LicenseViewSet(TenantModelViewSet):
     """
     authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
-    queryset = License.objects.filter(is_deleted=False)
+    queryset = License.objects.filter(is_deleted=False).select_related(
+        'application', 'plan', 'tenant'
+    ).annotate(
+        active_bindings_count=Count('machine_bindings', filter=Q(machine_bindings__status='active'), distinct=True)
+    )
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['application', 'plan', 'status', 'tenant']
     search_fields = ['license_key', 'customer_name', 'customer_email']
@@ -567,6 +571,16 @@ class LicenseViewSet(TenantModelViewSet):
             for key, value in save_kwargs.items():
                 setattr(instance, key, value)
             instance.save()
+
+    def create(self, request, *args, **kwargs):
+        """创建许可证并返回完整详情（包含 license_key、状态等）"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        instance = serializer.instance
+        detail_serializer = LicenseDetailSerializer(instance, context=self.get_serializer_context())
+        headers = self.get_success_headers(serializer.data)
+        return Response(detail_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     @action(detail=True, methods=['post'])
     def revoke(self, request, pk=None):
@@ -1148,7 +1162,7 @@ class MachineBindingViewSet(viewsets.ReadOnlyModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return MachineBinding.objects.none()
         
-        queryset = MachineBinding.objects.all()
+        queryset = MachineBinding.objects.select_related('license')
         user = self.request.user
         
         # 安全检查：确保用户有is_super_admin属性
@@ -1228,7 +1242,7 @@ class LicenseActivationViewSet(viewsets.ReadOnlyModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return LicenseActivation.objects.none()
         
-        queryset = LicenseActivation.objects.all()
+        queryset = LicenseActivation.objects.select_related('license', 'machine_binding')
         user = self.request.user
         
         # 安全检查
@@ -1271,7 +1285,7 @@ class SecurityAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return SecurityAuditLog.objects.none()
         
-        queryset = SecurityAuditLog.objects.all()
+        queryset = SecurityAuditLog.objects.select_related('user', 'tenant')
         user = self.request.user
         
         # 安全检查
@@ -1327,7 +1341,9 @@ class TenantLicenseQuotaViewSet(TenantModelViewSet):
     """
     authentication_classes = [APIJWTAuthentication]
     permission_classes = [IsSuperAdminOrTenantAdmin]
-    queryset = TenantLicenseQuota.objects.filter(is_deleted=False)
+    queryset = TenantLicenseQuota.objects.filter(is_deleted=False).select_related(
+        'tenant', 'application'
+    )
     serializer_class = TenantLicenseQuotaSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['tenant', 'application', 'is_active']

@@ -85,18 +85,24 @@ class TaskCategory(TranslatableModel):
             return f"{name} (系统)"
         return name
     
+    def get_translated_name(self, language_code=None):
+        """兼容多语言获取类型名称"""
+        return self.safe_translation_getter('name', language_code=language_code, any_language=True) or 'Unnamed'
+    
     def save(self, *args, **kwargs):
         """重写保存方法，添加日志"""
         is_new = self.pk is None
-        if is_new:
-            name = self.safe_translation_getter('name', any_language=True) or 'Unknown'
-            if self.is_system:
-                logger.info(f"创建系统预设类型: {name}")
-            else:
-                tenant_name = self.tenant.name if self.tenant else "无租户"
-                logger.info(f"租户 {tenant_name} 创建自定义类型: {name}")
-        
         super().save(*args, **kwargs)
+        if is_new:
+            try:
+                name = self.safe_translation_getter('name', any_language=True) or 'Unknown'
+                if self.is_system:
+                    logger.info(f"创建系统预设类型: {name}")
+                else:
+                    tenant_name = self.tenant.name if self.tenant else "无租户"
+                    logger.info(f"租户 {tenant_name} 创建自定义类型: {name}")
+            except Exception:
+                pass
     
     def soft_delete(self):
         """软删除"""
@@ -248,6 +254,18 @@ class CheckRecord(BaseModel):
         verbose_name_plural = _('打卡记录')
         db_table = 'check_record'
         ordering = ['-check_date', '-check_time']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['member', 'task', 'check_date'],
+                condition=models.Q(task__isnull=False, is_deleted=False),
+                name='unique_member_task_check_date'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['member', 'check_date'], name='check_rec_member_date_idx'),
+            models.Index(fields=['tenant', 'check_date'], name='check_rec_tenant_date_idx'),
+            models.Index(fields=['check_date'], name='check_rec_date_idx'),
+        ]
     
     def __str__(self):
         target = self.task.name if self.task else (self.theme.name if self.theme else "未知")

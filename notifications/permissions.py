@@ -108,21 +108,14 @@ class MemberNotificationPermission(permissions.BasePermission):
     """
     成员端通知权限类
     
-    - GET请求允许匿名访问（需要member_id参数）
-    - POST请求需要 Member 用户认证
-    - 只能操作自己的通知状态
+    - 所有请求均需要 Member 用户认证
+    - 只能操作自己的通知状态与查看自己的通知详情
     """
     
     def has_permission(self, request, view):
         """
         检查用户是否有权限访问视图
         """
-        # GET请求允许匿名访问
-        if request.method in permissions.SAFE_METHODS:
-            logger.debug(f"[MemberNotificationPermission] GET请求允许访问: {request.path}")
-            return True
-        
-        # POST请求需要认证
         user = request.user
         
         if not user or not user.is_authenticated:
@@ -148,9 +141,13 @@ class MemberNotificationPermission(permissions.BasePermission):
         检查成员是否有权限操作特定通知接收记录
         """
         user = request.user
+        if not user or not user.is_authenticated:
+            return False
         
-        # 检查是否是该通知的接收者
-        if hasattr(obj, 'member') and obj.member_id == user.id:
+        # 检查是否是该通知接收记录的接收者
+        if hasattr(obj, 'member_id') and obj.member_id == user.id:
+            return True
+        if hasattr(obj, 'member') and obj.member == user:
             return True
         
         # 检查是否是该通知的接收者（通过 NotificationRecipient 查询）

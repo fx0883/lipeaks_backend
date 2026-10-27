@@ -109,7 +109,7 @@ def license_reports(request):
             base_filter['license__tenant'] = request.user.tenant
         
         if product_id:
-            base_filter['license__product_id'] = product_id
+            base_filter['license__application_id'] = product_id
         
         # 根据报告类型生成数据
         if report_type == 'summary':
@@ -208,7 +208,7 @@ def generate_report(request):
             base_filter['license__tenant_id'] = tenant_id
         
         if product_id:
-            base_filter['license__product_id'] = product_id
+            base_filter['license__application_id'] = product_id
         
         # 根据报告类型生成数据
         if report_type == 'summary':
@@ -331,7 +331,7 @@ def generate_usage_report(start_date, end_date, base_filter):
         timestamp__date__range=[start_date, end_date],
         **base_filter
     ).values(
-        'license__product__name'
+        'license__application__name'
     ).annotate(
         usage_count=Count('id')
     ).order_by('-usage_count')[:10]

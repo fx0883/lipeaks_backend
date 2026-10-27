@@ -196,7 +196,7 @@ class LicenseActivationService:
             # 1. 查找许可证记录
             try:
                 license_hash = self.security_service.hash_manager.hash_data(license_key)
-                license_obj = License.objects.get(license_hash=license_hash)
+                license_obj = License.objects.select_for_update().get(license_hash=license_hash)
             except License.DoesNotExist:
                 return {
                     'success': False,
@@ -339,6 +339,7 @@ class LicenseActivationService:
             
         except Exception as e:
             logger.error(f"许可证激活失败: {str(e)}")
+            transaction.set_rollback(True)
             return {
                 'success': False,
                 'error': f'Activation failed: {str(e)}',
@@ -583,6 +584,7 @@ class LicenseActivationService:
             
         except Exception as e:
             logger.error(f"许可证解绑失败: {str(e)}")
+            transaction.set_rollback(True)
             return {
                 'success': False,
                 'error': f'Unbind failed: {str(e)}',
@@ -596,12 +598,14 @@ class LicenseManagementService:
     @transaction.atomic
     def create_license(
         self,
-        application_id: int,
-        plan_id: int,
-        tenant_id: int,
-        customer_info: Dict[str, Any],
+        application_id: int = None,
+        plan_id: int = None,
+        tenant_id: int = None,
+        customer_info: Dict[str, Any] = None,
         expires_at: datetime = None,
-        max_activations: int = None
+        max_activations: int = None,
+        product_id: int = None,
+        **kwargs
     ) -> License:
         """
         创建新许可证
@@ -613,10 +617,14 @@ class LicenseManagementService:
             customer_info: 客户信息
             expires_at: 过期时间
             max_activations: 最大激活数
+            product_id: 兼容历史产品ID
             
         Returns:
             License: 许可证对象
         """
+        if application_id is None and product_id is not None:
+            application_id = product_id
+
         try:
             # 获取应用和方案
             application = Application.objects.get(id=application_id)
@@ -739,9 +747,11 @@ class LicenseManagementService:
             
         except License.DoesNotExist:
             logger.error(f"许可证不存在: {license_id}")
+            transaction.set_rollback(True)
             return False
         except Exception as e:
             logger.error(f"许可证撤销失败: {str(e)}")
+            transaction.set_rollback(True)
             return False
     
     def get_license_usage_stats(self, license_id: int) -> Dict[str, Any]:

@@ -2,7 +2,7 @@
 通知系统成员端视图
 """
 from django.utils import timezone
-from rest_framework import status
+from rest_framework import permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
@@ -61,10 +61,24 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
     成员端通知视图集
     
     成员端 API,用于成员查看和管理自己的通知
-    - GET请求不需要认证（通过X-Tenant-ID和member_id参数）
-    - POST请求需要认证
+    - 所有请求需要用户认证
     """
-    permission_classes = [MemberNotificationPermission]
+    permission_classes = [permissions.IsAuthenticated, MemberNotificationPermission]
+    
+    def _get_current_member(self):
+        """获取当前登录用户的 Member 实例"""
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return None
+        if isinstance(user, Member):
+            return user
+        member = getattr(user, 'member_profile', None)
+        if member:
+            return member
+        try:
+            return Member.objects.get(id=user.id)
+        except Member.DoesNotExist:
+            return None
     
     def get_serializer_class(self):
         if self.action == 'list':
@@ -77,29 +91,10 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
     
     def get_queryset(self):
         """
-        获取成员的通知列表
-        - 认证用户:基于用户的member信息
-        - 匿名用户:基于 member_id 参数
+        获取当前登录成员的通知列表
+        - 强制绑定当前登录用户对应的 Member
         """
-        # 获取成员
-        member = None
-        if self.request.user.is_authenticated:
-            member = getattr(self.request.user, 'member_profile', None)
-            if not member:
-                try:
-                    member = Member.objects.get(id=self.request.user.id)
-                except Member.DoesNotExist:
-                    pass
-        
-        # 如果没有认证，尝试从查询参数获取member_id
-        if not member:
-            member_id = self.request.query_params.get('member_id')
-            if member_id:
-                try:
-                    member = Member.objects.get(id=member_id)
-                except Member.DoesNotExist:
-                    pass
-        
+        member = self._get_current_member()
         if not member:
             return NotificationRecipient.objects.none()
         
@@ -133,22 +128,7 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
     
     def retrieve(self, request, *args, **kwargs):
         """获取通知详情并自动标记为已读"""
-        # 直接从pk获取NotificationRecipient
-        pk = kwargs.get('pk')
-        try:
-            instance = NotificationRecipient.objects.select_related(
-                'notification', 'notification__application'
-            ).get(
-                id=pk,
-                is_deleted=False,
-                notification__status='published',
-                notification__is_deleted=False
-            )
-        except NotificationRecipient.DoesNotExist:
-            return Response(
-                {'detail': '通知不存在'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        instance = self.get_object()
         
         # 自动标记为已读
         if not instance.is_read:
@@ -177,7 +157,7 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
     @action(detail=False, methods=['post'], url_path='read-all')
     def read_all(self, request):
         """标记所有通知为已读"""
-        member = getattr(request.user, 'member_profile', None)
+        member = self._get_current_member()
         if not member:
             return Response(
                 {'detail': '未找到成员信息'},
@@ -206,25 +186,7 @@ class MemberNotificationViewSet(ListModelMixin, RetrieveModelMixin, GenericViewS
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
         """获取未读通知数量"""
-        # 获取成员
-        member = None
-        if request.user.is_authenticated:
-            member = getattr(request.user, 'member_profile', None)
-            if not member:
-                try:
-                    member = Member.objects.get(id=request.user.id)
-                except Member.DoesNotExist:
-                    pass
-        
-        # 如果没有认证，尝试从查询参数获取member_id
-        if not member:
-            member_id = request.query_params.get('member_id')
-            if member_id:
-                try:
-                    member = Member.objects.get(id=member_id)
-                except Member.DoesNotExist:
-                    pass
-        
+        member = self._get_current_member()
         if not member:
             return Response({'unread_count': 0})
         

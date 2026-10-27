@@ -203,17 +203,25 @@ class TenantPermissionChecker:
         username = user_type_info['username']
         self.logger.info(f"检测到超级管理员: {username}")
         
-        # 检查是否通过请求头指定了租户ID
-        header_tenant_id = self.request.headers.get('X-Tenant-ID')
+        # 检查是否通过请求头或参数指定了租户ID
+        header_tenant_id = self.request.headers.get('X-Tenant-ID') or self.request.GET.get('tenant_id')
+        
+        if not header_tenant_id and hasattr(self.request, 'data') and isinstance(self.request.data, dict):
+            header_tenant_id = self.request.data.get('tenant_id') or self.request.data.get('tenant')
+        
+        # 若仍未提供，超级管理员自动回退至系统默认主租户
+        if not header_tenant_id:
+            from tenants.models import Tenant
+            first_tenant = Tenant.objects.filter(is_deleted=False).first()
+            if first_tenant:
+                header_tenant_id = str(first_tenant.id)
+                self.logger.info(f"超级管理员 {username} 未指定租户，自动使用默认租户ID: {header_tenant_id}")
         
         if header_tenant_id:
-            self.logger.info(f"超级管理员 {username} 通过请求头指定租户ID: {header_tenant_id}")
-            
-            # 验证指定的租户是否存在
+            self.logger.info(f"超级管理员 {username} 指定租户ID: {header_tenant_id}")
             return self._validate_super_admin_tenant_id(header_tenant_id)
         else:
-            # 超级管理员必须指定租户ID才能进行CMS操作
-            self.logger.warning(f"超级管理员 {username} 尝试执行CMS操作但未指定租户ID")
+            self.logger.warning(f"超级管理员 {username} 尝试执行操作但系统中无可用租户")
             return TenantErrorResponseBuilder.build_error_response(
                 TenantErrorTypes.SUPER_ADMIN_TENANT_ID_REQUIRED,
                 self.request
@@ -247,10 +255,23 @@ class TenantPermissionChecker:
             
             return None
             
+        except (ValueError, TypeError):
+            self.logger.warning(f"超级管理员指定的租户ID格式无效: {tenant_id}")
+            return TenantErrorResponseBuilder.build_error_response(
+                TenantErrorTypes.INVALID_TENANT_ID,
+                self.request,
+                tenant_id=tenant_id
+            )
         except Tenant.DoesNotExist:
             self.logger.warning(f"超级管理员指定的租户ID不存在: {tenant_id}")
             return TenantErrorResponseBuilder.build_error_response(
                 TenantErrorTypes.TENANT_NOT_FOUND,
                 self.request,
                 tenant_id=tenant_id
+            )
+        except Exception as e:
+            self.logger.error(f"验证超级管理员租户ID发生未知异常: {str(e)}", exc_info=True)
+            return TenantErrorResponseBuilder.build_error_response(
+                TenantErrorTypes.INTERNAL_ERROR,
+                self.request
             )

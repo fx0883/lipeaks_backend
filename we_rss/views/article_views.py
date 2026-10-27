@@ -14,6 +14,8 @@ from rest_framework.response import Response
 
 from common.pagination import StandardResultsSetPagination
 from common.schema.responses import common_error_responses
+from users.models import Member
+from we_rss.permissions import get_we_rss_tenant
 from we_rss.models import WechatArticle, WechatSyncTask
 from we_rss.schema import (
     ARTICLE_BATCH_DELETE_REQUEST_EXAMPLE,
@@ -172,16 +174,19 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
     def get_queryset(self):
         base_queryset = super().get_queryset().select_related("feed")
         feed_id = self._get_feed_id_filter()
+        tenant = get_we_rss_tenant(self.request)
+        member = self.request.user if isinstance(self.request.user, Member) else None
+
         if feed_id is None:
             queryset = ArticleVisibilityService.get_visible_article_queryset(
-                tenant=self.request.user.tenant,
-                member=self.request.user,
+                tenant=tenant,
+                member=member,
                 queryset=base_queryset,
             )
         else:
             queryset = ArticleVisibilityService.get_tenant_visible_article_queryset(
-                tenant=self.request.user.tenant,
-                member=self.request.user,
+                tenant=tenant,
+                member=member,
                 queryset=base_queryset.filter(feed_id=feed_id),
             )
         article_type = self.request.query_params.get("article_type", "").strip()
@@ -201,12 +206,13 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
             queryset = queryset.filter(is_favorite=True)
 
         tag_ids = TagService.parse_tag_ids(self.request.query_params.get("tag_ids"))
-        queryset = TagService.filter_article_queryset_by_tag_ids(
-            queryset=queryset,
-            tenant=self.request.user.tenant,
-            member=self.request.user,
-            tag_ids=tag_ids,
-        )
+        if member and tag_ids:
+            queryset = TagService.filter_article_queryset_by_tag_ids(
+                queryset=queryset,
+                tenant=tenant,
+                member=member,
+                tag_ids=tag_ids,
+            )
 
         publish_time_start = self.request.query_params.get("publish_time_start", "").strip()
         if publish_time_start:
@@ -227,9 +233,11 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
         return self._apply_article_list_sorting(queryset)
 
     def get_object(self):
+        tenant = get_we_rss_tenant(self.request)
+        member = self.request.user if isinstance(self.request.user, Member) else None
         article = ArticleVisibilityService.get_tenant_visible_article(
-            tenant=self.request.user.tenant,
-            member=self.request.user,
+            tenant=tenant,
+            member=member,
             article_id=self.kwargs[self.lookup_field],
             queryset=super().get_queryset().select_related("feed"),
         )
@@ -492,22 +500,6 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
         return Response(WechatSyncTaskSerializer(task).data)
 
     @extend_schema(
-        operation_id="we_rss_articles_refresh",
-        tags=[WE_RSS_TAG],
-        summary="Refresh article Markdown content",
-        description=(
-            "Stream Markdown content refresh progress for one tenant article unless the current member has hidden it. "
-            "The response content type is `text/event-stream`. "
-            f"{WE_RSS_AUTH_DESCRIPTION}"
-        ),
-        parameters=with_tenant_header(ARTICLE_ID_PARAMETER),
-        request=None,
-        responses={
-            200: None,
-            **common_error_responses,
-        },
-    )
-    @extend_schema(
         operation_id="we_rss_articles_markdown_with_images",
         tags=[WE_RSS_TAG],
         summary="Get article markdown with images (fresh fetch by url)",
@@ -532,6 +524,22 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
             raise ValidationError(f"获取文章原文失败：{exc}")
         return Response({"markdown": markdown, "title": article.title})
 
+    @extend_schema(
+        operation_id="we_rss_articles_refresh",
+        tags=[WE_RSS_TAG],
+        summary="Refresh article Markdown content",
+        description=(
+            "Stream Markdown content refresh progress for one tenant article unless the current member has hidden it. "
+            "The response content type is `text/event-stream`. "
+            f"{WE_RSS_AUTH_DESCRIPTION}"
+        ),
+        parameters=with_tenant_header(ARTICLE_ID_PARAMETER),
+        request=None,
+        responses={
+            200: None,
+            **common_error_responses,
+        },
+    )
     @action(detail=True, methods=["post"])
     def refresh(self, request, *args, **kwargs):
         article = self.get_object()
@@ -651,6 +659,7 @@ class ArticleViewSet(ArticleApiGatewayMixin, WeRssTenantModelViewSet):
             "单篇/单图失败不阻断整体。"
             f" {WE_RSS_AUTH_DESCRIPTION}"
         ),
+        parameters=with_tenant_header(),
         request=request_body(
             ArticleExportSerializer,
             request_example(

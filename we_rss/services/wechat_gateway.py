@@ -207,13 +207,16 @@ def build_description_from_content(content, *, max_length=200):
     return f"{text[:max_length].rstrip()}..."
 
 
-def get_wechat_article_page_status(page_text):
+def get_wechat_article_page_status(page_text, html=""):
     environment_error_markers = {
         "当前环境异常，完成验证后即可继续访问": "当前环境异常，完成验证后即可继续访问",
     }
     for marker, message in environment_error_markers.items():
         if marker in page_text:
             raise ValueError(message)
+
+    if html and ("secitptpage/verify" in html or "TCaptcha.js" in html):
+        raise ValueError("当前环境异常，完成验证后即可继续访问")
 
     deleted_markers = [
         "该内容已被发布者删除",
@@ -281,7 +284,7 @@ def parse_wechat_article_html(html, url):
         "该内容暂时无法查看",
         "Unable to view this content because it violates regulation",
     ]
-    status = get_wechat_article_page_status(page_text)
+    status = get_wechat_article_page_status(page_text, html)
     if not description:
         description = build_description_from_content(content)
     if status == "deleted":

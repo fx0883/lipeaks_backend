@@ -82,7 +82,13 @@ class MemberLike(models.Model):
         verbose_name_plural = _('用户点赞')
         db_table = 'interactions_member_like'
         ordering = ['-created_at']
-        unique_together = [['from_member', 'to_member']]  # 同一用户不能重复点赞同一用户
+        constraints = [
+            models.UniqueConstraint(
+                fields=['from_member', 'to_member'],
+                condition=models.Q(is_deleted=False),
+                name='unique_active_member_like'
+            )
+        ]
         indexes = [
             models.Index(fields=['from_member', 'created_at']),
             models.Index(fields=['to_member', 'created_at']),
@@ -131,7 +137,13 @@ class MemberFollow(models.Model):
         verbose_name_plural = _('用户关注')
         db_table = 'interactions_member_follow'
         ordering = ['-created_at']
-        unique_together = [['follower', 'following']]  # 同一用户不能重复关注同一用户
+        constraints = [
+            models.UniqueConstraint(
+                fields=['follower', 'following'],
+                condition=models.Q(is_deleted=False),
+                name='unique_active_member_follow'
+            )
+        ]
         indexes = [
             models.Index(fields=['follower', 'created_at']),
             models.Index(fields=['following', 'created_at']),
@@ -190,7 +202,13 @@ class ArticleLike(models.Model):
         verbose_name_plural = _('文章点赞')
         db_table = 'interactions_article_like'
         ordering = ['-created_at']
-        unique_together = [['from_member', 'article']]  # 同一用户不能重复点赞同一文章
+        constraints = [
+            models.UniqueConstraint(
+                fields=['from_member', 'article'],
+                condition=models.Q(is_deleted=False),
+                name='unique_active_article_like'
+            )
+        ]
         indexes = [
             models.Index(fields=['from_member', 'created_at']),
             models.Index(fields=['article', 'created_at']),

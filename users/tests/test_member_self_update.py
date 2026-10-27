@@ -38,10 +38,12 @@ class MemberSelfUpdateTests(TestCase):
     def test_cannot_update_username(self):
         resp = self.client.put(self.url, {"username": "newuser"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        # Detail message comes from CurrentMemberView protection
-        self.assertEqual(resp.data.get("detail"), "不允许修改 username 字段")
+        # Detail/Message comes from CurrentMemberView protection through middleware
+        msg = resp.data.get("message") or resp.data.get("detail")
+        self.assertEqual(msg, "不允许修改 username 字段")
 
     def test_cannot_update_email(self):
         resp = self.client.put(self.url, {"email": "new@example.com"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(resp.data.get("detail"), "不允许修改 email 字段")
+        msg = resp.data.get("message") or resp.data.get("detail")
+        self.assertEqual(msg, "不允许修改 email 字段")

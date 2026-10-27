@@ -30,6 +30,7 @@ from users.serializers import (
 )
 from common.schema import api_schema, common_search_parameter, user_status_parameter, common_pagination_parameters, common_error_responses
 from tenants.models import Tenant
+from common.utils.image_url import add_domain_to_image_url
 
 logger = logging.getLogger(__name__)
 
@@ -457,6 +458,7 @@ class CurrentMemberView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
+        user.refresh_from_db()
         serializer = MemberSerializer(user, context=self.get_serializer_context())
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -971,10 +973,19 @@ class MemberAvatarUploadView(APIView):
             
             logger.info(f"普通用户 {user.username} 上传了新头像")
             
+            avatar_url = add_domain_to_image_url(request, relative_url)
+            
             return Response({
+                "success": True,
+                "code": 2000,
+                "message": "头像上传成功",
                 "detail": "头像上传成功",
-                "avatar": relative_url  # 返回给前端的是相对路径
-            })
+                "avatar": avatar_url,
+                "data": {
+                    "detail": "头像上传成功",
+                    "avatar": avatar_url
+                }
+            }, status=status.HTTP_200_OK)
         
         except Exception as e:
             logger.error(f"头像上传失败: {str(e)}")

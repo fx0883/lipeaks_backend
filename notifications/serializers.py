@@ -86,11 +86,12 @@ class NotificationCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = [
-            'title', 'content',
+            'id', 'title', 'content',
             'scope', 'application',
             'notification_type', 'priority',
             'send_email'
         ]
+        read_only_fields = ['id']
     
     def validate(self, attrs):
         """验证数据"""
