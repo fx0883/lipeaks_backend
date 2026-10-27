@@ -324,7 +324,9 @@ def get_user_tenant(user):
         if profile:
             return profile.tenant
     
-    return None
+    # 超管或未绑定租户的用户，默认回退到系统默认主租户
+    from tenants.models import Tenant
+    return Tenant.objects.filter(is_deleted=False).first()
 
 
 def ensure_tenant_isolation(request, queryset):

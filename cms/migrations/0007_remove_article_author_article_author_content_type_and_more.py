@@ -5,7 +5,51 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def drop_author_id_safely(apps, schema_editor):
+    cursor = schema_editor.connection.cursor()
+    cursor.execute("""
+        SELECT CONSTRAINT_NAME 
+        FROM information_schema.KEY_COLUMN_USAGE 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'cms_article' 
+          AND COLUMN_NAME = 'author_id' 
+          AND REFERENCED_TABLE_NAME IS NOT NULL;
+    """)
+    for row in cursor.fetchall():
+        fk_name = row[0]
+        schema_editor.execute(f"ALTER TABLE `cms_article` DROP FOREIGN KEY `{fk_name}`;")
+    
+    cursor.execute("""
+        SELECT COUNT(*) 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'cms_article' 
+          AND COLUMN_NAME = 'author_id';
+    """)
+    if cursor.fetchone()[0] > 0:
+        schema_editor.execute("ALTER TABLE `cms_article` DROP COLUMN `author_id`;")
+
+
+def create_indexes_safely(apps, schema_editor):
+    cursor = schema_editor.connection.cursor()
+    for idx_name, cols in [
+        ('cms_article_author__935039_idx', 'author_content_type_id, author_object_id'),
+        ('cms_article_tenant__cc6d2a_idx', 'tenant_id, author_content_type_id, author_object_id')
+    ]:
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM information_schema.STATISTICS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'cms_article' 
+              AND INDEX_NAME = %s;
+        """, [idx_name])
+        if cursor.fetchone()[0] == 0:
+            schema_editor.execute(f"CREATE INDEX `{idx_name}` ON `cms_article` ({cols});")
+
+
 class Migration(migrations.Migration):
+
+    atomic = False
 
     dependencies = [
         ('cms', '0006_add_category_translation'),
@@ -15,86 +59,48 @@ class Migration(migrations.Migration):
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
+def migrate_author_data_safely(apps, schema_editor):
+    cursor = schema_editor.connection.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) 
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'cms_article' 
+          AND COLUMN_NAME = 'author_id';
+    """)
+    if cursor.fetchone()[0] > 0:
+        schema_editor.execute("""
+            UPDATE cms_article 
+            SET author_content_type_id = (
+                SELECT id FROM django_content_type 
+                WHERE app_label='users' AND model='user' LIMIT 1
+            ),
+            author_object_id = author_id
+            WHERE author_id IS NOT NULL AND author_content_type_id IS NULL;
+        """)
+
     operations = [
-        # 步骤1: 添加新字段（保留旧字段）
-        migrations.RunSQL(
-            sql="""
-                ALTER TABLE cms_article 
-                ADD COLUMN author_content_type_id INT NULL,
-                ADD COLUMN author_object_id INT UNSIGNED NULL,
-                ADD CONSTRAINT cms_article_author_content_type_fk 
-                    FOREIGN KEY (author_content_type_id) 
-                    REFERENCES django_content_type(id);
-            """,
-            reverse_sql="""
-                ALTER TABLE cms_article 
-                DROP FOREIGN KEY cms_article_author_content_type_fk,
-                DROP COLUMN author_content_type_id,
-                DROP COLUMN author_object_id;
-            """,
-        ),
-        
-        # 步骤2: 迁移数据
-        migrations.RunSQL(
-            sql="""
-                UPDATE cms_article 
-                SET author_content_type_id = (
-                    SELECT id FROM django_content_type 
-                    WHERE app_label='users' AND model='user' LIMIT 1
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(migrate_author_data_safely, migrations.RunPython.noop),
+                migrations.RunPython(drop_author_id_safely, migrations.RunPython.noop),
+                migrations.RunPython(create_indexes_safely, migrations.RunPython.noop),
+            ],
+            state_operations=[
+                migrations.AddField(
+                    model_name='article',
+                    name='author_content_type',
+                    field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='cms_articles_as_author', to='contenttypes.contenttype', verbose_name='作者类型'),
                 ),
-                author_object_id = author_id
-                WHERE author_id IS NOT NULL;
-            """,
-            reverse_sql="""
-                UPDATE cms_article 
-                SET author_id = author_object_id
-                WHERE author_content_type_id = (
-                    SELECT id FROM django_content_type 
-                    WHERE app_label='users' AND model='user' LIMIT 1
-                ) AND author_object_id IS NOT NULL;
-            """,
-        ),
-        
-        # 步骤3: 删除旧字段
-        migrations.RunSQL(
-            sql="""
-                ALTER TABLE cms_article 
-                DROP FOREIGN KEY cms_article_author_id_64970b07_fk_users_user_id,
-                DROP COLUMN author_id;
-            """,
-            reverse_sql="""
-                ALTER TABLE cms_article 
-                ADD COLUMN author_id BIGINT NULL,
-                ADD CONSTRAINT cms_article_author_id_64970b07_fk_users_user_id 
-                    FOREIGN KEY (author_id) 
-                    REFERENCES users_user(id);
-            """,
-        ),
-        
-        # 步骤4: 添加索引
-        migrations.RunSQL(
-            sql="""
-                CREATE INDEX cms_article_author__935039_idx 
-                ON cms_article(author_content_type_id, author_object_id);
-                
-                CREATE INDEX cms_article_tenant__cc6d2a_idx 
-                ON cms_article(tenant_id, author_content_type_id, author_object_id);
-            """,
-            reverse_sql="""
-                DROP INDEX cms_article_author__935039_idx ON cms_article;
-                DROP INDEX cms_article_tenant__cc6d2a_idx ON cms_article;
-            """,
-        ),
-        
-        # 步骤5: 同步Django状态（告诉Django模型已更改）
-        migrations.AlterField(
-            model_name='article',
-            name='author_content_type',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='cms_articles_as_author', to='contenttypes.contenttype', verbose_name='作者类型'),
-        ),
-        migrations.AlterField(
-            model_name='article',
-            name='author_object_id',
-            field=models.PositiveIntegerField(blank=True, null=True, verbose_name='作者ID'),
-        ),
+                migrations.AddField(
+                    model_name='article',
+                    name='author_object_id',
+                    field=models.PositiveIntegerField(blank=True, null=True, verbose_name='作者ID'),
+                ),
+                migrations.RemoveField(
+                    model_name='article',
+                    name='author',
+                ),
+            ]
+        )
     ]

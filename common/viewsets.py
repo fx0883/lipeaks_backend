@@ -383,7 +383,15 @@ class TenantModelViewSet(viewsets.ModelViewSet):
                     return int(q_tid)
                 except (TypeError, ValueError):
                     raise TenantHeaderInvalidOrMissing()
-            raise TenantHeaderInvalidOrMissing("超级管理员执行写操作必须通过 X-Tenant-ID 请求头或 tenant_id 参数指定租户")
+            if hasattr(request, 'data') and isinstance(request.data, dict):
+                body_tid = request.data.get('tenant_id') or request.data.get('tenant')
+                if body_tid is not None:
+                    try:
+                        return int(body_tid)
+                    except (TypeError, ValueError):
+                        pass
+            # 若未显式提供，平滑回退到默认主租户
+            return getattr(settings, 'DEFAULT_TENANT_ID', 1)
 
         if is_tenant_admin:
             user_tenant = getattr(user, 'tenant', None)

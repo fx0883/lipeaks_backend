@@ -22,6 +22,28 @@ from .models import (
 )
 
 
+def _get_request_tenant(request, default_tenant=None):
+    if default_tenant:
+        return default_tenant
+    if not request:
+        from tenants.models import Tenant
+        return Tenant.objects.filter(is_deleted=False).first()
+    user = getattr(request, 'user', None)
+    if user and getattr(user, 'tenant', None):
+        return user.tenant
+    tenant_id = None
+    if hasattr(request, 'headers'):
+        tenant_id = request.headers.get('X-Tenant-ID')
+    if not tenant_id and hasattr(request, 'query_params'):
+        tenant_id = request.query_params.get('tenant_id')
+    from tenants.models import Tenant
+    if tenant_id:
+        t = Tenant.objects.filter(id=tenant_id, is_deleted=False).first()
+        if t:
+            return t
+    return Tenant.objects.filter(is_deleted=False).first()
+
+
 class CategorySerializer(ImageFieldNormalizerMixin, TranslatableModelSerializer):
     """分类序列化器（支持多语言）"""
     translations = TranslatedFieldsField(shared_model=Category)
@@ -597,7 +619,16 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
         category_ids = data.pop('category_ids', [])
         tag_ids = data.pop('tag_ids', [])
         applications = data.pop('applications', None)
-        tenant = self.context['request'].user.tenant
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        tenant = getattr(user, 'tenant', None)
+        if not tenant and request:
+            from tenants.models import Tenant
+            header_tid = request.headers.get('X-Tenant-ID') or request.GET.get('tenant_id')
+            if header_tid:
+                tenant = Tenant.objects.filter(id=header_tid, is_deleted=False).first()
+            if not tenant:
+                tenant = Tenant.objects.filter(is_deleted=False).first()
         instance = getattr(self, 'instance', None)
         
         # applications 为可选：允许文章不关联任何应用
@@ -651,11 +682,12 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
             pass
         # 如果是创建或更新且提供了标题，生成新的slug
         elif title:
-            slug = slugify(title)
+            import uuid
+            slug = slugify(title, allow_unicode=True) or f"article-{uuid.uuid4().hex[:6]}"
             # 确保slug唯一
             i = 1
             original_slug = slug
-            while Article.objects.filter(slug=slug).exclude(id=getattr(instance, 'id', None)).exists():
+            while Article.original_objects.filter(slug=slug).exclude(id=getattr(instance, 'id', None)).exists():
                 slug = f"{original_slug}-{i}"
                 i += 1
             data['slug'] = slug
@@ -689,11 +721,12 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
     def create(self, validated_data):
         """创建文章，并关联分类、标签和元数据"""
         meta_data = validated_data.pop('meta', None)
-        tenant = self.context['request'].user.tenant
+        request = self.context.get('request')
+        tenant = validated_data.get('tenant') or _get_request_tenant(request)
         validated_data['tenant'] = tenant
         
         # 如果没有指定作者，根据当前用户类型设置user或member
-        current_user = self.context['request'].user
+        current_user = request.user if request else None
         from users.models import Member, User
         
         # 根据用户类型设置对应的外键字段
@@ -749,18 +782,27 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
                 tenant=tenant
             )
         
-        # 创建统计记录（使用get_or_create避免重复创建）
-        ArticleStatistics.objects.get_or_create(
-            article=article,
-            defaults={'tenant': tenant}
-        )
+        # 创建统计记录（使用original_objects避免多租户管理器隔离导致的重复键冲突）
+        try:
+            stats = ArticleStatistics.original_objects.filter(article=article).first()
+            if not stats:
+                ArticleStatistics.original_objects.create(
+                    article=article,
+                    tenant=tenant
+                )
+            elif tenant and stats.tenant != tenant:
+                stats.tenant = tenant
+                stats.save(update_fields=['tenant'])
+        except Exception:
+            pass
         
         return article
     
     def update(self, instance, validated_data):
         """更新文章，并更新关联的分类、标签和元数据"""
         meta_data = validated_data.pop('meta', None)
-        tenant = self.context['request'].user.tenant
+        request = self.context.get('request')
+        tenant = _get_request_tenant(request, default_tenant=instance.tenant)
         
         # 更新前记录原始数据，用于版本控制
         old_title = instance.title

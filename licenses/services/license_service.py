@@ -598,12 +598,14 @@ class LicenseManagementService:
     @transaction.atomic
     def create_license(
         self,
-        application_id: int,
-        plan_id: int,
-        tenant_id: int,
-        customer_info: Dict[str, Any],
+        application_id: int = None,
+        plan_id: int = None,
+        tenant_id: int = None,
+        customer_info: Dict[str, Any] = None,
         expires_at: datetime = None,
-        max_activations: int = None
+        max_activations: int = None,
+        product_id: int = None,
+        **kwargs
     ) -> License:
         """
         创建新许可证
@@ -615,10 +617,14 @@ class LicenseManagementService:
             customer_info: 客户信息
             expires_at: 过期时间
             max_activations: 最大激活数
+            product_id: 兼容历史产品ID
             
         Returns:
             License: 许可证对象
         """
+        if application_id is None and product_id is not None:
+            application_id = product_id
+
         try:
             # 获取应用和方案
             application = Application.objects.get(id=application_id)

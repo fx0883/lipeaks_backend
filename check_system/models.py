@@ -85,18 +85,24 @@ class TaskCategory(TranslatableModel):
             return f"{name} (系统)"
         return name
     
+    def get_translated_name(self, language_code=None):
+        """兼容多语言获取类型名称"""
+        return self.safe_translation_getter('name', language_code=language_code, any_language=True) or 'Unnamed'
+    
     def save(self, *args, **kwargs):
         """重写保存方法，添加日志"""
         is_new = self.pk is None
-        if is_new:
-            name = self.safe_translation_getter('name', any_language=True) or 'Unknown'
-            if self.is_system:
-                logger.info(f"创建系统预设类型: {name}")
-            else:
-                tenant_name = self.tenant.name if self.tenant else "无租户"
-                logger.info(f"租户 {tenant_name} 创建自定义类型: {name}")
-        
         super().save(*args, **kwargs)
+        if is_new:
+            try:
+                name = self.safe_translation_getter('name', any_language=True) or 'Unknown'
+                if self.is_system:
+                    logger.info(f"创建系统预设类型: {name}")
+                else:
+                    tenant_name = self.tenant.name if self.tenant else "无租户"
+                    logger.info(f"租户 {tenant_name} 创建自定义类型: {name}")
+            except Exception:
+                pass
     
     def soft_delete(self):
         """软删除"""

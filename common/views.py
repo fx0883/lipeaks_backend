@@ -68,34 +68,33 @@ class TenantApiView(APIView):
         is_super_admin = bool(is_auth and getattr(request, 'auth_type', None) == 'jwt' and getattr(user, 'is_super_admin', False))
         is_tenant_admin = bool(is_auth and getattr(user, 'is_admin', False) and not is_super_admin)
         
-        # 防御性：管理员/超管禁止使用header
         header_tid = get_header_tenant_id(request)
-        if (is_super_admin or is_tenant_admin) and header_tid is not None:
-            logger.warning(f"[TenantApiView] 管理员/超管携带X-Tenant-ID被拒绝")
-            raise TenantHeaderInvalidOrMissing()
         
         # 计算有效租户ID
         if is_super_admin:
-            q_tid = request.GET.get('tenant_id')
+            q_tid = request.GET.get('tenant_id') or header_tid
             if q_tid is not None:
                 try:
                     return int(q_tid)
                 except (TypeError, ValueError):
-                    raise TenantHeaderInvalidOrMissing()
-            # 超管可以不指定租户ID，返回None表示访问所有数据
+                    return None
             return None
             
         elif is_tenant_admin:
-            q_tid = request.GET.get('tenant_id')
+            q_tid = request.GET.get('tenant_id') or header_tid
             if q_tid is not None:
                 try:
                     return int(q_tid)
                 except (TypeError, ValueError):
-                    raise TenantHeaderInvalidOrMissing()
+                    pass
             # 管理员未指定则使用自己的租户
             user_tenant = getattr(user, 'tenant', None)
             if user_tenant:
                 return int(user_tenant.id)
+            from tenants.models import Tenant
+            first_t = Tenant.objects.filter(is_deleted=False).first()
+            if first_t:
+                return int(first_t.id)
             raise TenantMismatchOrNoPermission()
             
         else:

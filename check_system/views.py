@@ -100,7 +100,14 @@ class TaskCategoryViewSet(TenantModelViewSet):
     def perform_create(self, serializer):
         """创建时自动设置租户"""
         user = self.request.user
-        tenant = user.tenant if hasattr(user, 'tenant') else None
+        tenant = getattr(user, 'tenant', None)
+        if not tenant:
+            header_tid = self.request.headers.get('X-Tenant-ID') or self.request.query_params.get('tenant_id')
+            from tenants.models import Tenant
+            if header_tid:
+                tenant = Tenant.objects.filter(id=header_tid, is_deleted=False).first()
+            if not tenant:
+                tenant = Tenant.objects.filter(is_deleted=False).first()
         serializer.save(tenant=tenant)
         logger.info(f"租户管理员 {user.username} 创建类型")
 
@@ -259,7 +266,14 @@ class TaskTemplateViewSet(TenantModelViewSet):
     def perform_create(self, serializer):
         """创建时自动设置租户"""
         user = self.request.user
-        tenant = user.tenant if hasattr(user, 'tenant') else None
+        tenant = getattr(user, 'tenant', None)
+        if not tenant:
+            header_tid = self.request.headers.get('X-Tenant-ID') or self.request.query_params.get('tenant_id')
+            from tenants.models import Tenant
+            if header_tid:
+                tenant = Tenant.objects.filter(id=header_tid, is_deleted=False).first()
+            if not tenant:
+                tenant = Tenant.objects.filter(is_deleted=False).first()
         serializer.save(tenant=tenant)
         logger.info(f"租户管理员 {user.username} 创建模板")
 

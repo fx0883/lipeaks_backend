@@ -34,6 +34,8 @@ class APICacheMiddleware(MiddlewareMixin):
     # 绝对不缓存的敏感/实时路由黑名单前缀
     BLACKLIST_PREFIXES = (
         '/api/v1/auth/',
+        '/api/v1/admin/',
+        '/api/v1/admin-users/',
         '/api/v1/members/password-reset/',
         '/api/v1/members/delete-account/',
         '/api/v1/schema/',

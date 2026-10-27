@@ -5,7 +5,20 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def drop_constraint_safely(apps, schema_editor):
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS 
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cms_article' 
+              AND CONSTRAINT_NAME = 'article_one_author_required';
+        """)
+        if cursor.fetchone():
+            schema_editor.execute("ALTER TABLE `cms_article` DROP CHECK `article_one_author_required`;")
+
+
 class Migration(migrations.Migration):
+
+    atomic = False
 
     dependencies = [
         ('cms', '0008_replace_generic_fk_with_dual_fk'),
@@ -15,33 +28,40 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveConstraint(
-            model_name='article',
-            name='article_one_author_required',
-        ),
-        migrations.RenameIndex(
-            model_name='article',
-            new_name='cms_article_user_id_bacb9b_idx',
-            old_name='cms_article_user_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='article',
-            new_name='cms_article_member__11bd62_idx',
-            old_name='cms_article_member_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='article',
-            new_name='cms_article_tenant__3e9ef5_idx',
-            old_name='cms_article_tenant_user_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='article',
-            new_name='cms_article_tenant__01419f_idx',
-            old_name='cms_article_tenant_member_idx',
-        ),
-        migrations.RemoveField(
-            model_name='article',
-            name='author',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(drop_constraint_safely, migrations.RunPython.noop),
+            ],
+            state_operations=[
+                migrations.RemoveConstraint(
+                    model_name='article',
+                    name='article_one_author_required',
+                ),
+                migrations.RenameIndex(
+                    model_name='article',
+                    new_name='cms_article_user_id_bacb9b_idx',
+                    old_name='cms_article_user_idx',
+                ),
+                migrations.RenameIndex(
+                    model_name='article',
+                    new_name='cms_article_member__11bd62_idx',
+                    old_name='cms_article_member_idx',
+                ),
+                migrations.RenameIndex(
+                    model_name='article',
+                    new_name='cms_article_tenant__3e9ef5_idx',
+                    old_name='cms_article_tenant_user_idx',
+                ),
+                migrations.RenameIndex(
+                    model_name='article',
+                    new_name='cms_article_tenant__01419f_idx',
+                    old_name='cms_article_tenant_member_idx',
+                ),
+                migrations.RemoveField(
+                    model_name='article',
+                    name='author',
+                ),
+            ]
         ),
         migrations.AddField(
             model_name='comment',

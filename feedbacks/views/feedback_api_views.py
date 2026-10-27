@@ -55,7 +55,15 @@ def get_tenant_from_request(request):
         tenant = getattr(user, 'tenant', None)
         if tenant:
             return tenant
-    
+            
+    # 4. 尝试从 X-Tenant-ID 请求头获取
+    header_tid = request.headers.get('X-Tenant-ID') or request.GET.get('tenant_id')
+    if header_tid:
+        from tenants.models import Tenant
+        tenant = Tenant.objects.filter(id=header_tid, is_deleted=False).first()
+        if tenant:
+            return tenant
+
     return None
 
 
@@ -297,7 +305,7 @@ class FeedbackChangeStatusView(APIView):
             return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
         
         new_status = request.data.get('status')
-        reason = request.data.get('reason', '')
+        reason = request.data.get('reason') or request.data.get('comment', '')
         
         if not new_status:
             return Response({'detail': 'Status is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -321,6 +329,10 @@ class FeedbackChangeStatusView(APIView):
         
         serializer = FeedbackDetailSerializer(feedback, context={'request': request})
         return Response(serializer.data)
+    
+    def post(self, request, pk):
+        """兼容POST方式更新状态"""
+        return self.patch(request, pk)
 
 
 class FeedbackVerifyEmailView(APIView):

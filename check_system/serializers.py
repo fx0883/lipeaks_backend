@@ -241,8 +241,11 @@ class TaskTemplateSerializer(serializers.ModelSerializer):
     def get_category_name(self, obj) -> str:
         """获取类型名称"""
         if obj.category:
-            language = normalize_language_code(self.context.get('request'))
-            return obj.category.get_translated_name(language)
+            if hasattr(obj.category, 'safe_translation_getter'):
+                return obj.category.safe_translation_getter('name', any_language=True) or 'Unnamed'
+            if hasattr(obj.category, 'get_translated_name'):
+                return obj.category.get_translated_name()
+            return str(obj.category)
         return None
         
     def to_representation(self, instance):

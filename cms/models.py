@@ -193,12 +193,13 @@ class Article(BaseModel):
     def save(self, *args, **kwargs):
         # 如果没有设置slug，根据标题自动生成
         if not self.slug:
-            base_slug = slugify(self.title) or 'article'
+            import uuid
+            base_slug = slugify(self.title, allow_unicode=True) or f"article-{uuid.uuid4().hex[:6]}"
             self.slug = base_slug
             
-            # 如果slug冲突，自动添加后缀
+            # 如果slug冲突，自动添加后缀（使用original_objects避免跨租户/软删除唯一冲突）
             counter = 1
-            while Article.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+            while Article.original_objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
                 self.slug = f"{base_slug}-{counter}"
                 counter += 1
         
@@ -218,10 +219,18 @@ class Article(BaseModel):
         
         # 如果是首次创建文章，自动创建文章统计记录
         if kwargs.get('force_insert', False):
-            ArticleStatistics.objects.get_or_create(
-                article=self,
-                defaults={'tenant': self.tenant}
-            )
+            try:
+                stats = ArticleStatistics.original_objects.filter(article=self).first()
+                if not stats:
+                    ArticleStatistics.original_objects.create(
+                        article=self,
+                        tenant=self.tenant
+                    )
+                elif self.tenant and stats.tenant != self.tenant:
+                    stats.tenant = self.tenant
+                    stats.save(update_fields=['tenant'])
+            except Exception as e:
+                logger.warning(f"自动创建文章统计记录被忽略: {str(e)}")
     
     def get_ancestors(self):
         """

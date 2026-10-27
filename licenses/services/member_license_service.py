@@ -137,7 +137,7 @@ class MemberLicenseApplicationService:
             # 使用子查询确保产品有活跃的试用方案
             # 这样可以避免JOIN导致的误判问题
             has_active_trial_plan = LicensePlan.objects.filter(
-                product=OuterRef('pk'),
+                application=OuterRef('pk'),
                 plan_type='trial',
                 status='active'
             )
@@ -440,7 +440,7 @@ class MemberLicenseApplicationService:
         
         # 使用现有的许可证管理服务创建许可证
         license_obj = self.license_management_service.create_license(
-            product_id=product.id,
+            application_id=product.id,
             plan_id=plan.id,
             tenant_id=member.tenant.id,
             customer_info=customer_info,

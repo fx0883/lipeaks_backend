@@ -974,8 +974,22 @@ class LicenseApplicationSerializer(serializers.Serializer):
     """许可证申请序列化器"""
     
     application_id = serializers.IntegerField(
+        required=False,
         help_text="产品ID"
     )
+    product_id = serializers.IntegerField(
+        required=False,
+        help_text="兼容前端历史字段名"
+    )
+
+    def validate(self, attrs):
+        if 'application_id' in attrs and 'product_id' not in attrs:
+            attrs['product_id'] = attrs['application_id']
+        elif 'product_id' in attrs and 'application_id' not in attrs:
+            attrs['application_id'] = attrs['product_id']
+        elif 'application_id' not in attrs and 'product_id' not in attrs:
+            raise serializers.ValidationError({"application_id": "请指定要申请的产品ID"})
+        return attrs
     plan_id = serializers.IntegerField(
         required=False,
         help_text="方案ID（可选）。如果产品有多个试用方案，可以指定要申请的方案ID；如果不指定，系统会自动选择有效期最长的方案"

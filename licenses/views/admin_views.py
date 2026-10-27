@@ -571,6 +571,16 @@ class LicenseViewSet(TenantModelViewSet):
             for key, value in save_kwargs.items():
                 setattr(instance, key, value)
             instance.save()
+
+    def create(self, request, *args, **kwargs):
+        """创建许可证并返回完整详情（包含 license_key、状态等）"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        instance = serializer.instance
+        detail_serializer = LicenseDetailSerializer(instance, context=self.get_serializer_context())
+        headers = self.get_success_headers(serializer.data)
+        return Response(detail_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     @action(detail=True, methods=['post'])
     def revoke(self, request, pk=None):

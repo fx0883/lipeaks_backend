@@ -464,6 +464,8 @@ class LoginSerializer(serializers.Serializer):
         # 通用状态校验
         if not user.is_active:
             raise serializers.ValidationError("User is disabled")
+        if hasattr(user, 'status') and user.status != 'active':
+            raise serializers.ValidationError(f"User account is {user.status}")
         if user.is_deleted:
             raise serializers.ValidationError("User has been deleted")
         # 子账号限制
@@ -892,6 +894,20 @@ class MemberSerializer(serializers.ModelSerializer):
         path = obj.avatar if obj.avatar.startswith('/') else f'/{obj.avatar}'
         return f"{base_url}{path}"
 
+    def update(self, instance, validated_data):
+        if 'status' in validated_data:
+            new_status = validated_data['status']
+            if new_status != 'active':
+                validated_data['is_active'] = False
+            elif 'is_active' not in validated_data:
+                validated_data['is_active'] = True
+        elif 'is_active' in validated_data:
+            if not validated_data['is_active'] and instance.status == 'active':
+                validated_data['status'] = 'suspended'
+            elif validated_data['is_active'] and instance.status != 'active':
+                validated_data['status'] = 'active'
+        return super().update(instance, validated_data)
+
 
 class MemberCreateSerializer(serializers.ModelSerializer):
     """
@@ -981,6 +997,19 @@ class MemberCreateSerializer(serializers.ModelSerializer):
         member.is_active = True
         member.save()
         return member
+
+    def to_representation(self, instance):
+        return {
+            'id': instance.id,
+            'username': instance.username,
+            'email': instance.email,
+            'phone': instance.phone,
+            'nick_name': instance.nick_name,
+            'wechat_id': instance.wechat_id,
+            'status': instance.status,
+            'tenant': instance.tenant_id,
+            'tenant_name': instance.tenant.name if instance.tenant else None
+        }
 
 
 class MemberSelfRegisterSerializer(serializers.ModelSerializer):

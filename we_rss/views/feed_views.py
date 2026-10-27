@@ -4,7 +4,7 @@ from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import timedelta
 
 from django.conf import settings
-from django.db.models import Exists, OuterRef
+from django.db.models import BooleanField, Exists, OuterRef, Value
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, OpenApiTypes, extend_schema
 from django.http import StreamingHttpResponse
@@ -14,6 +14,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from common.schema.responses import common_error_responses
+from users.models import Member
+from we_rss.permissions import get_we_rss_tenant
 from we_rss.models import MemberFeedSubscription, WechatArticle, WechatFeed
 from we_rss.schema import (
     FEED_ARTICLE_CLEAR_EXAMPLE,
@@ -68,27 +70,41 @@ class FeedViewSet(FeedApiGatewayMixin, WeRssTenantModelViewSet):
         return super().get_renderers()
 
     def get_queryset(self):
-        subscription_exists = MemberFeedSubscription.objects.filter(
-            tenant_id=self.get_tenant_id(),
-            member=self.request.user,
-            feed_id=OuterRef("pk"),
-        )
-        queryset = (
-            super()
-            .get_queryset()
-            .annotate(is_subscribed=Exists(subscription_exists))
-            .order_by("-updated_at", "-id")
-        )
+        user = self.request.user
+        tenant = get_we_rss_tenant(self.request)
+        tenant_id = tenant.id if tenant else self.get_tenant_id()
+
+        if isinstance(user, Member):
+            subscription_exists = MemberFeedSubscription.objects.filter(
+                tenant_id=tenant_id,
+                member=user,
+                feed_id=OuterRef("pk"),
+            )
+            queryset = (
+                super()
+                .get_queryset()
+                .annotate(is_subscribed=Exists(subscription_exists))
+                .order_by("-updated_at", "-id")
+            )
+        else:
+            queryset = (
+                super()
+                .get_queryset()
+                .annotate(is_subscribed=Value(False, output_field=BooleanField()))
+                .order_by("-updated_at", "-id")
+            )
+
         subscribed_only = self.request.query_params.get("subscribed_only", "").strip().lower()
         if subscribed_only in {"1", "true", "yes"}:
             queryset = queryset.filter(is_subscribed=True)
         tag_ids = TagService.parse_tag_ids(self.request.query_params.get("tag_ids"))
-        queryset = TagService.filter_feed_queryset_by_tag_ids(
-            queryset=queryset,
-            tenant=self.request.user.tenant,
-            member=self.request.user,
-            tag_ids=tag_ids,
-        )
+        if isinstance(user, Member) and tag_ids:
+            queryset = TagService.filter_feed_queryset_by_tag_ids(
+                queryset=queryset,
+                tenant=tenant,
+                member=user,
+                tag_ids=tag_ids,
+            )
         return queryset
 
     def get_serializer_class(self):

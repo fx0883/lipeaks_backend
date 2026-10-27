@@ -141,6 +141,10 @@ class FeedbackVoteView(APIView):
             return Response({'error': 'Feedback not found'}, status=404)
         
         vote_type = request.data.get('vote_type')
+        if vote_type in ['upvote', 'up', '1']:
+            vote_type = 1
+        elif vote_type in ['downvote', 'down', '-1']:
+            vote_type = -1
         if vote_type not in [1, -1]:
             return Response({'error': 'Invalid vote type'}, status=400)
         

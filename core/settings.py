@@ -71,9 +71,19 @@ FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER = get_env_with_validation(
 )
 
 # 允许的主机列表：生产环境通过环境变量 ALLOWED_HOSTS 指定具体域名，例如 "example.com,api.example.com"
+def _parse_allowed_hosts(val):
+    default_hosts = ['*'] if DEBUG else ['localhost', '127.0.0.1']
+    if isinstance(val, (list, tuple)):
+        return list(val) if val else default_hosts
+    if isinstance(val, str):
+        parsed = [host.strip() for host in val.split(',') if host.strip()]
+        if parsed:
+            return parsed
+    return default_hosts
+
 ALLOWED_HOSTS = get_env_with_validation(
     'ALLOWED_HOSTS',
-    lambda x: [host.strip() for host in x.split(',') if host.strip()],
+    _parse_allowed_hosts,
     ['*'] if DEBUG else ['localhost', '127.0.0.1']
 )
 
@@ -739,7 +749,10 @@ REDIS_URL = os.getenv('REDIS_URL')
 
 
 def _get_cache_backend_config(redis_url: str) -> dict:
-    """根据依赖安装情况动态选择最佳 Redis 缓存后端"""
+    """根据依赖安装情况动态选择最佳 Redis 缓存后端，并设置极速超时以防止 Redis 宕机时级联阻塞"""
+    socket_connect_timeout = float(os.getenv('REDIS_SOCKET_CONNECT_TIMEOUT', '0.5'))
+    socket_timeout = float(os.getenv('REDIS_SOCKET_TIMEOUT', '0.5'))
+
     try:
         import django_redis  # noqa: F401
         return {
@@ -748,6 +761,8 @@ def _get_cache_backend_config(redis_url: str) -> dict:
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
                 'IGNORE_EXCEPTIONS': True,
+                'SOCKET_CONNECT_TIMEOUT': socket_connect_timeout,
+                'SOCKET_TIMEOUT': socket_timeout,
             },
             'TIMEOUT': 300,
             'KEY_PREFIX': 'lipeaks',
@@ -756,6 +771,10 @@ def _get_cache_backend_config(redis_url: str) -> dict:
         return {
             'BACKEND': 'django.core.cache.backends.redis.RedisCache',
             'LOCATION': redis_url,
+            'OPTIONS': {
+                'socket_connect_timeout': socket_connect_timeout,
+                'socket_timeout': socket_timeout,
+            },
             'TIMEOUT': 300,
             'KEY_PREFIX': 'lipeaks',
         }

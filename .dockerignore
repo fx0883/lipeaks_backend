@@ -1,0 +1,14 @@
+.git
+.idea
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env.local
+.venv
+venv
+env
+*.log
+docs/sql/*.sql
+staticfiles

@@ -13,90 +13,95 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name='softwareproduct',
-            name='tenant',
-        ),
-        migrations.RemoveField(
-            model_name='license',
-            name='product',
-        ),
-        migrations.RemoveIndex(
-            model_name='license',
-            name='licenses_li_product_708cf9_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='licenseplan',
-            name='licenses_li_product_e14b44_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='tenantlicensequota',
-            name='licenses_te_product_36891f_idx',
-        ),
-        migrations.AlterUniqueTogether(
-            name='licenseplan',
-            unique_together={('application', 'code')},
-        ),
-        migrations.AlterUniqueTogether(
-            name='tenantlicensequota',
-            unique_together={('tenant', 'application')},
-        ),
-        migrations.AddField(
-            model_name='license',
-            name='application',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='licenses', to='applications.application', verbose_name='关联应用'),
-        ),
-        migrations.AddField(
-            model_name='licenseplan',
-            name='application',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='license_plans', to='applications.application', verbose_name='关联应用'),
-        ),
-        migrations.AddField(
-            model_name='tenantlicensequota',
-            name='application',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='tenant_quotas', to='applications.application', verbose_name='应用'),
-        ),
-        migrations.AlterField(
-            model_name='license',
-            name='current_activations',
-            field=models.PositiveIntegerField(default=0, verbose_name='current激活数'),
-        ),
-        migrations.AlterField(
-            model_name='licenseplan',
-            name='default_max_activations',
-            field=models.PositiveIntegerField(default=1, verbose_name='默认最大激活数'),
-        ),
-        migrations.AlterField(
-            model_name='licenseplan',
-            name='default_validity_days',
-            field=models.PositiveIntegerField(default=365, verbose_name='默认有效天数'),
-        ),
-        migrations.AlterField(
-            model_name='tenantlicensequota',
-            name='current_licenses',
-            field=models.PositiveIntegerField(default=0, verbose_name='current许可证数'),
-        ),
-        migrations.AddIndex(
-            model_name='license',
-            index=models.Index(fields=['application', 'status'], name='licenses_li_applica_fb820b_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='licenseplan',
-            index=models.Index(fields=['application', 'plan_type'], name='licenses_li_applica_3d292f_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='tenantlicensequota',
-            index=models.Index(fields=['application', 'is_active'], name='licenses_te_applica_8d692b_idx'),
-        ),
-        migrations.RemoveField(
-            model_name='licenseplan',
-            name='product',
-        ),
-        migrations.RemoveField(
-            model_name='tenantlicensequota',
-            name='product',
-        ),
-        migrations.DeleteModel(
-            name='SoftwareProduct',
-        ),
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.RemoveField(
+                    model_name='softwareproduct',
+                    name='tenant',
+                ),
+                migrations.RemoveIndex(
+                    model_name='license',
+                    name='licenses_li_product_708cf9_idx',
+                ),
+                migrations.RemoveField(
+                    model_name='license',
+                    name='product',
+                ),
+                migrations.RemoveIndex(
+                    model_name='licenseplan',
+                    name='licenses_li_product_e14b44_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='tenantlicensequota',
+                    name='licenses_te_product_36891f_idx',
+                ),
+                migrations.AddField(
+                    model_name='license',
+                    name='application',
+                    field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='licenses', to='applications.application', verbose_name='关联应用'),
+                ),
+                migrations.AddField(
+                    model_name='licenseplan',
+                    name='application',
+                    field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='license_plans', to='applications.application', verbose_name='关联应用'),
+                ),
+                migrations.AddField(
+                    model_name='tenantlicensequota',
+                    name='application',
+                    field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='tenant_quotas', to='applications.application', verbose_name='应用'),
+                ),
+                migrations.AlterUniqueTogether(
+                    name='licenseplan',
+                    unique_together={('application', 'code')},
+                ),
+                migrations.AlterUniqueTogether(
+                    name='tenantlicensequota',
+                    unique_together={('tenant', 'application')},
+                ),
+                migrations.AlterField(
+                    model_name='license',
+                    name='current_activations',
+                    field=models.PositiveIntegerField(default=0, verbose_name='current激活数'),
+                ),
+                migrations.AlterField(
+                    model_name='licenseplan',
+                    name='default_max_activations',
+                    field=models.PositiveIntegerField(default=1, verbose_name='默认最大激活数'),
+                ),
+                migrations.AlterField(
+                    model_name='licenseplan',
+                    name='default_validity_days',
+                    field=models.PositiveIntegerField(default=365, verbose_name='默认有效天数'),
+                ),
+                migrations.AlterField(
+                    model_name='tenantlicensequota',
+                    name='current_licenses',
+                    field=models.PositiveIntegerField(default=0, verbose_name='current许可证数'),
+                ),
+                migrations.AddIndex(
+                    model_name='license',
+                    index=models.Index(fields=['application', 'status'], name='licenses_li_applica_fb820b_idx'),
+                ),
+                migrations.AddIndex(
+                    model_name='licenseplan',
+                    index=models.Index(fields=['application', 'plan_type'], name='licenses_li_applica_3d292f_idx'),
+                ),
+                migrations.AddIndex(
+                    model_name='tenantlicensequota',
+                    index=models.Index(fields=['application', 'is_active'], name='licenses_te_applica_8d692b_idx'),
+                ),
+                migrations.RemoveField(
+                    model_name='licenseplan',
+                    name='product',
+                ),
+                migrations.RemoveField(
+                    model_name='tenantlicensequota',
+                    name='product',
+                ),
+                migrations.DeleteModel(
+                    name='SoftwareProduct',
+                ),
+            ],
+            database_operations=[]
+        )
     ]
