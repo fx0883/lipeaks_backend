@@ -52,7 +52,7 @@ DATABASES = {
 }
 
 # Docker环境CORS配置 - 覆盖settings.py中的配置
-CORS_ALLOW_ALL_ORIGINS = False  # 使用白名单模式
+CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True').lower() == 'true'
 CORS_ALLOWED_ORIGINS = [
     # 本地开发环境
     "http://localhost",
@@ -66,6 +66,11 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8848",
     # 生产环境
+    "http://145.223.97.208",
+    "http://145.223.97.208:80",
+    "http://145.223.97.208:8000",
+    "http://145.223.97.208:3000",
+    "http://145.223.97.208:8848",
     "http://espressox.online",
     "https://espressox.online",
     "http://backend.espressox.online",
@@ -89,6 +94,11 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:80',
     'http://127.0.0.1:8000',
     'http://127.0.0.1:8848',
+    'http://145.223.97.208',
+    'http://145.223.97.208:80',
+    'http://145.223.97.208:8000',
+    'http://145.223.97.208:3000',
+    'http://145.223.97.208:8848',
     'http://espressox.online',
     'https://espressox.online',
     'http://backend.espressox.online',
