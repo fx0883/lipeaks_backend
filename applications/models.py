@@ -145,3 +145,45 @@ class Application(BaseModel):
     def get_article_count(self):
         """获取关联文章数量"""
         return self.articleapplication_set.count()
+
+
+class UserApplication(BaseModel):
+    """
+    用户与应用的数据权限绑定关系
+    """
+    user = models.ForeignKey(
+        'users.User',
+        on_delete=models.CASCADE,
+        related_name='app_permissions',
+        verbose_name=_("用户")
+    )
+    application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        related_name='user_permissions',
+        verbose_name=_("应用")
+    )
+    role = models.CharField(
+        _("应用角色"),
+        max_length=20,
+        default='admin',
+        choices=[
+            ('admin', '应用管理员'),
+            ('editor', '内容编辑'),
+            ('viewer', '只读成员'),
+        ]
+    )
+
+    class Meta:
+        db_table = 'app_user_application'
+        verbose_name = _('用户应用权限')
+        verbose_name_plural = _('用户应用权限')
+        unique_together = [['user', 'application']]
+        indexes = [
+            models.Index(fields=['tenant', 'user']),
+            models.Index(fields=['tenant', 'application']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.application.name} ({self.role})"
+

@@ -1,7 +1,7 @@
 """
 CMS系统视图
 """
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q, Count, Avg, F
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
@@ -43,6 +43,7 @@ from ..permissions import (
     CommentPermission, ArticleVersionPermission, ArticleMetaPermission,
     ArticleStatisticsPermission
 )
+from ..utils.media_cleanup import cleanup_article_media_files, schedule_media_cleanup_on_commit
 
 logger = logging.getLogger(__name__)
 
@@ -389,11 +390,10 @@ class ArticleViewSet(TenantModelViewSet):
         # 处理应用过滤（可选）
         application = self.request.query_params.get('application')
         if application:
-            from ..models import ArticleApplication
-            article_ids = ArticleApplication.objects.filter(
-                application_id=application
-            ).values_list('article_id', flat=True)
-            queryset = queryset.filter(id__in=article_ids)
+            queryset = queryset.filter(
+                Q(articleapplication__application_id=application) |
+                Q(article_categories__category__application_id=application)
+            ).distinct()
 
         # 处理排序
         sort = self.request.query_params.get('sort')
@@ -423,6 +423,17 @@ class ArticleViewSet(TenantModelViewSet):
         elif has_parent == 'false':
             queryset = queryset.filter(parent__isnull=True)
         
+        # 应用管理员严格隔离：仅查看其管辖应用的文章
+        user = getattr(self.request, 'user', None)
+        if user and user.is_authenticated and getattr(user, 'is_app_admin', False):
+            managed_apps = user.get_managed_app_ids()
+            if not managed_apps:
+                return queryset.none()
+            queryset = queryset.filter(
+                Q(articleapplication__application_id__in=managed_apps) |
+                Q(article_categories__category__application_id__in=managed_apps)
+            ).distinct()
+
         return queryset
     
     def get_serializer_class(self):
@@ -533,6 +544,16 @@ class ArticleViewSet(TenantModelViewSet):
         if not can_edit_content(user, instance.author):
             raise serializers.ValidationError(_("You do not have permission to edit this article"))
         
+        # 应用管理员权限校验：只能修改管辖应用的文章
+        if getattr(user, 'is_app_admin', False):
+            managed_apps = user.get_managed_app_ids()
+            is_managed = (
+                instance.articleapplication_set.filter(application_id__in=managed_apps).exists() or
+                instance.article_categories.filter(category__application_id__in=managed_apps).exists()
+            )
+            if not is_managed:
+                raise serializers.ValidationError(_("无权修改非管辖应用的文章"))
+        
         # 验证作者权限（不允许修改user或member字段）
         if 'user' in serializer.validated_data or 'member' in serializer.validated_data:
             if not (is_super_admin(user) or is_admin(user)):
@@ -561,12 +582,42 @@ class ArticleViewSet(TenantModelViewSet):
         
         return article
     
+    def destroy(self, request, *args, **kwargs):
+        """
+        删除单篇文章：
+        - 若为应用管理员且文章同时关联了其他应用：仅解除管辖应用关联，不破坏其他应用
+        - 若文章为已归档状态（archived）或携带 force=true：物理彻底删除（清除数据与关联图片资源）
+        - 若文章为未归档状态（published/draft/pending 等）：软删除（状态变更为 archived 归档）
+        """
+        instance = self.get_object()
+        result_action = self.perform_destroy(instance)
+
+        if result_action == "unlinked":
+            msg = _("已成功从您管辖的应用中移除该文章（文章在其他应用中仍保留）")
+        elif result_action == "permanent_delete":
+            msg = _("文章及关联资源已物理彻底删除")
+        else:
+            msg = _("文章已移至归档")
+
+        return Response(
+            {
+                "success": True,
+                "code": 2000,
+                "message": msg,
+                "data": {
+                    "action": result_action,
+                    "id": kwargs.get('pk')
+                }
+            },
+            status=status.HTTP_200_OK
+        )
+
     def perform_destroy(self, instance):
         """
-        执行文章删除操作
-        
-        - 支持软删除和强制删除
-        - 记录操作日志
+        执行文章删除操作：
+        - 隐患1防护：多应用关联文章，应用管理员删除时仅解除管辖应用绑定，避免连带误删其他应用数据
+        - 隐患2防护：物理删除与文件清理使用 transaction.atomic 与 on_commit 联动，确保 ACID 事务一致性
+        - 状态机流转：未归档 -> archived；已归档 -> 物理彻底清除
         """
         user = self.request.user
         tenant = user.tenant
@@ -575,31 +626,86 @@ class ArticleViewSet(TenantModelViewSet):
         if not can_delete_content(user, instance.author):
             raise serializers.ValidationError(_("You do not have permission to delete this article"))
         
-        # 检查是否强制删除
+        # 应用管理员权限校验与多应用共享保护
+        if getattr(user, 'is_app_admin', False):
+            managed_apps = set(user.get_managed_app_ids())
+            article_apps = set(instance.articleapplication_set.values_list('application_id', flat=True))
+            category_apps = set(instance.article_categories.filter(category__application__isnull=False).values_list('category__application_id', flat=True))
+            all_associated_apps = article_apps | category_apps
+
+            if not all_associated_apps.intersection(managed_apps):
+                raise serializers.ValidationError(_("无权删除非管辖应用的文章"))
+
+            # 如果文章同时关联了非当前管理员管辖的其他应用，仅解除当前管理员的管辖应用关联
+            other_apps = all_associated_apps - managed_apps
+            if other_apps:
+                with transaction.atomic():
+                    instance.articleapplication_set.filter(application_id__in=managed_apps).delete()
+                    instance.article_categories.filter(category__application_id__in=managed_apps).delete()
+                    try:
+                        OperationLog.objects.create(
+                            user=user,
+                            action='unlink',
+                            entity_type='article',
+                            entity_id=instance.id,
+                            details=f"应用管理员解除应用关联: {instance.title} (涉及应用: {list(managed_apps)})",
+                            ip_address=self.request.META.get('REMOTE_ADDR'),
+                            user_agent=self.request.META.get('HTTP_USER_AGENT'),
+                            tenant=tenant
+                        )
+                    except Exception as e:
+                        logger.error(f"记录文章解除应用关联日志失败: {str(e)}")
+                return "unlinked"
+        
+        # 检查是否属于物理删除：如果文章当前状态已经是已归档('archived')，或者请求参数携带 force=true
+        is_already_archived = (instance.status == 'archived')
         force_delete = self.request.query_params.get('force', 'false').lower() == 'true'
+        should_hard_delete = is_already_archived or force_delete
         
-        # 记录操作日志
-        try:
-            OperationLog.objects.create(
-                user=user,
-                action='delete',
-                entity_type='article',
-                entity_id=instance.id,
-                details=f"删除文章: {instance.title} (强制删除: {force_delete})",
-                ip_address=self.request.META.get('REMOTE_ADDR'),
-                user_agent=self.request.META.get('HTTP_USER_AGENT'),
-                tenant=tenant
-            )
-        except Exception as e:
-            logger.error(f"记录文章删除操作日志失败: {str(e)}")
-        
-        if force_delete:
-            # 强制删除：真实删除数据库记录
-            super().perform_destroy(instance)
+        if should_hard_delete:
+            with transaction.atomic():
+                # 1. 注册事务提交后的磁盘文件物理清理回调（事务回滚则不删文件，保障ACID一致性）
+                deleted_files = schedule_media_cleanup_on_commit(instance)
+                
+                # 2. 记录物理彻底删除操作日志
+                try:
+                    OperationLog.objects.create(
+                        user=user,
+                        action='permanent_delete',
+                        entity_type='article',
+                        entity_id=instance.id,
+                        details=f"物理删除文章: {instance.title} (排队清理关联磁盘文件: {len(deleted_files)}个)",
+                        ip_address=self.request.META.get('REMOTE_ADDR'),
+                        user_agent=self.request.META.get('HTTP_USER_AGENT'),
+                        tenant=tenant
+                    )
+                except Exception as e:
+                    logger.error(f"记录文章物理删除操作日志失败: {str(e)}")
+                
+                # 3. 数据库物理删除记录（外键 cascade 级联清除关联项）
+                instance.delete()
+            return "permanent_delete"
         else:
-            # 软删除：将状态改为archived
-            instance.status = 'archived'
-            instance.save(update_fields=['status'])
+            with transaction.atomic():
+                # 软删除：将状态改为 archived
+                instance.status = 'archived'
+                instance.save(update_fields=['status', 'updated_at'])
+
+                # 记录归档操作日志
+                try:
+                    OperationLog.objects.create(
+                        user=user,
+                        action='archive',
+                        entity_type='article',
+                        entity_id=instance.id,
+                        details=f"归档文章: {instance.title}",
+                        ip_address=self.request.META.get('REMOTE_ADDR'),
+                        user_agent=self.request.META.get('HTTP_USER_AGENT'),
+                        tenant=tenant
+                    )
+                except Exception as e:
+                    logger.error(f"记录文章归档操作日志失败: {str(e)}")
+            return "archive"
     
     @extend_schema(
         summary="获取文章版本历史",
@@ -1238,6 +1344,17 @@ class ArticleViewSet(TenantModelViewSet):
         else:
             articles = Article.objects.filter(id__in=article_ids, tenant_id=tenant_id, author=user)
         
+        # 应用管理员隔离：只允许操作其管辖应用的文章
+        if getattr(user, 'is_app_admin', False):
+            managed_apps = user.get_managed_app_ids()
+            if not managed_apps:
+                articles = Article.objects.none()
+            else:
+                articles = articles.filter(
+                    Q(articleapplication__application_id__in=managed_apps) |
+                    Q(article_categories__category__application_id__in=managed_apps)
+                ).distinct()
+        
         # 统计找到的文章数量
         found_count = articles.count()
         if found_count == 0:
@@ -1247,39 +1364,72 @@ class ArticleViewSet(TenantModelViewSet):
             )
         
         # 处理删除操作
-        if force_delete:
-            # 真实删除
-            deleted_ids = list(articles.values_list('id', flat=True))
-            deleted_titles = list(articles.values_list('title', flat=True))
-            articles.delete()
-        else:
-            # 软删除
-            deleted_ids = list(articles.values_list('id', flat=True))
-            deleted_titles = list(articles.values_list('title', flat=True))
-            articles.update(status='archived')
-        
-        # 记录操作日志
-        for i, article_id in enumerate(deleted_ids):
-            try:
-                OperationLog.objects.create(
-                    user=user,
-                    action='delete',
-                    entity_type='article',
-                    entity_id=article_id,
-                    details=f"批量删除文章: {deleted_titles[i]} (强制删除: {force_delete})",
-                    ip_address=request.META.get('REMOTE_ADDR'),
-                    user_agent=request.META.get('HTTP_USER_AGENT'),
-                    tenant=tenant
-                )
-            except Exception as e:
-                logger.error(f"记录文章批量删除操作日志失败: {str(e)}")
+        archived_ids = []
+        permanently_deleted_ids = []
+        unlinked_ids = []
+        deleted_titles = []
+
+        is_app_admin_user = getattr(user, 'is_app_admin', False)
+        managed_apps = set(user.get_managed_app_ids()) if is_app_admin_user else set()
+
+        with transaction.atomic():
+            for article in list(articles):
+                if is_app_admin_user:
+                    art_apps = set(article.articleapplication_set.values_list('application_id', flat=True))
+                    cat_apps = set(article.article_categories.filter(category__application__isnull=False).values_list('category__application_id', flat=True))
+                    all_apps = art_apps | cat_apps
+                    other_apps = all_apps - managed_apps
+                    # 隐患1防护：若该文章同时关联了其他应用，仅解除当前管理员应用关联，不破坏其他应用
+                    if other_apps:
+                        article.articleapplication_set.filter(application_id__in=managed_apps).delete()
+                        article.article_categories.filter(category__application_id__in=managed_apps).delete()
+                        unlinked_ids.append(article.id)
+                        deleted_titles.append(f"{article.title} (解除关联)")
+                        continue
+
+                # 隐患2防护：如果强制删除或文章已归档，物理删除并注册 on_commit 清理磁盘文件
+                if force_delete or article.status == 'archived':
+                    schedule_media_cleanup_on_commit(article)
+                    permanently_deleted_ids.append(article.id)
+                    deleted_titles.append(f"{article.title} (物理删除)")
+                    article.delete()
+                else:
+                    # 软删除：标记状态为归档
+                    article.status = 'archived'
+                    article.save(update_fields=['status', 'updated_at'])
+                    archived_ids.append(article.id)
+                    deleted_titles.append(f"{article.title} (归档)")
+            
+            # 记录操作日志
+            all_processed_ids = permanently_deleted_ids + archived_ids + unlinked_ids
+            for i, article_id in enumerate(all_processed_ids):
+                try:
+                    OperationLog.objects.create(
+                        user=user,
+                        action='permanent_delete' if article_id in permanently_deleted_ids else ('unlink' if article_id in unlinked_ids else 'archive'),
+                        entity_type='article',
+                        entity_id=article_id,
+                        details=f"批量处理文章: {deleted_titles[i]} (强制: {force_delete})",
+                        ip_address=request.META.get('REMOTE_ADDR'),
+                        user_agent=request.META.get('HTTP_USER_AGENT'),
+                        tenant=tenant
+                    )
+                except Exception as e:
+                    logger.error(f"记录文章批量处理操作日志失败: {str(e)}")
         
         return Response(
             {
-                "message": _("文章批量删除成功"),
-                "requested_count": len(article_ids),
-                "deleted_count": found_count,
-                "deleted_ids": deleted_ids
+                "success": True,
+                "code": 2000,
+                "message": _("文章批量处理成功"),
+                "data": {
+                    "requested_count": len(article_ids),
+                    "deleted_count": len(all_processed_ids),
+                    "archived_count": len(archived_ids),
+                    "permanently_deleted_count": len(permanently_deleted_ids),
+                    "unlinked_count": len(unlinked_ids),
+                    "deleted_ids": all_processed_ids
+                }
             },
             status=status.HTTP_200_OK
         )
@@ -1437,6 +1587,12 @@ class CategoryViewSet(TenantModelViewSet):
         # 基于租户的过滤
         if not is_super_admin(user):
             queryset = queryset.filter(tenant=user.tenant)
+            # 应用管理员严格隔离：仅允许查看其管辖应用的分类（公共分类 application is null 和其他应用的分类均不可见）
+            if getattr(user, 'is_app_admin', False):
+                managed_apps = user.get_managed_app_ids()
+                if not managed_apps:
+                    return queryset.none()
+                queryset = queryset.filter(application_id__in=managed_apps)
         
         return queryset
     
@@ -1450,6 +1606,14 @@ class CategoryViewSet(TenantModelViewSet):
         user = self.request.user
         tenant = getattr(user, 'tenant', None) or get_effective_tenant(self.request)
         
+        # 应用管理员创建限制：必须关联管辖内的应用，严禁创建全局公共分类或其他应用分类
+        if getattr(user, 'is_app_admin', False):
+            app = serializer.validated_data.get('application')
+            managed_apps = user.get_managed_app_ids()
+            if not app or app.id not in managed_apps:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("应用管理员无法创建全局分类或非管辖应用分类")
+
         # 设置租户ID
         serializer.validated_data['tenant'] = tenant
         
@@ -1483,6 +1647,13 @@ class CategoryViewSet(TenantModelViewSet):
         user = self.request.user
         tenant = getattr(user, 'tenant', None) or get_effective_tenant(self.request)
         
+        if getattr(user, 'is_app_admin', False):
+            app = serializer.validated_data.get('application', serializer.instance.application)
+            managed_apps = user.get_managed_app_ids()
+            if not app or app.id not in managed_apps:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("应用管理员无法修改非管辖应用分类")
+
         # 更新分类
         category = serializer.save()
         
@@ -1513,6 +1684,12 @@ class CategoryViewSet(TenantModelViewSet):
         """
         user = self.request.user
         tenant = getattr(user, 'tenant', None) or get_effective_tenant(self.request)
+        
+        if getattr(user, 'is_app_admin', False):
+            managed_apps = user.get_managed_app_ids()
+            if not instance.application_id or instance.application_id not in managed_apps:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("应用管理员无法删除非管辖应用分类")
         
         # 检查是否有活跃文章关联到该分类
         ArticleCategory.objects.filter(category=instance, article__status='archived').delete()

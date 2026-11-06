@@ -74,12 +74,21 @@ class BaseUserModel(AbstractUser):
     
     def soft_delete(self):
         """
-        软删除用户
+        软删除用户，并释放唯一键占用
         """
+        import time
+        ts = int(time.time())
         self.is_deleted = True
         self.status = 'inactive'
         self.is_active = False
-        self.save(update_fields=['is_deleted', 'status', 'is_active'])
+        update_fields = ['is_deleted', 'status', 'is_active']
+        if self.username and not self.username.startswith('_deleted_'):
+            self.username = f"_deleted_{ts}_{self.username}"[:150]
+            update_fields.append('username')
+        if self.email and not self.email.startswith('_deleted_'):
+            self.email = f"_deleted_{ts}_{self.email}"[:254]
+            update_fields.append('email')
+        self.save(update_fields=update_fields)
         logger.info(f"软删除用户: {self.username}")
         return self
     
@@ -102,6 +111,18 @@ class User(BaseUserModel):
     # 用户角色字段
     is_admin = models.BooleanField(_("是否管理员"), default=True)
     is_super_admin = models.BooleanField(_("是否超级管理员"), default=False)
+    ADMIN_TYPE_CHOICES = (
+        ('tenant_owner', '租户主管理员'),
+        ('app_admin', '应用管理员'),
+    )
+    admin_type = models.CharField(
+        _("管理员类型"),
+        max_length=20,
+        choices=ADMIN_TYPE_CHOICES,
+        default='tenant_owner',
+        db_index=True,
+        help_text=_("tenant_owner: 拥有租户完全管理权限; app_admin: 仅管辖指定应用内容")
+    )
     
     class Meta:
         verbose_name = _('管理员用户')
@@ -170,9 +191,33 @@ class User(BaseUserModel):
     @property
     def is_tenant_admin(self):
         """
-        判断用户是否是租户管理员
+        判断用户是否是租户管理员（包含主管理员和应用管理员）
         """
         return bool(self.is_admin and not self.is_super_admin)
+
+    @property
+    def is_tenant_owner(self):
+        """
+        判断用户是否是租户主管理员（拥有租户全部管理权限）
+        """
+        return bool(self.is_super_admin or (self.is_admin and self.admin_type == 'tenant_owner'))
+
+    @property
+    def is_app_admin(self):
+        """
+        判断用户是否是应用管理员（受限管理员）
+        """
+        return bool(not self.is_super_admin and self.is_admin and self.admin_type == 'app_admin')
+
+    def get_managed_app_ids(self):
+        """
+        获取当前用户管辖的应用ID列表
+        返回 None 表示拥有全部应用的无界权限（超管或租户主管理员）
+        返回 list[int] 表示受限于特定应用
+        """
+        if self.is_super_admin or self.is_tenant_owner:
+            return None
+        return list(self.app_permissions.values_list('application_id', flat=True))
     
     @property
     def display_role(self):
@@ -182,6 +227,8 @@ class User(BaseUserModel):
         if self.is_super_admin:
             return "超级管理员"
         elif self.is_admin:
+            if self.admin_type == 'app_admin':
+                return "应用管理员"
             return "租户管理员"
         else:
             return "普通用户"

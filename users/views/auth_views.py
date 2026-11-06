@@ -259,6 +259,7 @@ class LoginView(APIView):
                 user_data['is_admin'] = is_admin(user)
                 user_data['is_super_admin'] = is_super_admin(user)
                 user_data['is_member'] = False
+                user_data['admin_type'] = getattr(user, 'admin_type', 'tenant_owner')
             else:  # Member类型
                 user_data['is_admin'] = False
                 user_data['is_super_admin'] = False
@@ -267,6 +268,7 @@ class LoginView(APIView):
             
             # 添加租户信息
             if user.tenant:
+                user_data['tenant'] = user.tenant.id
                 user_data['tenant_id'] = user.tenant.id
                 user_data['tenant_name'] = user.tenant.name
             
@@ -464,6 +466,7 @@ class TokenVerifyView(APIView):
             user_data['is_admin'] = is_admin(user)
             user_data['is_super_admin'] = is_super_admin(user)
             user_data['is_member'] = False
+            user_data['admin_type'] = getattr(user, 'admin_type', 'tenant_owner')
         else:  # Member类型
             user_data['is_admin'] = False
             user_data['is_super_admin'] = False
@@ -472,6 +475,7 @@ class TokenVerifyView(APIView):
         
         # 添加租户信息
         if user.tenant:
+            user_data['tenant'] = user.tenant.id
             user_data['tenant_id'] = user.tenant.id
             user_data['tenant_name'] = user.tenant.name
         

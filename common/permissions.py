@@ -103,6 +103,22 @@ class IsTenantAdmin(permissions.BasePermission):
         return is_tenant_admin
 
 
+class IsTenantOwnerUser(permissions.BasePermission):
+    """
+    检查用户是否是租户主管理员或超级管理员
+    应用管理员 (app_admin) 严格禁止访问（用于保护人员管理、租户设置等全局敏感资源）
+    """
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if getattr(user, 'is_super_admin', False):
+            return True
+        if getattr(user, 'is_admin', False) and getattr(user, 'admin_type', 'tenant_owner') == 'tenant_owner':
+            return True
+        return False
+
+
 class IsOwnerOrAdmin(permissions.BasePermission):
     """
     对象级权限，只允许对象的所有者或管理员访问

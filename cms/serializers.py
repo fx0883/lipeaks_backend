@@ -641,6 +641,25 @@ class ArticleCreateUpdateSerializer(ImageFieldNormalizerMixin, serializers.Model
                 except Application.DoesNotExist:
                     raise serializers.ValidationError(_(f"应用ID {app_id} 不存在或无权限访问"))
         
+        # 应用管理员 (app_admin) 严格权限约束：
+        if user and getattr(user, 'is_app_admin', False):
+            managed_apps = user.get_managed_app_ids()
+            # 1. 创建文章时必须指定管辖应用；更新若指定 applications 也必须在管辖范围内
+            if not instance and not applications:
+                raise serializers.ValidationError(_("应用管理员创建文章时必须指定管辖的应用"))
+            if applications is not None:
+                if not applications:
+                    raise serializers.ValidationError(_("应用管理员必须指定至少一个管辖应用"))
+                for app_id in applications:
+                    if app_id not in managed_apps:
+                        raise serializers.ValidationError(_(f"应用管理员无权为非管辖应用(ID:{app_id})发布文章"))
+            # 2. 应用管理员禁止使用公共分类（application is null）或非管辖应用的分类
+            if category_ids:
+                for category_id in category_ids:
+                    cat = Category.objects.filter(id=category_id, tenant=tenant).first()
+                    if not cat or cat.application_id is None or cat.application_id not in managed_apps:
+                        raise serializers.ValidationError(_(f"应用管理员不能使用公共分类或非管辖应用的分类(ID:{category_id})"))
+        
         if category_ids:
             for category_id in category_ids:
                 try:

@@ -16,7 +16,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, OpenApiExample
 
-from common.permissions import IsSuperAdminUser, IsAdminUser
+from common.permissions import IsSuperAdminUser, IsAdminUser, IsTenantOwnerUser
 from common.utils.user_permissions import is_super_admin, is_admin
 from users.models import User
 from users.serializers import (
@@ -112,7 +112,7 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
     """
     管理员用户列表和创建视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated, IsTenantOwnerUser]
     serializer_class = UserSerializer
     pagination_class = PageNumberPagination
     
@@ -353,7 +353,7 @@ class AdminUserRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
     管理员用户详情、更新和删除视图
     """
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated, IsTenantOwnerUser]
     
     @extend_schema(
         summary="获取管理员详情",
@@ -1016,7 +1016,7 @@ class DeactivateAdminUserView(APIView):
     """
     停用管理员用户视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated, IsTenantOwnerUser]
     serializer_class = SimpleResponseSerializer  # 使用简单响应序列化器
     
     @extend_schema(
@@ -1092,7 +1092,7 @@ class ActivateAdminUserView(APIView):
     """
     激活管理员用户视图
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated, IsTenantOwnerUser]
     serializer_class = SimpleResponseSerializer  # 使用简单响应序列化器
     
     @extend_schema(

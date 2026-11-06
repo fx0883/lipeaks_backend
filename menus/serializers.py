@@ -66,12 +66,17 @@ class MenuTreeSerializer(MenuSerializer):
         """
         获取子菜单
         """
-        # 过滤非活跃菜单
-        if self.context.get('is_active') is not None:
-            is_active = self.context.get('is_active')
-            children = obj.children.filter(is_active=is_active)
+        # 性能优化：优先使用上下文中预加载的子菜单映射，杜绝跨网络递归 N+1 查询
+        children_map = self.context.get('_children_map')
+        if children_map is not None:
+            children = children_map.get(obj.id, [])
         else:
-            children = obj.children.all()
+            # 过滤非活跃菜单回退逻辑
+            if self.context.get('is_active') is not None:
+                is_active = self.context.get('is_active')
+                children = obj.children.filter(is_active=is_active)
+            else:
+                children = obj.children.all()
             
         serializer = MenuTreeSerializer(children, many=True, context=self.context)
         return serializer.data
@@ -122,7 +127,7 @@ class UserMenusSerializer(serializers.Serializer):
     """
     menu_ids = serializers.ListField(
         child=serializers.IntegerField(),
-        min_length=1,
+        allow_empty=True,
         required=True
     )
 

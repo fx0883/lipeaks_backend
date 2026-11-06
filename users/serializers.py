@@ -26,20 +26,34 @@ class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     avatar = serializers.SerializerMethodField()
     is_member = serializers.SerializerMethodField()
+    managed_applications = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'phone', 'nick_name', 'first_name', 
             'last_name', 'is_active', 'avatar', 'tenant', 'tenant_name', 
-            'is_admin', 'is_super_admin', 'is_member', 'role', 'date_joined',
-            'wechat_id'
+            'is_admin', 'is_super_admin', 'admin_type', 'managed_applications',
+            'is_member', 'role', 'date_joined', 'wechat_id'
         ]
-        read_only_fields = ['id', 'date_joined', 'role', 'tenant_name', 'is_member', 'is_super_admin']
+        read_only_fields = ['id', 'date_joined', 'role', 'tenant_name', 'is_member', 'is_super_admin', 'admin_type', 'managed_applications']
         extra_kwargs = {
             'is_admin': {'read_only': True},
             'is_super_admin': {'read_only': True},
         }
+
+    def get_managed_applications(self, obj) -> list:
+        """获取应用管理员所管辖的应用简明信息"""
+        if obj.is_super_admin or obj.is_tenant_owner:
+            return []
+        apps = []
+        for ua in obj.app_permissions.select_related('application').all():
+            apps.append({
+                'id': ua.application.id,
+                'name': ua.application.name,
+                'code': ua.application.code,
+            })
+        return apps
     
     def get_tenant_name(self, obj) -> str:
         """获取租户名称"""
@@ -86,13 +100,23 @@ class UserCreateSerializer(serializers.ModelSerializer):
         write_only=True
     )
     is_member = serializers.BooleanField(write_only=True, required=False, default=True)
+    admin_type = serializers.ChoiceField(
+        choices=User.ADMIN_TYPE_CHOICES,
+        required=False,
+        default='tenant_owner'
+    )
+    application_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        write_only=True
+    )
     
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'phone', 'nick_name', 'first_name',
             'last_name', 'password', 'password_confirm', 'tenant_id',
-            'is_admin', 'is_member', 'avatar', 'wechat_id'
+            'is_admin', 'admin_type', 'application_ids', 'is_member', 'avatar', 'wechat_id'
         ]
         extra_kwargs = {
             'password': {'write_only': True},
@@ -102,13 +126,25 @@ class UserCreateSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """
-        验证密码一致性
+        验证密码一致性与应用管理员绑定
         """
         if data['password'] != data.pop('password_confirm'):
             raise serializers.ValidationError({"password_confirm": "Passwords do not match"})
         
         # 验证密码强度
         validate_password(data['password'])
+
+        admin_type = data.get('admin_type', 'tenant_owner')
+        app_ids = data.get('application_ids', [])
+        if admin_type == 'app_admin':
+            if not app_ids:
+                raise serializers.ValidationError({"application_ids": "应用管理员必须至少指定一个管辖应用"})
+            tenant = data.get('tenant')
+            if tenant:
+                from applications.models import Application
+                valid_count = Application.objects.filter(tenant=tenant, id__in=app_ids).count()
+                if valid_count != len(set(app_ids)):
+                    raise serializers.ValidationError({"application_ids": "存在无效或不属于该租户的应用ID"})
         
         return data
     
@@ -118,6 +154,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
         """
         # 从validated_data中移除is_member字段，因为User模型中实际不存在这个字段
         is_member = validated_data.pop('is_member', True)
+        application_ids = validated_data.pop('application_ids', None)
+        admin_type = validated_data.pop('admin_type', 'tenant_owner')
         
         user = User.objects.create_user(
             username=validated_data['username'],
@@ -132,10 +170,25 @@ class UserCreateSerializer(serializers.ModelSerializer):
         
         # 设置角色
         user.is_admin = validated_data.get('is_admin', False)
-        # 不需要设置is_member，因为User模型中没有这个字段
+        user.admin_type = admin_type
         
         user.save()
+
+        # 如果是应用管理员，创建 UserApplication 绑定
+        if admin_type == 'app_admin' and application_ids and user.tenant:
+            from applications.models import UserApplication
+            for app_id in set(application_ids):
+                UserApplication.objects.create(
+                    tenant=user.tenant,
+                    user=user,
+                    application_id=app_id,
+                    role='admin'
+                )
+
         return user
+
+    def to_representation(self, instance):
+        return UserSerializer(instance, context=self.context).data
 
 
 class SuperAdminCreateSerializer(UserCreateSerializer):
@@ -167,14 +220,47 @@ class UserUpdateSerializer(ImageFieldNormalizerMixin, serializers.ModelSerialize
     用户更新序列化器
     """
     image_fields = ['avatar']  # 需要标准化的图片字段
+    admin_type = serializers.ChoiceField(
+        choices=User.ADMIN_TYPE_CHOICES,
+        required=False
+    )
+    application_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        write_only=True
+    )
     
     class Meta:
         model = User
         fields = [
             'id', 'phone', 'nick_name', 'first_name', 'last_name', 
-            'avatar', 'is_active', 'status', 'wechat_id'
+            'avatar', 'is_active', 'status', 'wechat_id', 'admin_type', 'application_ids'
         ]
         read_only_fields = ['id']
+
+    def update(self, instance, validated_data):
+        application_ids = validated_data.pop('application_ids', None)
+        admin_type = validated_data.get('admin_type', instance.admin_type)
+        instance = super().update(instance, validated_data)
+
+        if application_ids is not None and instance.tenant:
+            from applications.models import UserApplication
+            if admin_type == 'app_admin':
+                # 同步管辖应用
+                UserApplication.objects.filter(user=instance).exclude(application_id__in=application_ids).delete()
+                for app_id in set(application_ids):
+                    UserApplication.objects.get_or_create(
+                        tenant=instance.tenant,
+                        user=instance,
+                        application_id=app_id,
+                        defaults={'role': 'admin'}
+                    )
+            elif admin_type == 'tenant_owner':
+                UserApplication.objects.filter(user=instance).delete()
+        return instance
+
+    def to_representation(self, instance):
+        return UserSerializer(instance, context=self.context).data
 
 
 class UserPasswordUpdateSerializer(serializers.Serializer):

@@ -13,6 +13,7 @@ import hashlib
 import json
 import logging
 import re
+import jwt
 from typing import Optional
 from django.conf import settings
 from django.core.cache import cache
@@ -36,6 +37,7 @@ class APICacheMiddleware(MiddlewareMixin):
         '/api/v1/auth/',
         '/api/v1/admin/',
         '/api/v1/admin-users/',
+        '/api/v1/menus/',
         '/api/v1/members/password-reset/',
         '/api/v1/members/delete-account/',
         '/api/v1/schema/',
@@ -112,6 +114,20 @@ class APICacheMiddleware(MiddlewareMixin):
         user = getattr(request, 'user', None)
         if user and getattr(user, 'is_authenticated', False):
             return f"user_{user.id}"
+
+        # 尝试从 Bearer JWT 令牌中提取用户作用域，防止在中间件尚未执行DRF认证时退化为 anon 导致越权或缓存串号
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:].strip()
+            try:
+                unverified_payload = jwt.decode(token, options={"verify_signature": False})
+                uid = unverified_payload.get('user_id')
+                mtype = unverified_payload.get('model_type', 'user')
+                if uid:
+                    return f"{mtype}_{uid}"
+            except Exception:
+                pass
+
         return "anon"
 
     def _build_cache_key(self, request) -> str:

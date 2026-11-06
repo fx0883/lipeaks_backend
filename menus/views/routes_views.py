@@ -17,12 +17,13 @@ from ..serializers import RoutesResponseSerializer
 logger = logging.getLogger(__name__)
 
 
-def build_route_from_menu(menu):
+def build_route_from_menu(menu, allowed_menu_ids=None):
     """
     从菜单对象构建路由配置
     
     Args:
         menu: 菜单对象
+        allowed_menu_ids: 可选的允许菜单ID列表，用于精确过滤子菜单
         
     Returns:
         dict: 路由配置字典
@@ -84,10 +85,42 @@ def build_route_from_menu(menu):
         
     # 处理子菜单
     children = Menu.objects.filter(parent=menu, is_active=True).order_by('rank')
+    if allowed_menu_ids is not None:
+        children = children.filter(id__in=allowed_menu_ids)
     if children:
-        route['children'] = [build_route_from_menu(child) for child in children]
+        route['children'] = [build_route_from_menu(child, allowed_menu_ids=allowed_menu_ids) for child in children]
         
     return route
+
+
+def is_route_allowed_for_app_admin(route):
+    """
+    判断路由项是否对应用管理员开放
+    严格白名单模式：仅放行 CMS 相关路由以及控制台/首页/仪表盘，严禁放行客户管理、用户管理、应用设置等其它模块
+    """
+    path = (route.get('path') or '').lower()
+    name = (route.get('name') or '').lower()
+
+    # 1. 严格白名单：CMS 以及首页/仪表盘绝对开放
+    if path.startswith('/cms') or 'cms' in name:
+        return True
+    if any(k in path for k in ['dashboard', 'welcome', 'home']) or path in ['/', '']:
+        return True
+
+    # 2. 其它一切路由严禁向应用管理员开放
+    return False
+
+
+def filter_routes_for_app_admin(routes):
+    """递归过滤路由树，只保留应用管理员可见节点"""
+    filtered = []
+    for r in routes:
+        if is_route_allowed_for_app_admin(r):
+            item = dict(r)
+            if 'children' in item and item['children']:
+                item['children'] = filter_routes_for_app_admin(item['children'])
+            filtered.append(item)
+    return filtered
 
 
 class AdminRoutesView(APIView):
@@ -159,31 +192,40 @@ class AdminRoutesView(APIView):
             # 处理租户管理员菜单
             if user.tenant and user.is_tenant_admin:
                 try:
-                    # 从用户菜单中获取配置
-                    user_menu_ids = UserMenu.objects.filter(
-                        user=user, 
-                        is_active=True
-                    ).values_list('menu_id', flat=True)
+                    # 严格按用户在【用户菜单设置】中分配激活的菜单加载
+                    user_menu_ids = list(
+                        UserMenu.objects.filter(user=user, is_active=True).values_list('menu_id', flat=True)
+                    )
                     
                     if user_menu_ids:
-                        # 获取顶级菜单项
                         top_menus = Menu.objects.filter(
                             id__in=user_menu_ids, 
                             is_active=True, 
                             parent__isnull=True
                         ).order_by('rank')
-                        
-                        # 构建路由配置
-                        routes = [build_route_from_menu(menu) for menu in top_menus]
-                        
-                        return Response({
-                            'success': True,
-                            'code': 2000,
-                            'message': '获取路由成功',
-                            'data': routes
-                        })
+                        routes = [build_route_from_menu(menu, allowed_menu_ids=user_menu_ids) for menu in top_menus]
                     else:
-                        logger.warning(f"用户 {user.username} 没有分配菜单")
+                        # 仅租户主管理员在从未配置过 UserMenu 时，默认继承租户全量顶级菜单；
+                        # 对于应用管理员和普通子管理员，必须在【用户菜单设置】中勾选对应菜单才可见！未勾选任何菜单时，菜单为空！
+                        if user.is_tenant_owner and not UserMenu.objects.filter(user=user).exists():
+                            top_menus = Menu.objects.filter(
+                                is_active=True, 
+                                parent__isnull=True
+                            ).order_by('rank')
+                            routes = [build_route_from_menu(menu) for menu in top_menus]
+                        else:
+                            routes = []
+                    
+                    # 如果是应用管理员，严格过滤菜单树，仅保留控制台与 CMS 相关菜单
+                    if getattr(user, 'is_app_admin', False):
+                        routes = filter_routes_for_app_admin(routes)
+                    
+                    return Response({
+                        'success': True,
+                        'code': 2000,
+                        'message': '获取路由成功',
+                        'data': routes
+                    })
                 except Exception as e:
                     logger.error(f"获取用户菜单失败: {str(e)}")
             

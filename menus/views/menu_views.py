@@ -264,16 +264,26 @@ class MenuViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='tree')
     def tree(self, request):
         """
-        获取菜单树形结构
+        获取菜单树形结构（单次查询并由内存组装树形，消除跨网络 N+1 延迟）
         """
-        # 只获取顶级菜单
-        queryset = self.get_queryset().filter(parent__isnull=True)
-        
-        # 设置序列化上下文
+        from collections import defaultdict
+
+        base_queryset = self.get_queryset()
         context = self.get_serializer_context()
         is_active = request.query_params.get('is_active')
         if is_active is not None:
             context['is_active'] = is_active.lower() == 'true'
-        
-        serializer = MenuTreeSerializer(queryset, many=True, context=context)
+
+        all_menus = list(base_queryset)
+        children_map = defaultdict(list)
+        top_level = []
+        for menu in all_menus:
+            if menu.parent_id is None:
+                top_level.append(menu)
+            else:
+                children_map[menu.parent_id].append(menu)
+
+        context['_children_map'] = children_map
+
+        serializer = MenuTreeSerializer(top_level, many=True, context=context)
         return Response(serializer.data) 
