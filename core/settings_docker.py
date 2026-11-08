@@ -52,7 +52,7 @@ DATABASES = {
 }
 
 # Docker环境CORS配置 - 覆盖settings.py中的配置
-CORS_ALLOW_ALL_ORIGINS = False  # 使用白名单模式
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'True').lower() in ('true', '1', 'yes')
 CORS_ALLOWED_ORIGINS = [
     # 本地开发环境
     "http://localhost",
@@ -65,14 +65,32 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8848",
-    # 生产环境
+    # 生产服务器IP及端口
+    "http://145.223.97.208",
+    "http://145.223.97.208:80",
+    "http://145.223.97.208:8000",
+    "http://145.223.97.208:8848",
+    "http://145.223.97.208:3000",
+    "https://145.223.97.208",
+    "https://145.223.97.208:8848",
+    # 生产域名
+    "http://lipeaks.cloud",
+    "https://lipeaks.cloud",
+    "http://www.lipeaks.cloud",
+    "https://www.lipeaks.cloud",
+    "http://admin.lipeaks.cloud",
+    "https://admin.lipeaks.cloud",
+    "http://api.lipeaks.cloud",
+    "https://api.lipeaks.cloud",
+    "http://viscase.lipeaks.cloud",
+    "https://viscase.lipeaks.cloud",
+    # 历史环境
     "http://espressox.online",
     "https://espressox.online",
     "http://backend.espressox.online",
     "https://backend.espressox.online",
     "http://admin.espressox.online",
     "https://admin.espressox.online",
-
     'http://43.142.76.105',
     'http://43.142.76.105:80',
     'http://43.142.76.105:8000',
@@ -89,6 +107,23 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:80',
     'http://127.0.0.1:8000',
     'http://127.0.0.1:8848',
+    'http://145.223.97.208',
+    'http://145.223.97.208:80',
+    'http://145.223.97.208:8000',
+    'http://145.223.97.208:8848',
+    'http://145.223.97.208:3000',
+    'https://145.223.97.208',
+    'https://145.223.97.208:8848',
+    'http://lipeaks.cloud',
+    'https://lipeaks.cloud',
+    'http://www.lipeaks.cloud',
+    'https://www.lipeaks.cloud',
+    'http://admin.lipeaks.cloud',
+    'https://admin.lipeaks.cloud',
+    'http://api.lipeaks.cloud',
+    'https://api.lipeaks.cloud',
+    'http://viscase.lipeaks.cloud',
+    'https://viscase.lipeaks.cloud',
     'http://espressox.online',
     'https://espressox.online',
     'http://backend.espressox.online',
