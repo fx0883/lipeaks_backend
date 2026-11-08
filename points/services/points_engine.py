@@ -567,6 +567,19 @@ class PointsEngine:
         """
         return TenantUserPoints.get_points_summary(tenant_user_profile, days)
 
+    @classmethod
+    def get_user_points_summary(
+        cls,
+        member,
+        tenant,
+        days: int = 30
+    ) -> Dict[str, Any]:
+        """按成员与租户获取用户积分统计"""
+        profile = TenantUserProfile.objects.filter(tenant=tenant, member=member).first()
+        if not profile:
+            return {}
+        return TenantUserPoints.get_points_summary(profile, days)
+
 
 class UserLevelService:
     """

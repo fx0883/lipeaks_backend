@@ -7,7 +7,10 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from points.api.views import (
     UserLevelViewSet, UserTypeTagViewSet, TenantUserProfileViewSet,
-    TenantUserPointsViewSet, TenantUserTypeTagViewSet, PointsStatisticsViewSet
+    TenantUserPointsViewSet, TenantUserTypeTagViewSet, PointsStatisticsViewSet,
+    ApplicationUserLevelViewSet, AppUserPointsAccountViewSet,
+    CheckinConfigViewSet, MemberCheckinViewSet,
+    UserCheckinStreakViewSet, UserCheckinRecordViewSet
 )
 
 # 创建API路由器
@@ -20,6 +23,12 @@ router.register(r'profiles', TenantUserProfileViewSet, basename='tenant-user-pro
 router.register(r'points-records', TenantUserPointsViewSet, basename='tenant-user-points')
 router.register(r'vip-tags', TenantUserTypeTagViewSet, basename='tenant-user-type-tags')
 router.register(r'statistics', PointsStatisticsViewSet, basename='points-statistics')
+router.register(r'app-levels', ApplicationUserLevelViewSet, basename='app-levels')
+router.register(r'app-accounts', AppUserPointsAccountViewSet, basename='app-accounts')
+router.register(r'checkin-configs', CheckinConfigViewSet, basename='checkin-configs')
+router.register(r'checkin-streaks', UserCheckinStreakViewSet, basename='checkin-streaks')
+router.register(r'checkin-records', UserCheckinRecordViewSet, basename='checkin-records')
+router.register(r'checkin', MemberCheckinViewSet, basename='checkin')
 
 # URL模式
 urlpatterns = [

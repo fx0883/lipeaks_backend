@@ -78,6 +78,62 @@ APPLICATION_MENU_DATA = {
                 "activePath": "/application/index",
                 "rank": 4
             }
+        },
+        {
+            "path": "/application/points-level",
+            "name": "ApplicationPointsLevel",
+            "code": "application_points_level",
+            "component": "/src/views/application/points-level/index.vue",
+            "meta": {
+                "title": "积分等级管理",
+                "icon": "ri:medal-line",
+                "showLink": True,
+                "showParent": True,
+                "keepAlive": True,
+                "rank": 5
+            }
+        },
+        {
+            "path": "/application/points-account",
+            "name": "ApplicationPointsAccount",
+            "code": "application_points_account",
+            "component": "/src/views/application/points-account/index.vue",
+            "meta": {
+                "title": "积分管理",
+                "icon": "ri:coin-line",
+                "showLink": True,
+                "showParent": True,
+                "keepAlive": True,
+                "rank": 6
+            }
+        },
+        {
+            "path": "/application/checkin-rule",
+            "name": "ApplicationCheckinRule",
+            "code": "application_checkin_rule",
+            "component": "/src/views/application/checkin-rule/index.vue",
+            "meta": {
+                "title": "签到规则管理",
+                "icon": "ri:calendar-check-line",
+                "showLink": True,
+                "showParent": True,
+                "keepAlive": True,
+                "rank": 7
+            }
+        },
+        {
+            "path": "/application/checkin-record",
+            "name": "ApplicationCheckinRecord",
+            "code": "application_checkin_record",
+            "component": "/src/views/application/checkin-record/index.vue",
+            "meta": {
+                "title": "签到管理",
+                "icon": "ri:user-shared-line",
+                "showLink": True,
+                "showParent": True,
+                "keepAlive": True,
+                "rank": 8
+            }
         }
     ]
 }

@@ -49,6 +49,12 @@ class APICacheMiddleware(MiddlewareMixin):
         '/api/v1/licenses/verify/',
         '/api/v1/licenses/activate/',
         '/api/v1/licenses/status/',
+        '/api/v1/points/checkin/',
+        '/api/v1/points/checkin-streaks/',
+        '/api/v1/points/checkin-records/',
+        '/api/v1/points/checkin-configs/',
+        '/api/v1/points/app-accounts/',
+        '/api/v1/points/profiles/',
         '/api/v1/we-rss/images/proxy/',
     )
 

@@ -345,6 +345,7 @@ class TenantUserPoints(models.Model):
     
     CATEGORY_CHOICES = [
         ('login', '登录奖励'),
+        ('checkin', '每日签到'),
         ('license', '许可证相关'),
         ('referral', '推荐奖励'),
         ('payment', '支付奖励'),
@@ -383,6 +384,22 @@ class TenantUserPoints(models.Model):
         'users.Member', 
         on_delete=models.CASCADE, 
         verbose_name=_("成员")  # 冗余字段，便于查询优化
+    )
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='points_records',
+        verbose_name=_("关联应用")
+    )
+    app_account = models.ForeignKey(
+        'AppUserPointsAccount',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='points_records',
+        verbose_name=_("关联应用积分账户")
     )
     
     # 积分类型分类
@@ -1044,3 +1061,393 @@ class TenantUserTypeTag(models.Model):
         
         grace_period_end = self.expires_at + timedelta(days=self.grace_period_days)
         return now <= grace_period_end
+
+
+class ApplicationUserLevel(models.Model):
+    """
+    应用专属积分等级定义表
+    每个应用拥有独立的积分阶梯配置和特权体系
+    """
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        verbose_name=_("关联租户")
+    )
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.CASCADE,
+        related_name='points_levels',
+        verbose_name=_("关联应用")
+    )
+    level_name = models.CharField(_("等级名称"), max_length=50)
+    level_code = models.CharField(_("等级代码"), max_length=50)
+    level_order = models.PositiveIntegerField(_("等级序号"))
+    
+    min_points = models.PositiveIntegerField(_("最低积分门槛"), default=0)
+    max_points = models.PositiveIntegerField(_("最高积分上限"), null=True, blank=True)
+    
+    icon = models.CharField(_("等级图标"), max_length=255, blank=True, null=True, help_text=_("图标相对路径或URL"))
+    level_color = models.CharField(_("等级颜色"), max_length=7, default="#999999")
+    level_description = models.TextField(_("等级描述"), blank=True)
+    
+    permissions = models.JSONField(_("功能权限配置"), default=dict, blank=True)
+    quota_config = models.JSONField(_("配额配置"), default=dict, blank=True)
+    
+    is_active = models.BooleanField(_("是否启用"), default=True)
+    is_default = models.BooleanField(_("是否初始等级"), default=False)
+    
+    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
+
+    class Meta:
+        db_table = 'points_application_user_level'
+        verbose_name = _('应用专属积分等级')
+        verbose_name_plural = _('应用专属积分等级')
+        ordering = ['application', 'level_order']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['application', 'level_order'],
+                name='unique_app_level_order'
+            ),
+            models.UniqueConstraint(
+                fields=['application', 'level_code'],
+                name='unique_app_level_code'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(min_points__gte=0),
+                name='valid_app_level_min_points'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(max_points__isnull=True) | models.Q(max_points__gt=models.F('min_points')),
+                name='valid_app_level_max_points'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['application', 'is_active', 'level_order'], name='idx_app_lvl_active_ord'),
+            models.Index(fields=['tenant', 'application'], name='idx_app_lvl_tenant_app'),
+        ]
+
+    def __str__(self):
+        app_name = self.application.name if self.application else "App"
+        return f"{app_name} - {self.level_name} (Order: {self.level_order})"
+
+    def save(self, *args, **kwargs):
+        if self.is_default:
+            ApplicationUserLevel.objects.filter(
+                application=self.application,
+                is_default=True
+            ).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
+    def is_points_in_range(self, points):
+        if points < self.min_points:
+            return False
+        if self.max_points is not None and points > self.max_points:
+            return False
+        return True
+
+
+class AppUserPointsAccount(models.Model):
+    """
+    应用级用户积分账户表
+    记录Member在特定Application下的积分余额与专属等级
+    """
+    tenant_user_profile = models.ForeignKey(
+        TenantUserProfile,
+        on_delete=models.CASCADE,
+        related_name='app_points_accounts',
+        verbose_name=_("租户用户档案")
+    )
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.CASCADE,
+        related_name='user_points_accounts',
+        verbose_name=_("关联应用")
+    )
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        verbose_name=_("关联租户")
+    )
+    member = models.ForeignKey(
+        'users.Member',
+        on_delete=models.CASCADE,
+        verbose_name=_("关联成员")
+    )
+    
+    total_points = models.PositiveIntegerField(_("总积分"), default=0)
+    available_points = models.PositiveIntegerField(_("可用积分"), default=0)
+    points_earned_total = models.PositiveIntegerField(_("历史获得总积分"), default=0)
+    points_spent_total = models.PositiveIntegerField(_("历史消费总积分"), default=0)
+    
+    current_level = models.ForeignKey(
+        ApplicationUserLevel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='account_holders',
+        verbose_name=_("当前应用等级")
+    )
+    level_updated_at = models.DateTimeField(_("等级更新时间"), null=True, blank=True)
+    
+    is_enabled = models.BooleanField(_("是否启用积分"), default=True)
+    last_points_update = models.DateTimeField(_("最后积分变动时间"), null=True, blank=True)
+    
+    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
+
+    class Meta:
+        db_table = 'points_app_user_points_account'
+        verbose_name = _('应用用户积分账户')
+        verbose_name_plural = _('应用用户积分账户')
+        ordering = ['-total_points', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'application', 'member'],
+                name='unique_tenant_app_member_account'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(total_points__gte=0) & models.Q(available_points__gte=0),
+                name='valid_app_account_points'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(available_points__lte=models.F('total_points')),
+                name='valid_app_account_available_points'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['tenant', 'application'], name='idx_app_acct_tenant_app'),
+            models.Index(fields=['member', 'application'], name='idx_app_acct_member_app'),
+            models.Index(fields=['application', 'total_points'], name='idx_app_acct_app_points'),
+            models.Index(fields=['current_level'], name='idx_app_acct_lvl'),
+        ]
+
+    def __str__(self):
+        member_name = self.member.username if self.member else "Unknown"
+        app_name = self.application.name if self.application else "Unknown"
+        level_name = self.current_level.level_name if self.current_level else "无等级"
+        return f"{member_name}@{app_name} - {self.available_points}可用/{self.total_points}总 ({level_name})"
+
+    def check_level_upgrade(self):
+        """检查并更新该应用下的等级"""
+        new_level = ApplicationUserLevel.objects.filter(
+            application=self.application,
+            is_active=True,
+            min_points__lte=self.total_points
+        ).order_by('-level_order').first()
+        
+        if not new_level:
+            new_level = ApplicationUserLevel.objects.filter(
+                application=self.application,
+                is_active=True,
+                is_default=True
+            ).first()
+
+        if new_level != self.current_level:
+            self.current_level = new_level
+            self.level_updated_at = timezone.now()
+            self.save(update_fields=['current_level', 'level_updated_at'])
+            return True
+        return False
+
+
+class CheckinConfig(models.Model):
+    """
+    签到规则配置模型
+    支持应用专属签到规则与租户全局签到规则（application 为空时表示全局）
+    """
+    CYCLE_MODE_CHOICES = [
+        ('repeat', '周期循环重置'),
+        ('cap', '封顶保持最高奖励'),
+    ]
+
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        related_name='checkin_configs',
+        verbose_name=_("关联租户")
+    )
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='checkin_configs',
+        verbose_name=_("关联应用")
+    )
+    name = models.CharField(_("规则名称"), max_length=100, default="每日签到奖励")
+    cycle_days = models.PositiveIntegerField(_("周期天数"), default=7)
+    cycle_mode = models.CharField(
+        _("周期结算模式"),
+        max_length=20,
+        choices=CYCLE_MODE_CHOICES,
+        default='repeat'
+    )
+    reward_ladder = models.JSONField(
+        _("阶梯奖励配置"),
+        default=list,
+        blank=True,
+        help_text=_("每日奖励列表，如 [{'day': 1, 'points': 10}, ...]")
+    )
+    allow_recheckin = models.BooleanField(_("是否允许补签"), default=False)
+    recheckin_cost = models.PositiveIntegerField(_("补签扣除积分"), default=50)
+    is_active = models.BooleanField(_("是否启用"), default=True)
+
+    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
+
+    class Meta:
+        db_table = 'points_checkin_config'
+        verbose_name = _('签到规则配置')
+        verbose_name_plural = _('签到规则配置')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'application'],
+                name='unique_tenant_app_checkin_config'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['tenant', 'application'], name='idx_checkin_cfg_tenant_app'),
+            models.Index(fields=['tenant', 'is_active'], name='idx_checkin_cfg_tenant_act'),
+        ]
+
+    def __str__(self):
+        target = self.application.name if self.application else "租户全局"
+        return f"{self.tenant.name} - {target} - {self.name} ({self.cycle_days}天周期)"
+
+    @classmethod
+    def get_default_ladder(cls):
+        """生成默认的 7 天递增阶梯奖励"""
+        return [
+            {"day": 1, "points": 10, "label": "第1天"},
+            {"day": 2, "points": 15, "label": "第2天"},
+            {"day": 3, "points": 20, "label": "第3天"},
+            {"day": 4, "points": 25, "label": "第4天"},
+            {"day": 5, "points": 30, "label": "第5天"},
+            {"day": 6, "points": 40, "label": "第6天"},
+            {"day": 7, "points": 100, "label": "满签大礼包"},
+        ]
+
+    def get_points_for_day(self, day_number: int) -> int:
+        """根据连续天数计算应当获得的积分数"""
+        ladder = self.reward_ladder if self.reward_ladder else self.get_default_ladder()
+        ladder_dict = {item.get('day'): item.get('points', 0) for item in ladder if isinstance(item, dict)}
+        
+        cycle = max(self.cycle_days, 1)
+        if self.cycle_mode == 'repeat':
+            effective_day = ((day_number - 1) % cycle) + 1
+        else:
+            effective_day = min(day_number, cycle)
+            
+        if effective_day in ladder_dict:
+            return ladder_dict[effective_day]
+        return ladder[-1].get('points', 10) if ladder else 10
+
+
+class UserCheckinStreak(models.Model):
+    """
+    用户签到连续状态统计表
+    每个用户在每个应用（或全局）下维护一条连续打卡记录
+    """
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        verbose_name=_("关联租户")
+    )
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='checkin_streaks',
+        verbose_name=_("关联应用")
+    )
+    member = models.ForeignKey(
+        'users.Member',
+        on_delete=models.CASCADE,
+        related_name='checkin_streaks',
+        verbose_name=_("关联成员")
+    )
+
+    current_streak = models.PositiveIntegerField(_("当前连续签到天数"), default=0)
+    max_streak = models.PositiveIntegerField(_("历史最高连续天数"), default=0)
+    total_days = models.PositiveIntegerField(_("累计签到总天数"), default=0)
+    last_checkin_date = models.DateField(_("最后签到日期"), null=True, blank=True)
+
+    created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
+
+    class Meta:
+        db_table = 'points_user_checkin_streak'
+        verbose_name = _('用户签到连续状态')
+        verbose_name_plural = _('用户签到连续状态')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'application', 'member'],
+                name='unique_checkin_streak_tenant_app_member'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['tenant', 'application', 'member'], name='idx_chk_strk_tam'),
+            models.Index(fields=['member', 'last_checkin_date'], name='idx_chk_strk_m_date'),
+        ]
+
+    def __str__(self):
+        target = self.application.name if self.application else "全局"
+        return f"{self.member.username}@{target}: 连续 {self.current_streak} 天, 累计 {self.total_days} 天"
+
+
+class UserCheckinRecord(models.Model):
+    """
+    用户每日签到流水明细表
+    记录每次实际签到打卡日志
+    """
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        verbose_name=_("关联租户")
+    )
+    application = models.ForeignKey(
+        'applications.Application',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='checkin_records',
+        verbose_name=_("关联应用")
+    )
+    member = models.ForeignKey(
+        'users.Member',
+        on_delete=models.CASCADE,
+        related_name='checkin_records',
+        verbose_name=_("关联成员")
+    )
+
+    checkin_date = models.DateField(_("签到归属日期"), db_index=True)
+    streak_day = models.PositiveIntegerField(_("连续签到序号(第N天)"))
+    reward_points = models.PositiveIntegerField(_("奖励积分"))
+    is_recheckin = models.BooleanField(_("是否补签"), default=False)
+    extra_data = models.JSONField(_("额外信息"), default=dict, blank=True)
+
+    created_at = models.DateTimeField(_("实际打卡时间"), auto_now_add=True)
+
+    class Meta:
+        db_table = 'points_user_checkin_record'
+        verbose_name = _('用户签到记录')
+        verbose_name_plural = _('用户签到记录')
+        ordering = ['-checkin_date', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'application', 'member', 'checkin_date'],
+                name='unique_checkin_tam_date'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['tenant', 'application', 'checkin_date'], name='idx_chk_rec_tac_date'),
+            models.Index(fields=['member', 'checkin_date'], name='idx_chk_rec_m_date'),
+        ]
+
+    def __str__(self):
+        target = self.application.name if self.application else "全局"
+        return f"{self.member.username}@{target} 于 {self.checkin_date} 签到第{self.streak_day}天 (+{self.reward_points}分)"
+
+

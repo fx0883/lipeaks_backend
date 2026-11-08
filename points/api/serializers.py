@@ -10,7 +10,9 @@ from decimal import Decimal
 
 from points.models import (
     TenantUserProfile, TenantUserPoints, UserLevel, 
-    UserTypeTag, TenantUserTypeTag
+    UserTypeTag, TenantUserTypeTag, ApplicationUserLevel,
+    AppUserPointsAccount, CheckinConfig, UserCheckinStreak,
+    UserCheckinRecord
 )
 from users.models import Member
 from tenants.models import Tenant
@@ -120,11 +122,8 @@ class TenantUserProfileSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.DictField)
     def get_points_summary(self, obj):
         """获取积分统计摘要"""
-        # 调用服务层方法获取积分摘要
-        from points.services.points_engine import PointsEngineService
-        return PointsEngineService.get_user_points_summary(
-            obj.member, obj.tenant, days=30
-        )
+        from points.models import TenantUserPoints
+        return TenantUserPoints.get_points_summary(obj, days=30)
     
     @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_active_tags(self, obj):
@@ -417,3 +416,172 @@ class UserPointsSummarySerializer(serializers.Serializer):
     spent = serializers.DictField(help_text="消费积分统计")
     net_change = serializers.IntegerField(help_text="净变化")
     category_breakdown = serializers.ListField(help_text="分类明细")
+
+
+class ApplicationUserLevelSerializer(serializers.ModelSerializer):
+    """应用专属积分等级序列化器"""
+    application_name = serializers.CharField(source='application.name', read_only=True)
+    application_code = serializers.CharField(source='application.code', read_only=True)
+    icon_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ApplicationUserLevel
+        fields = [
+            'id', 'tenant', 'application', 'application_name', 'application_code',
+            'level_name', 'level_code', 'level_order', 'min_points', 'max_points',
+            'icon', 'icon_url', 'level_color', 'level_description', 'permissions',
+            'quota_config', 'is_active', 'is_default', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'tenant', 'created_at', 'updated_at', 'application_name', 'application_code', 'icon_url']
+
+    def validate(self, attrs):
+        min_p = attrs.get('min_points', getattr(self.instance, 'min_points', None))
+        max_p = attrs.get('max_points', getattr(self.instance, 'max_points', None) if self.instance else None)
+        if min_p is not None and max_p is not None and max_p <= min_p:
+            raise serializers.ValidationError({"max_points": "最高积分上限必须大于最低积分门槛"})
+        return attrs
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_icon_url(self, obj):
+        if not obj.icon:
+            return None
+        request = self.context.get('request')
+        if obj.icon.startswith('http://') or obj.icon.startswith('https://'):
+            return obj.icon
+        # 兼容相对路径 /media/
+        icon_path = obj.icon if obj.icon.startswith('/') else f"/media/{obj.icon}"
+        if request:
+            return request.build_absolute_uri(icon_path)
+        return icon_path
+
+
+class AppUserPointsAccountSerializer(serializers.ModelSerializer):
+    """应用用户积分账户序列化器"""
+    application_name = serializers.CharField(source='application.name', read_only=True)
+    application_code = serializers.CharField(source='application.code', read_only=True)
+    member_username = serializers.CharField(source='member.username', read_only=True)
+    member_email = serializers.CharField(source='member.email', read_only=True)
+    current_level_info = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AppUserPointsAccount
+        fields = [
+            'id', 'tenant_user_profile', 'tenant', 'application', 'application_name', 'application_code',
+            'member', 'member_username', 'member_email', 'total_points', 'available_points',
+            'points_earned_total', 'points_spent_total', 'current_level', 'current_level_info',
+            'level_updated_at', 'is_enabled', 'last_points_update', 'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'created_at', 'updated_at', 'application_name', 'application_code',
+            'member_username', 'member_email', 'current_level_info', 'points_earned_total',
+            'points_spent_total', 'last_points_update', 'level_updated_at'
+        ]
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_current_level_info(self, obj):
+        if obj.current_level:
+            return {
+                'id': obj.current_level.id,
+                'level_name': obj.current_level.level_name,
+                'level_code': obj.current_level.level_code,
+                'level_order': obj.current_level.level_order,
+                'level_color': obj.current_level.level_color,
+                'icon': obj.current_level.icon,
+            }
+        return None
+
+
+class AppPointsAdjustSerializer(serializers.Serializer):
+    """应用积分调整序列化器"""
+    points = serializers.IntegerField(help_text="积分调整数值（正数为增，负数为减）")
+    reason = serializers.CharField(max_length=255, default="管理员手动调账", help_text="调账原因")
+    category = serializers.ChoiceField(
+        choices=TenantUserPoints.CATEGORY_CHOICES,
+        default='manual',
+        help_text="业务分类"
+    )
+
+
+class CheckinConfigSerializer(serializers.ModelSerializer):
+    """签到规则配置序列化器"""
+    application_name = serializers.CharField(source='application.name', read_only=True)
+    application_code = serializers.CharField(source='application.code', read_only=True)
+
+    class Meta:
+        model = CheckinConfig
+        fields = [
+            'id', 'tenant', 'application', 'application_name', 'application_code',
+            'name', 'cycle_days', 'cycle_mode', 'reward_ladder',
+            'allow_recheckin', 'recheckin_cost', 'is_active',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'tenant', 'application_name', 'application_code', 'created_at', 'updated_at']
+
+    def validate_reward_ladder(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("阶梯奖励配置必须是数组格式")
+        for item in value:
+            if not isinstance(item, dict) or 'day' not in item or 'points' not in item:
+                raise serializers.ValidationError("阶梯项必须包含 day 和 points 字段")
+            if not isinstance(item['day'], int) or item['day'] < 1:
+                raise serializers.ValidationError("阶梯 day 必须为大于 0 的整数")
+            if not isinstance(item['points'], int) or item['points'] < 0:
+                raise serializers.ValidationError("阶梯 points 必须为非负整数")
+        return value
+
+
+class UserCheckinStreakSerializer(serializers.ModelSerializer):
+    """用户连续签到统计序列化器（后台管理及用户状态）"""
+    application_name = serializers.CharField(source='application.name', read_only=True)
+    member_username = serializers.CharField(source='member.username', read_only=True)
+    member_email = serializers.CharField(source='member.email', read_only=True)
+    has_checked_in_today = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserCheckinStreak
+        fields = [
+            'id', 'tenant', 'application', 'application_name',
+            'member', 'member_username', 'member_email',
+            'current_streak', 'max_streak', 'total_days',
+            'last_checkin_date', 'has_checked_in_today',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'tenant', 'application_name', 'member_username',
+            'member_email', 'has_checked_in_today', 'created_at', 'updated_at'
+        ]
+
+    def get_has_checked_in_today(self, obj):
+        from django.utils import timezone
+        return obj.last_checkin_date == timezone.localdate()
+
+
+class UserCheckinRecordSerializer(serializers.ModelSerializer):
+    """用户签到记录序列化器"""
+    application_name = serializers.CharField(source='application.name', read_only=True)
+    member_username = serializers.CharField(source='member.username', read_only=True)
+    member_email = serializers.CharField(source='member.email', read_only=True)
+
+    class Meta:
+        model = UserCheckinRecord
+        fields = [
+            'id', 'tenant', 'application', 'application_name',
+            'member', 'member_username', 'member_email', 'checkin_date',
+            'streak_day', 'reward_points', 'is_recheckin', 'extra_data',
+            'created_at'
+        ]
+        read_only_fields = ['id', 'tenant', 'application_name', 'member_username', 'member_email', 'created_at']
+
+
+class CheckinExecuteSerializer(serializers.Serializer):
+    """执行签到请求参数"""
+    application_id = serializers.IntegerField(required=False, allow_null=True, help_text="目标应用ID（不传表示租户全局签到）")
+
+
+class CheckinRecheckinSerializer(serializers.Serializer):
+    """执行补签请求参数"""
+    application_id = serializers.IntegerField(required=False, allow_null=True, help_text="目标应用ID（不传表示租户全局签到）")
+    target_date = serializers.DateField(help_text="需要补签的目标日期（YYYY-MM-DD）")
+
+
+

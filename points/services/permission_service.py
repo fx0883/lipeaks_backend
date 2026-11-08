@@ -145,6 +145,16 @@ class TenantAwarePermissionService:
         )
         
         return effective_permissions
+
+    @classmethod
+    def get_effective_permissions(
+        cls,
+        member: Any,
+        tenant: Any,
+        force_refresh: bool = False
+    ) -> Dict[str, Any]:
+        """静态便捷方法：计算并获取用户的有效权限"""
+        return cls().calculate_user_permissions(member, tenant, force_refresh=force_refresh)
     
     def check_permission(
         self,

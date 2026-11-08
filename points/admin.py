@@ -11,7 +11,12 @@ from .models import (
     TenantUserPoints,
     UserLevel,
     UserTypeTag,
-    TenantUserTypeTag
+    TenantUserTypeTag,
+    ApplicationUserLevel,
+    AppUserPointsAccount,
+    CheckinConfig,
+    UserCheckinStreak,
+    UserCheckinRecord
 )
 
 
@@ -162,3 +167,62 @@ class LicenseAssignmentAdmin(admin.ModelAdmin):
             return f"{key[:8]}***{key[-4:]}" if len(key) > 12 else key
         return '-'
     license_key_short.short_description = '许可证密钥'
+
+
+@admin.register(ApplicationUserLevel)
+class ApplicationUserLevelAdmin(admin.ModelAdmin):
+    """应用专属积分等级管理"""
+    list_display = ['level_name', 'application', 'level_code', 'level_order', 'min_points', 'max_points', 'is_default', 'is_active']
+    list_filter = ['application', 'tenant', 'is_active', 'is_default']
+    search_fields = ['level_name', 'level_code', 'application__name']
+    ordering = ['application', 'level_order']
+
+
+@admin.register(AppUserPointsAccount)
+class AppUserPointsAccountAdmin(admin.ModelAdmin):
+    """应用级用户积分账户管理"""
+    list_display = ['member_name', 'application', 'current_level', 'available_points', 'total_points', 'points_spent_total', 'is_enabled']
+    list_filter = ['application', 'tenant', 'is_enabled']
+    search_fields = ['member__username', 'application__name']
+    
+    def member_name(self, obj):
+        return obj.member.username
+    member_name.short_description = '成员'
+
+
+@admin.register(CheckinConfig)
+class CheckinConfigAdmin(admin.ModelAdmin):
+    """签到规则配置管理"""
+    list_display = ['name', 'tenant', 'application_display', 'cycle_days', 'cycle_mode', 'is_active', 'allow_recheckin']
+    list_filter = ['tenant', 'application', 'is_active', 'cycle_mode']
+    search_fields = ['name', 'tenant__name', 'application__name']
+
+    def application_display(self, obj):
+        return obj.application.name if obj.application else "租户全局"
+    application_display.short_description = '适用应用'
+
+
+@admin.register(UserCheckinStreak)
+class UserCheckinStreakAdmin(admin.ModelAdmin):
+    """用户签到连续状态管理"""
+    list_display = ['member', 'tenant', 'application_display', 'current_streak', 'max_streak', 'total_days', 'last_checkin_date']
+    list_filter = ['tenant', 'application']
+    search_fields = ['member__username', 'tenant__name', 'application__name']
+
+    def application_display(self, obj):
+        return obj.application.name if obj.application else "租户全局"
+    application_display.short_description = '适用应用'
+
+
+@admin.register(UserCheckinRecord)
+class UserCheckinRecordAdmin(admin.ModelAdmin):
+    """用户签到日志流水管理"""
+    list_display = ['member', 'application_display', 'checkin_date', 'streak_day', 'reward_points', 'is_recheckin', 'created_at']
+    list_filter = ['tenant', 'application', 'is_recheckin', 'checkin_date']
+    search_fields = ['member__username', 'application__name']
+    date_hierarchy = 'checkin_date'
+
+    def application_display(self, obj):
+        return obj.application.name if obj.application else "租户全局"
+    application_display.short_description = '适用应用'
+

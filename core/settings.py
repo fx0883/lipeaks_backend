@@ -72,19 +72,21 @@ FEATURE_ENFORCE_TENANT_HEADER_FOR_MEMBER = get_env_with_validation(
 
 # 允许的主机列表：生产环境通过环境变量 ALLOWED_HOSTS 指定具体域名，例如 "example.com,api.example.com"
 def _parse_allowed_hosts(val):
-    default_hosts = ['*'] if DEBUG else ['localhost', '127.0.0.1']
+    default_hosts = ['*'] if DEBUG else ['localhost', '127.0.0.1', 'testserver']
     if isinstance(val, (list, tuple)):
         return list(val) if val else default_hosts
     if isinstance(val, str):
         parsed = [host.strip() for host in val.split(',') if host.strip()]
         if parsed:
+            if 'testserver' not in parsed:
+                parsed.append('testserver')
             return parsed
     return default_hosts
 
 ALLOWED_HOSTS = get_env_with_validation(
     'ALLOWED_HOSTS',
     _parse_allowed_hosts,
-    ['*'] if DEBUG else ['localhost', '127.0.0.1']
+    ['*'] if DEBUG else ['localhost', '127.0.0.1', 'testserver']
 )
 
 # Application definition
