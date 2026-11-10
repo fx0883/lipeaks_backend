@@ -180,11 +180,16 @@ class MenuViewSet(viewsets.ModelViewSet):
         
         # 只有超级管理员可以看到所有菜单
         if not is_super_admin(user):
-            # 普通管理员只能看到分配给自己的菜单
-            user_menu_ids = UserMenu.objects.filter(
-                user=user
-            ).values_list('menu_id', flat=True)
-            queryset = queryset.filter(id__in=user_menu_ids)
+            # 租户主管理员在未限制自身 UserMenu 时，可查看全部激活菜单（用于给应用管理员分配菜单）
+            if getattr(user, 'is_tenant_owner', False) and not UserMenu.objects.filter(user=user).exists():
+                pass
+            else:
+                # 已配置过 UserMenu 的管理员只能看到分配给自己的菜单
+                user_menu_ids = UserMenu.objects.filter(
+                    user=user,
+                    is_active=True
+                ).values_list('menu_id', flat=True)
+                queryset = queryset.filter(id__in=user_menu_ids)
         
         # 过滤条件
         is_active = self.request.query_params.get('is_active')

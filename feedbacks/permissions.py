@@ -10,28 +10,70 @@ from django.utils.translation import gettext_lazy as _
 
 def is_tenant_admin(user):
     """
-    Helper function to check if user is a tenant administrator
-    
-    Args:
-        user: User object
-        
-    Returns:
-        bool: True if user is a tenant admin, False otherwise
+    Helper function to check if user is a tenant administrator (tenant_owner or app_admin).
+    Super admins and regular users/members return False.
     """
-    # User must be authenticated
     if not user or not user.is_authenticated:
         return False
-    
-    # Check if this is a User model instance (not Member)
-    # User has is_admin field, Member doesn't
+
     if not hasattr(user, 'is_admin'):
         return False
-    
-    # Must be admin but not super admin
+
     return (
-        user.is_admin and 
-        not getattr(user, 'is_super_admin', False)
+        user.is_admin and
+        not getattr(user, 'is_super_admin', False) and
+        not getattr(user, 'is_superuser', False)
     )
+
+
+def is_tenant_owner_only(user):
+    """
+    Check if user is a tenant owner (excludes super_admin and app_admin).
+    """
+    return is_tenant_admin(user) and not getattr(user, 'is_app_admin', False)
+
+
+def can_manage_feedback_app(user, application_id):
+    """
+    Check if tenant administrator can manage feedback resources for the given application_id.
+    - tenant_owner: all applications in their tenant
+    - app_admin: only applications returned by user.get_managed_app_ids()
+    - super_admin / regular users: False
+    """
+    if not is_tenant_admin(user):
+        return False
+
+    if getattr(user, 'is_app_admin', False):
+        if application_id is None:
+            return False
+        managed_app_ids = user.get_managed_app_ids() or []
+        return application_id in managed_app_ids
+
+    return True
+
+
+def filter_feedback_queryset_for_user(queryset, user):
+    """
+    Scope Feedback queryset according to role:
+    - super_admin: none (feedback management is restricted to tenant_owner and app_admin)
+    - tenant_owner: all feedbacks in the tenant
+    - app_admin: only feedbacks belonging to user.get_managed_app_ids()
+    - regular authenticated user/member: only feedbacks submitted by user
+    - anonymous: none
+    """
+    if not user or not user.is_authenticated:
+        return queryset.none()
+
+    if getattr(user, 'is_super_admin', False) or getattr(user, 'is_superuser', False):
+        return queryset.none()
+
+    if is_tenant_admin(user):
+        if getattr(user, 'is_app_admin', False):
+            managed_app_ids = user.get_managed_app_ids() or []
+            return queryset.filter(application_id__in=managed_app_ids)
+        return queryset
+
+    return queryset.filter(user=user)
 
 
 class IsTenantAdmin(permissions.BasePermission):
@@ -98,36 +140,35 @@ class SoftwareManagePermission(permissions.BasePermission):
 class FeedbackViewPermission(permissions.BasePermission):
     """
     Permission for viewing feedback.
-    - Super admins can only view feedback from their tenant
-    - Tenant admins can view all feedback from their tenant
+    - Tenant owners can view all feedback from their tenant
+    - Tenant app admins can view feedback for their managed applications
     - Regular users can only view their own feedback
-    - Anonymous users cannot view any feedback
+    - Super admins and anonymous users cannot view feedback
     """
     message = _("You don't have permission to view this feedback.")
     
     def has_permission(self, request, view):
         """Check permission at the view level"""
-        # Must be authenticated to view feedback list
-        return request.user and request.user.is_authenticated
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if getattr(request.user, 'is_super_admin', False) or getattr(request.user, 'is_superuser', False):
+            return False
+        return True
     
     def has_object_permission(self, request, view, obj):
         """Check permission at the object level"""
         if not request.user or not request.user.is_authenticated:
             return False
         
-        # Check tenant match first
         if hasattr(request, 'tenant') and obj.tenant != request.tenant:
             return False
         
-        # Super admin can view all feedback in their tenant
-        if request.user.is_superuser:
+        if can_manage_feedback_app(request.user, obj.application_id):
             return True
         
-        # Tenant admin can view all feedback in their tenant
         if is_tenant_admin(request.user):
-            return True
+            return False
         
-        # Regular users can only view their own feedback
         return obj.user == request.user
 
 
@@ -145,9 +186,9 @@ class FeedbackCreatePermission(permissions.BasePermission):
 class FeedbackUpdatePermission(permissions.BasePermission):
     """
     Permission for updating feedback.
-    - Super admins and tenant admins can update any feedback in their tenant
+    - Tenant owners and app admins (for managed apps) can update feedback in their tenant
     - Regular users can update their own feedback if it hasn't been replied to
-    - Anonymous users cannot update feedback
+    - Super admins and anonymous users cannot update feedback
     """
     message = _("You don't have permission to update this feedback.")
     
@@ -157,18 +198,15 @@ class FeedbackUpdatePermission(permissions.BasePermission):
             self.message = _("Anonymous users cannot update feedback.")
             return False
         
-        # Check tenant match
         if hasattr(request, 'tenant') and obj.tenant != request.tenant:
             return False
         
-        # Super admin and tenant admin can update
-        if request.user.is_superuser:
+        if can_manage_feedback_app(request.user, obj.application_id):
             return True
         
         if is_tenant_admin(request.user):
-            return True
+            return False
         
-        # Regular users can update their own feedback if not replied
         if obj.user == request.user:
             if obj.replies.filter(is_internal_note=False).exists():
                 self.message = _("Cannot update feedback that has been replied to.")
@@ -181,9 +219,9 @@ class FeedbackUpdatePermission(permissions.BasePermission):
 class FeedbackDeletePermission(permissions.BasePermission):
     """
     Permission for deleting feedback.
-    - Super admins and tenant admins can delete any feedback in their tenant
+    - Tenant owners and app admins (for managed apps) can delete feedback in their tenant
     - Regular users can delete their own feedback if it hasn't been replied to
-    - Anonymous users cannot delete feedback
+    - Super admins and anonymous users cannot delete feedback
     """
     message = _("You don't have permission to delete this feedback.")
     
@@ -193,18 +231,15 @@ class FeedbackDeletePermission(permissions.BasePermission):
             self.message = _("Anonymous users cannot delete feedback.")
             return False
         
-        # Check tenant match
         if hasattr(request, 'tenant') and obj.tenant != request.tenant:
             return False
         
-        # Super admin and tenant admin can delete
-        if request.user.is_superuser:
+        if can_manage_feedback_app(request.user, obj.application_id):
             return True
         
         if is_tenant_admin(request.user):
-            return True
+            return False
         
-        # Regular users can delete their own feedback if not replied
         if obj.user == request.user:
             if obj.replies.filter(is_internal_note=False).exists():
                 self.message = _("Cannot delete feedback that has been replied to.")
@@ -217,59 +252,37 @@ class FeedbackDeletePermission(permissions.BasePermission):
 class FeedbackReplyPermission(permissions.BasePermission):
     """
     Permission for replying to feedback.
-    - Only super admins and tenant admins can reply to feedback
-    - Regular users and anonymous users cannot reply
+    - Only tenant owners and app admins (for managed apps) can reply as administrators
     """
-    message = _("Only administrators can reply to feedback.")
+    message = _("Only tenant administrators can reply to feedback.")
     
     def has_permission(self, request, view):
         """Check permission at the view level"""
-        if not request.user or not request.user.is_authenticated:
-            return False
-        
-        # Only admins can reply
-        return (
-            request.user.is_superuser or
-            is_tenant_admin(request.user)
-        )
+        return is_tenant_admin(request.user)
     
     def has_object_permission(self, request, view, obj):
         """Check permission at the object level"""
-        if not request.user or not request.user.is_authenticated:
-            return False
-        
-        # Check tenant match (obj here is the feedback)
         if hasattr(request, 'tenant') and obj.tenant != request.tenant:
             return False
-        
-        # Only admins can reply
-        return (
-            request.user.is_superuser or
-            is_tenant_admin(request.user)
-        )
+        return can_manage_feedback_app(request.user, obj.application_id)
 
 
 class FeedbackStatusChangePermission(permissions.BasePermission):
     """
     Permission for changing feedback status.
-    - Only super admins and tenant admins can change status
+    - Only tenant owners and app admins (for managed apps) can change status
     """
-    message = _("Only administrators can change feedback status.")
+    message = _("Only tenant administrators can change feedback status.")
+
+    def has_permission(self, request, view):
+        """Check permission at the view level"""
+        return is_tenant_admin(request.user)
     
     def has_object_permission(self, request, view, obj):
         """Check permission at the object level"""
-        if not request.user or not request.user.is_authenticated:
-            return False
-        
-        # Check tenant match
         if hasattr(request, 'tenant') and obj.tenant != request.tenant:
             return False
-        
-        # Only admins can change status
-        return (
-            request.user.is_superuser or
-            is_tenant_admin(request.user)
-        )
+        return can_manage_feedback_app(request.user, obj.application_id)
 
 
 class FeedbackVotePermission(permissions.BasePermission):
@@ -300,57 +313,35 @@ class FeedbackVotePermission(permissions.BasePermission):
 class StatisticsViewPermission(permissions.BasePermission):
     """
     Permission for viewing statistics.
-    - Only super admins and tenant admins can view statistics
-    - Statistics are limited to their own tenant
+    - Only tenant owners and app admins can view statistics
+    - Statistics are limited to their own tenant (and managed apps for app_admin)
     """
-    message = _("Only administrators can view statistics.")
+    message = _("Only tenant administrators can view statistics.")
     
     def has_permission(self, request, view):
         """Check permission at the view level"""
-        if not request.user or not request.user.is_authenticated:
-            return False
-        
-        # Only admins can view statistics
-        return (
-            request.user.is_superuser or
-            is_tenant_admin(request.user)
-        )
+        return is_tenant_admin(request.user)
 
 
 class EmailTemplatePermission(permissions.BasePermission):
     """
     Permission for managing email templates.
-    - Only tenant admins can manage email templates
-    - Super admins can view but not edit
+    - Only tenant owners can manage tenant-wide email templates
     """
-    message = _("Only tenant administrators can manage email templates.")
+    message = _("Only tenant owners can manage email templates.")
     
     def has_permission(self, request, view):
         """Check permission at the view level"""
-        # Anyone authenticated can view
         if request.method in permissions.SAFE_METHODS:
             return request.user and request.user.is_authenticated
-        
-        # Only tenant admins can manage
-        if not request.user or not request.user.is_authenticated:
-            return False
-        
-        return (
-            is_tenant_admin(request.user)
-        )
+        return is_tenant_owner_only(request.user)
     
     def has_object_permission(self, request, view, obj):
         """Check permission at the object level"""
-        # Anyone authenticated can view
         if request.method in permissions.SAFE_METHODS:
             return request.user and request.user.is_authenticated
-        
-        # Only tenant admins of the same tenant can manage
-        if not request.user or not request.user.is_authenticated:
-            return False
-        
         return (
-            is_tenant_admin(request.user) and
+            is_tenant_owner_only(request.user) and
             hasattr(request, 'tenant') and
             obj.tenant == request.tenant
         )

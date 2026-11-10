@@ -301,15 +301,24 @@ class FeedbackStatisticsView(APIView):
         
         # Get parameters (compatible with both DRF Request and Django Request)
         query_params = getattr(request, 'query_params', request.GET)
+        application_id = query_params.get('application')
         software_id = query_params.get('software')
         date_from = query_params.get('date_from')
         date_to = query_params.get('date_to')
         
         # Base queryset
-        queryset = Feedback.objects.all()
+        queryset = Feedback.objects.filter(is_deleted=False)
         
-        if hasattr(request, 'tenant'):
-            queryset = queryset.filter(tenant=request.tenant)
+        tenant = getattr(request, 'tenant', None) or getattr(request.user, 'tenant', None)
+        if tenant:
+            queryset = queryset.filter(tenant=tenant)
+
+        if getattr(request.user, 'is_app_admin', False):
+            managed_app_ids = request.user.get_managed_app_ids() or []
+            queryset = queryset.filter(application_id__in=managed_app_ids)
+
+        if application_id:
+            queryset = queryset.filter(application_id=application_id)
         
         if software_id:
             queryset = queryset.filter(software_id=software_id)

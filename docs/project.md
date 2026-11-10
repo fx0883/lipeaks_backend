@@ -1,6 +1,6 @@
-后端服务 lipeaks_backend    路径 /Volumes/MOVESPEED/Github/lipeaks_backend
-后端管理 lipeaks_admin      路径 /Volumes/MOVESPEED/Github/lipeaks_admin
-网站 espressox_cms_next    路径 /Volumes/MOVESPEED/Github/espressox_cms_next
+后端服务 lipeaks_backend    路径 /Volumes/MOVESPEED/lipeaks_backend
+后端管理 lipeaks_admin      路径 /Volumes/MOVESPEED/lipeaks_admin
+网站 espressox_cms_next    路径 /Volumes/MOVESPEED/espressox_cms_next
 
 
 

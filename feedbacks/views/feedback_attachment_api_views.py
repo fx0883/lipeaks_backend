@@ -12,7 +12,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from ..models import Feedback, FeedbackAttachment
 from ..serializers import FeedbackAttachmentSerializer
-from ..permissions import FeedbackReplyPermission  # 使用回复权限，附件上传需要相同权限
+from ..permissions import FeedbackReplyPermission, is_tenant_admin, can_manage_feedback_app
 
 
 def get_tenant_from_request(request):
@@ -72,6 +72,12 @@ class FeedbackAttachmentListView(APIView):
                 return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
         except Feedback.DoesNotExist:
             return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user.is_authenticated:
+            if getattr(request.user, 'is_super_admin', False) or getattr(request.user, 'is_superuser', False):
+                return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+            if is_tenant_admin(request.user) and not can_manage_feedback_app(request.user, feedback.application_id):
+                return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
         
         # 获取附件列表
         queryset = FeedbackAttachment.objects.filter(
@@ -118,6 +124,12 @@ class FeedbackAttachmentListView(APIView):
                 return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
         except Feedback.DoesNotExist:
             return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not can_manage_feedback_app(request.user, feedback.application_id):
+            if getattr(request.user, 'is_super_admin', False) or getattr(request.user, 'is_superuser', False) or is_tenant_admin(request.user):
+                return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+            if feedback.user_id != request.user.id:
+                return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         
         # 创建附件数据
         data = request.data.copy()
@@ -144,16 +156,22 @@ class FeedbackAttachmentDetailView(APIView):
         return [IsAuthenticated()]
     
     def get_object(self, feedback_pk, pk, request):
-        """获取附件对象并检查租户"""
+        """获取附件对象并检查租户与应用管辖权限"""
         try:
             # 先检查反馈是否存在且属于当前租户
             tenant = get_tenant_from_request(request)
             feedback = Feedback.objects.get(pk=feedback_pk, is_deleted=False)
             if tenant and feedback.tenant != tenant:
                 return None
+
+            if request.user.is_authenticated:
+                if getattr(request.user, 'is_super_admin', False) or getattr(request.user, 'is_superuser', False):
+                    return None
+                if is_tenant_admin(request.user) and not can_manage_feedback_app(request.user, feedback.application_id):
+                    return None
             
             # 获取附件
-            attachment = FeedbackAttachment.objects.get(pk=pk, feedback_id=feedback_pk, is_deleted=False)
+            attachment = FeedbackAttachment.objects.select_related('feedback').get(pk=pk, feedback_id=feedback_pk, is_deleted=False)
             return attachment
         except (Feedback.DoesNotExist, FeedbackAttachment.DoesNotExist):
             return None
@@ -189,6 +207,9 @@ class FeedbackAttachmentDetailView(APIView):
         attachment = self.get_object(feedback_pk, pk, request)
         if not attachment:
             return Response({'detail': 'Attachment not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not can_manage_feedback_app(request.user, attachment.feedback.application_id) and attachment.uploaded_by_id != request.user.id:
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         
         attachment.is_deleted = True
         attachment.save(update_fields=['is_deleted'])

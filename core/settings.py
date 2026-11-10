@@ -596,6 +596,15 @@ LOGGING = {
 }
 
 # 邮件设置（QQ邮箱SMTP）
+# 若系统 CA 证书路径为空（常见于 macOS python.org 安装的 Python），自动启用 certifi 根证书束
+try:
+    import ssl as _ssl
+    import certifi as _certifi
+    if not os.environ.get('SSL_CERT_FILE') and not _ssl.get_default_verify_paths().cafile:
+        os.environ['SSL_CERT_FILE'] = _certifi.where()
+except ImportError:
+    pass
+
 # 支持通过环境变量控制：EMAIL_USE_CONSOLE=true 使用控制台模式（仅调试）
 USE_CONSOLE_EMAIL = os.getenv('EMAIL_USE_CONSOLE', 'false').lower() == 'true'
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' if USE_CONSOLE_EMAIL else 'django.core.mail.backends.smtp.EmailBackend'
@@ -606,7 +615,7 @@ EMAIL_USE_TLS = True  # 启用TLS
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')  # QQ邮箱地址
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')  # QQ邮箱授权码
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER if EMAIL_HOST_USER else 'noreply@example.com')  # 发件人邮箱
-EMAIL_TIMEOUT = 30  # SMTP 连接超时（秒）
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '8'))  # SMTP 连接超时（秒，需小于前端 10s 请求超时以便返回明确错误）
 
 # 网站基础 URL（用于生成邮件中的链接）
 # 生产环境应设置为实际域名，如 https://api.example.com

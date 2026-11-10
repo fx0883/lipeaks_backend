@@ -26,6 +26,9 @@ from ..permissions import (
     FeedbackUpdatePermission,
     FeedbackDeletePermission,
     FeedbackStatusChangePermission,
+    is_tenant_admin,
+    can_manage_feedback_app,
+    filter_feedback_queryset_for_user,
 )
 
 
@@ -110,14 +113,8 @@ class FeedbackListView(APIView):
         if application_id:
             queryset = queryset.filter(application_id=application_id)
         
-        # 权限过滤
-        if user.is_authenticated:
-            if not user.is_superuser and not getattr(user, 'is_tenant_admin', False):
-                # 普通用户只能看自己的反馈
-                queryset = queryset.filter(user=user)
-        else:
-            # 未认证用户返回空
-            queryset = queryset.none()
+        # 权限与角色数据范围过滤（super_admin 不可见；tenant_owner 见全租户；app_admin 见管辖应用；普通用户见自己提交）
+        queryset = filter_feedback_queryset_for_user(queryset, user)
         
         feedback_type = request.query_params.get('feedback_type')
         if feedback_type:
@@ -178,6 +175,14 @@ class FeedbackListView(APIView):
                 logger.debug(f"Creating feedback with tenant: {tenant}")
                 feedback = serializer.save(tenant=tenant if tenant else None)
                 logger.debug(f"Feedback created successfully: {feedback.id}")
+
+                # 触发新反馈邮件通知（异步处理，失败不影响反馈提交）
+                try:
+                    from ..services import EmailService
+                    EmailService.send_new_feedback_notification(feedback)
+                except Exception as notify_error:
+                    logger.warning(f"Failed to trigger notification for feedback {feedback.id}: {notify_error}")
+
                 detail_serializer = FeedbackDetailSerializer(feedback, context={'request': request})
                 return Response(detail_serializer.data, status=status.HTTP_201_CREATED)
             else:
@@ -192,15 +197,25 @@ class FeedbackListView(APIView):
 
 
 class FeedbackDetailView(APIView):
-    """反馈详情API - GET不需要认证"""
-    permission_classes = [AllowAny]  # ✅ GET不需要认证，其他操作需要在方法中检查
+    """反馈详情API - 仅限所属租户管理员/应用管理员或提交者访问"""
+    permission_classes = [IsAuthenticated]
     
     def get_object(self, pk, request):
-        """获取反馈对象并检查租户"""
+        """获取反馈对象并检查租户与应用管辖权限"""
         try:
-            feedback = Feedback.objects.get(pk=pk, is_deleted=False)
+            feedback = Feedback.objects.select_related('application', 'user', 'tenant').get(pk=pk, is_deleted=False)
             tenant = get_tenant_from_request(request)
             if tenant and feedback.tenant != tenant:
+                return None
+
+            user = request.user
+            if getattr(user, 'is_super_admin', False) or getattr(user, 'is_superuser', False):
+                return None
+            if is_tenant_admin(user):
+                if not can_manage_feedback_app(user, feedback.application_id):
+                    return None
+                return feedback
+            if feedback.user_id != user.id:
                 return None
             return feedback
         except Feedback.DoesNotExist:
@@ -249,6 +264,10 @@ class FeedbackDetailView(APIView):
         feedback = self.get_object(pk, request)
         if not feedback:
             return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        perm = FeedbackUpdatePermission()
+        if not perm.has_object_permission(request, self, feedback):
+            return Response({'detail': str(perm.message)}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = FeedbackUpdateSerializer(feedback, data=request.data, partial=partial, context={'request': request})
         if serializer.is_valid():
@@ -267,6 +286,10 @@ class FeedbackDetailView(APIView):
         feedback = self.get_object(pk, request)
         if not feedback:
             return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        perm = FeedbackDeletePermission()
+        if not perm.has_object_permission(request, self, feedback):
+            return Response({'detail': str(perm.message)}, status=status.HTTP_403_FORBIDDEN)
         
         feedback.is_deleted = True
         feedback.save(update_fields=['is_deleted'])
@@ -280,7 +303,7 @@ class FeedbackChangeStatusView(APIView):
     @extend_schema(
         tags=['Feedback System'],
         summary='Change feedback status',
-        description='Change feedback status (admin only). Creates status history record.',
+        description='Change feedback status (tenant admin / app admin only). Creates status history record.',
         request={
             'application/json': {
                 'type': 'object',
@@ -303,6 +326,8 @@ class FeedbackChangeStatusView(APIView):
                 return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
         except Feedback.DoesNotExist:
             return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        self.check_object_permissions(request, feedback)
         
         new_status = request.data.get('status')
         reason = request.data.get('reason') or request.data.get('comment', '')

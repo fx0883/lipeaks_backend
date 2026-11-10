@@ -26,7 +26,8 @@ def test_feedback_pagination_sql_slicing_and_oom_defense():
         username="adv_fb_admin",
         email="adv_fb@test.com",
         is_admin=True,
-        is_super_admin=True,
+        is_super_admin=False,
+        admin_type="tenant_owner",
         tenant=tenant
     )
     app = Application.objects.create(name="Adv FB App", code="ADV_FB_APP", tenant=tenant)
@@ -92,7 +93,8 @@ def test_feedback_reply_pagination_sql_slicing():
         username="adv_reply_admin",
         email="adv_reply@test.com",
         is_admin=True,
-        is_super_admin=True,
+        is_super_admin=False,
+        admin_type="tenant_owner",
         tenant=tenant
     )
     app = Application.objects.create(name="Adv Reply App", code="ADV_REPLY_APP", tenant=tenant)

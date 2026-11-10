@@ -12,7 +12,7 @@ from common.pagination import StandardResultsSetPagination
 
 from ..models import EmailTemplate, FeedbackEmailLog
 from ..serializers import EmailTemplateSerializer, FeedbackEmailLogSerializer
-from ..permissions import EmailTemplatePermission, is_tenant_admin
+from ..permissions import EmailTemplatePermission, IsTenantAdmin, is_tenant_admin, is_tenant_owner_only
 
 
 def get_tenant_from_request(request):
@@ -123,13 +123,13 @@ class EmailTemplateListView(APIView):
         }
     )
     def post(self, request):
-        # 权限检查：只有租户管理员可以创建
-        if not is_tenant_admin(request.user):
+        # 权限检查：只有租户主管理员可以创建租户级邮件模板
+        if not is_tenant_owner_only(request.user):
             return Response(
                 {
                     'success': False,
                     'code': 4003,
-                    'message': _('Only tenant administrators can manage email templates.'),
+                    'message': _('Only tenant owners can manage email templates.'),
                     'data': None,
                     'error_code': 'AUTH_PERMISSION_DENIED'
                 },
@@ -236,13 +236,13 @@ class EmailTemplateDetailView(APIView):
         return self._update(request, pk, partial=True)
     
     def _update(self, request, pk, partial=False):
-        # 权限检查：只有租户管理员可以更新
-        if not is_tenant_admin(request.user):
+        # 权限检查：只有租户主管理员可以更新租户级邮件模板
+        if not is_tenant_owner_only(request.user):
             return Response(
                 {
                     'success': False,
                     'code': 4003,
-                    'message': _('Only tenant administrators can manage email templates.'),
+                    'message': _('Only tenant owners can manage email templates.'),
                     'data': None,
                     'error_code': 'AUTH_PERMISSION_DENIED'
                 },
@@ -295,13 +295,13 @@ class EmailTemplateDetailView(APIView):
         }
     )
     def delete(self, request, pk):
-        # 权限检查：只有租户管理员可以删除
-        if not is_tenant_admin(request.user):
+        # 权限检查：只有租户主管理员可以删除租户级邮件模板
+        if not is_tenant_owner_only(request.user):
             return Response(
                 {
                     'success': False,
                     'code': 4003,
-                    'message': _('Only tenant administrators can manage email templates.'),
+                    'message': _('Only tenant owners can manage email templates.'),
                     'data': None,
                     'error_code': 'AUTH_PERMISSION_DENIED'
                 },
@@ -331,9 +331,9 @@ class EmailTemplateDetailView(APIView):
 class EmailLogListView(APIView):
     """
     邮件日志列表视图（只读）
-    GET: 获取邮件发送日志（不需要认证）
+    GET: 获取邮件发送日志（仅限租户管理员/应用管理员，应用管理员按管辖应用过滤）
     """
-    permission_classes = [AllowAny]  # ✅ 所有GET API不需要认证
+    permission_classes = [IsTenantAdmin]
     
     @extend_schema(
         tags=['Email Logs'],
@@ -374,12 +374,17 @@ class EmailLogListView(APIView):
     )
     def get(self, request):
         # 获取当前租户的邮件日志
-        queryset = FeedbackEmailLog.objects.all()
+        queryset = FeedbackEmailLog.objects.select_related('feedback').all()
         
         # 过滤租户
         tenant = get_tenant_from_request(request)
         if tenant:
             queryset = queryset.filter(tenant=tenant)
+
+        # 应用管理员仅查看管辖应用的反馈邮件日志
+        if getattr(request.user, 'is_app_admin', False):
+            managed_app_ids = request.user.get_managed_app_ids() or []
+            queryset = queryset.filter(feedback__application_id__in=managed_app_ids)
         
         # 筛选条件
         feedback_id = request.query_params.get('feedback')
@@ -411,17 +416,20 @@ class EmailLogListView(APIView):
 class EmailLogDetailView(APIView):
     """
     邮件日志详情视图（只读）
-    GET: 获取单个邮件日志详情（不需要认证）
+    GET: 获取单个邮件日志详情（仅限租户管理员/应用管理员）
     """
-    permission_classes = [AllowAny]  # ✅ 所有GET API不需要认证
+    permission_classes = [IsTenantAdmin]
     
     def get_object(self, pk, request):
         """获取邮件日志对象"""
         try:
-            queryset = FeedbackEmailLog.objects.filter(pk=pk)
+            queryset = FeedbackEmailLog.objects.select_related('feedback').filter(pk=pk)
             tenant = get_tenant_from_request(request)
             if tenant:
                 queryset = queryset.filter(tenant=tenant)
+            if getattr(request.user, 'is_app_admin', False):
+                managed_app_ids = request.user.get_managed_app_ids() or []
+                queryset = queryset.filter(feedback__application_id__in=managed_app_ids)
             return queryset.get()
         except FeedbackEmailLog.DoesNotExist:
             return None

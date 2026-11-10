@@ -96,13 +96,18 @@ def build_route_from_menu(menu, allowed_menu_ids=None):
 def is_route_allowed_for_app_admin(route):
     """
     判断路由项是否对应用管理员开放
-    严格白名单模式：仅放行 CMS 相关路由以及控制台/首页/仪表盘，严禁放行客户管理、用户管理、应用设置等其它模块
+    严格白名单模式：仅放行 CMS、反馈管理（应用级）相关路由以及控制台/首页/仪表盘，
+    严禁放行客户管理、用户管理、应用设置、租户全局邮件模板等其它模块
     """
     path = (route.get('path') or '').lower()
     name = (route.get('name') or '').lower()
 
-    # 1. 严格白名单：CMS 以及首页/仪表盘绝对开放
+    # 1. 严格白名单：CMS、反馈管理（排除租户级邮件模板配置）以及首页/仪表盘开放
     if path.startswith('/cms') or 'cms' in name:
+        return True
+    if path.startswith('/feedback') or 'feedback' in name:
+        if path.startswith('/feedback/email/templates') or 'emailtemplate' in name:
+            return False
         return True
     if any(k in path for k in ['dashboard', 'welcome', 'home']) or path in ['/', '']:
         return True
@@ -117,8 +122,11 @@ def filter_routes_for_app_admin(routes):
     for r in routes:
         if is_route_allowed_for_app_admin(r):
             item = dict(r)
-            if 'children' in item and item['children']:
-                item['children'] = filter_routes_for_app_admin(item['children'])
+            if 'children' in item:
+                filtered_children = filter_routes_for_app_admin(item['children'] or [])
+                if not filtered_children:
+                    continue
+                item['children'] = filtered_children
             filtered.append(item)
     return filtered
 
@@ -159,11 +167,11 @@ class AdminRoutesView(APIView):
             except Config.DoesNotExist:
                 # 配置不存在，尝试从菜单模型构建
                 try:
-                    # 获取顶级菜单
+                    # 获取顶级菜单（超级管理员不展示仅限租户管理员/应用管理员的反馈管理菜单）
                     top_menus = Menu.objects.filter(
                         is_active=True, 
                         parent__isnull=True
-                    ).order_by('rank')
+                    ).exclude(code='feedback').order_by('rank')
                     
                     if top_menus:
                         # 构建路由配置

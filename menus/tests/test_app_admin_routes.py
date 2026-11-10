@@ -141,3 +141,54 @@ def test_admin_routes_adaptation_for_app_admin_and_owner(
     explicit_paths = [r["path"] for r in res_explicit.data.get("data", [])]
     assert "/cms" in explicit_paths
     assert "/users" not in explicit_paths
+
+
+@pytest.mark.django_db
+def test_feedback_dynamic_menus_visibility_by_role(tenant, owner, app_admin):
+    """验证 load_feedback_menus 导入后，super_admin 不可见，tenant_owner 全量可见，app_admin 仅见授权的应用级反馈菜单"""
+    from django.core.management import call_command
+
+    call_command("init_super_admin_menu")
+    call_command("load_feedback_menus")
+
+    super_admin = User.objects.create_superuser(
+        username="route_super_admin",
+        email="super@route.com",
+        password="Password123!",
+    )
+    super_admin.is_super_admin = True
+    super_admin.save()
+
+    client = APIClient()
+
+    # 1. 超级管理员不包含反馈管理菜单
+    client.force_authenticate(user=super_admin)
+    res_super = client.get(ROUTES_URL)
+    assert res_super.status_code == status.HTTP_200_OK
+    super_paths = [r["path"] for r in res_super.data.get("data", [])]
+    assert "/feedback" not in super_paths
+
+    # 2. 租户主管理员可见完整反馈管理菜单及子菜单
+    client.force_authenticate(user=owner)
+    res_owner = client.get(ROUTES_URL)
+    assert res_owner.status_code == status.HTTP_200_OK
+    owner_routes = {r["path"]: r for r in res_owner.data.get("data", [])}
+    assert "/feedback" in owner_routes
+    owner_fb_child_paths = [c["path"] for c in owner_routes["/feedback"].get("children", [])]
+    assert "/feedback/list" in owner_fb_child_paths
+    assert "/feedback/email/templates" in owner_fb_child_paths
+
+    # 3. 应用管理员勾选反馈菜单后，可见应用级反馈菜单，但租户级邮件模板配置被过滤
+    fb_menus = Menu.objects.filter(path__startswith="/feedback")
+    for m in fb_menus:
+        UserMenu.objects.create(user=app_admin, menu=m, is_active=True)
+
+    client.force_authenticate(user=app_admin)
+    res_app_admin = client.get(ROUTES_URL)
+    assert res_app_admin.status_code == status.HTTP_200_OK
+    app_admin_routes = {r["path"]: r for r in res_app_admin.data.get("data", [])}
+    assert "/feedback" in app_admin_routes
+    app_admin_fb_child_paths = [c["path"] for c in app_admin_routes["/feedback"].get("children", [])]
+    assert "/feedback/list" in app_admin_fb_child_paths
+    assert "/feedback/statistics" in app_admin_fb_child_paths
+    assert "/feedback/email/templates" not in app_admin_fb_child_paths

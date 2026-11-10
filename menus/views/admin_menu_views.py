@@ -141,17 +141,31 @@ class AdminMenuViewSet(mixins.ListModelMixin,
     permission_classes = [IsAdminUser]
     serializer_class = UserMenuDetailSerializer
     
+    def _can_manage_target_user_menus(self, operator, target_user):
+        """判断当前操作者是否有权管理目标用户的菜单"""
+        if is_super_admin(operator):
+            return True
+        if (
+            getattr(operator, 'is_tenant_owner', False)
+            and operator.tenant_id
+            and operator.tenant_id == getattr(target_user, 'tenant_id', None)
+            and getattr(target_user, 'is_app_admin', False)
+        ):
+            return True
+        return False
+
     def get_queryset(self):
         """
         获取用户菜单关联
         """
         user_id = self.kwargs.get('user_id')
         current_user = self.request.user
-        
+        target_user = User.objects.filter(id=user_id).first()
+
         # 验证访问权限
-        if not is_super_admin(current_user):
+        if not target_user or not self._can_manage_target_user_menus(current_user, target_user):
             return UserMenu.objects.none()
-        
+
         return UserMenu.objects.filter(user_id=user_id, is_active=True)
     
     def list(self, request, *args, **kwargs):
@@ -165,6 +179,12 @@ class AdminMenuViewSet(mixins.ListModelMixin,
             return Response(
                 {"detail": "用户不存在"},
                 status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not self._can_manage_target_user_menus(request.user, user):
+            return Response(
+                {"detail": "权限不足"},
+                status=status.HTTP_403_FORBIDDEN
             )
         
         queryset = self.get_queryset()
@@ -180,12 +200,6 @@ class AdminMenuViewSet(mixins.ListModelMixin,
         """
         为用户分配菜单
         """
-        if not is_super_admin(request.user):
-            return Response(
-                {"detail": "只有超级管理员才能分配菜单给用户"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
         user_id = kwargs.get('user_id')
         try:
             user = User.objects.get(id=user_id)
@@ -193,6 +207,12 @@ class AdminMenuViewSet(mixins.ListModelMixin,
             return Response(
                 {"detail": "用户不存在"},
                 status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not self._can_manage_target_user_menus(request.user, user):
+            return Response(
+                {"detail": "只有超级管理员或本租户主管理员才能分配菜单给该用户"},
+                status=status.HTTP_403_FORBIDDEN
             )
         
         # 检查目标用户是否是管理员
@@ -245,14 +265,15 @@ class AdminMenuViewSet(mixins.ListModelMixin,
         """
         移除用户的特定菜单
         """
-        if not is_super_admin(request.user):
-            return Response(
-                {"detail": "只有超级管理员才能移除用户的菜单"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
         user_id = kwargs.get('user_id')
         menu_id = kwargs.get('pk')
+        target_user = User.objects.filter(id=user_id).first()
+
+        if not target_user or not self._can_manage_target_user_menus(request.user, target_user):
+            return Response(
+                {"detail": "只有超级管理员或本租户主管理员才能移除该用户的菜单"},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         try:
             user_menu = UserMenu.objects.get(user_id=user_id, menu_id=menu_id)
@@ -272,7 +293,7 @@ class AdminMenuViewSet(mixins.ListModelMixin,
     
     @extend_schema(
         summary="批量移除用户菜单",
-        description="批量移除用户的菜单，仅限超级管理员操作",
+        description="批量移除用户的菜单",
         tags=["用户菜单管理"],
         parameters=[
             OpenApiParameter(
@@ -295,18 +316,18 @@ class AdminMenuViewSet(mixins.ListModelMixin,
         """
         批量移除用户菜单
         """
-        if not is_super_admin(request.user):
-            return Response(
-                {"detail": "只有超级管理员才能批量移除用户的菜单"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response(
                 {"detail": "用户不存在"},
                 status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not self._can_manage_target_user_menus(request.user, user):
+            return Response(
+                {"detail": "只有超级管理员或本租户主管理员才能批量移除该用户的菜单"},
+                status=status.HTTP_403_FORBIDDEN
             )
         
         serializer = UserMenusSerializer(data=request.data, context={'request': request})

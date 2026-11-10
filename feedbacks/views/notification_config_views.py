@@ -23,7 +23,7 @@ from feedbacks.serializers import (
     FeedbackNotificationRecipientCreateSerializer,
     NotificationTestSerializer
 )
-from feedbacks.permissions import IsTenantAdmin
+from feedbacks.permissions import IsTenantAdmin, can_manage_feedback_app
 
 logger = logging.getLogger(__name__)
 
@@ -104,19 +104,30 @@ class FeedbackNotificationConfigViewSet(viewsets.ModelViewSet):
         return FeedbackNotificationConfigSerializer
     
     def get_queryset(self):
-        """获取当前租户的通知配置"""
+        """获取当前租户的通知配置（应用管理员仅限所管辖应用）"""
         tenant = get_tenant_from_request(self.request)
         if not tenant:
             return FeedbackNotificationConfig.objects.none()
-        
-        return FeedbackNotificationConfig.objects.filter(
+
+        queryset = FeedbackNotificationConfig.objects.filter(
             tenant=tenant,
             is_deleted=False
         ).select_related('application').prefetch_related('recipients')
+
+        user = self.request.user
+        if getattr(user, 'is_app_admin', False):
+            managed_app_ids = user.get_managed_app_ids() or []
+            queryset = queryset.filter(application_id__in=managed_app_ids)
+
+        return queryset
     
     def perform_create(self, serializer):
-        """创建时自动设置租户"""
+        """创建时自动设置租户并校验应用管辖权限"""
+        from rest_framework.exceptions import PermissionDenied
         tenant = get_tenant_from_request(self.request)
+        application = serializer.validated_data.get('application')
+        if not application or not can_manage_feedback_app(self.request.user, application.id):
+            raise PermissionDenied(_('您没有权限为该应用配置反馈通知'))
         serializer.save(tenant=tenant)
         logger.info(
             f"Notification config created for application {serializer.instance.application.name} "
@@ -353,10 +364,26 @@ class FeedbackNotificationConfigViewSet(viewsets.ModelViewSet):
     def by_application(self, request, application_id=None):
         """按应用ID获取配置"""
         try:
+            app_id_int = int(application_id)
+        except (TypeError, ValueError):
+            return Response({
+                'code': 400,
+                'message': _('无效的应用ID'),
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not can_manage_feedback_app(request.user, app_id_int):
+            return Response({
+                'code': 403,
+                'message': _('您没有权限查看该应用的通知配置'),
+                'data': None
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
             tenant = get_tenant_from_request(request)
             config = FeedbackNotificationConfig.objects.get(
                 tenant=tenant,
-                application_id=application_id,
+                application_id=app_id_int,
                 is_deleted=False
             )
             serializer = FeedbackNotificationConfigSerializer(config)

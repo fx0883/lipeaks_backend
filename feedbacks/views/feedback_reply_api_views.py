@@ -13,7 +13,7 @@ from common.pagination import StandardResultsSetPagination
 
 from ..models import Feedback, FeedbackReply
 from ..serializers import FeedbackReplySerializer, FeedbackReplyCreateSerializer
-from ..permissions import FeedbackReplyPermission
+from ..permissions import FeedbackReplyPermission, is_tenant_admin, can_manage_feedback_app
 from ..services import FeedbackService
 
 
@@ -73,6 +73,12 @@ class FeedbackReplyListView(APIView):
                 return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
         except Feedback.DoesNotExist:
             return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user.is_authenticated:
+            if getattr(request.user, 'is_super_admin', False) or getattr(request.user, 'is_superuser', False):
+                return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+            if is_tenant_admin(request.user) and not can_manage_feedback_app(request.user, feedback.application_id):
+                return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
         
         # 获取回复列表（预取 user, tenant 关联）
         queryset = FeedbackReply.objects.select_related('user', 'tenant').filter(
@@ -80,8 +86,8 @@ class FeedbackReplyListView(APIView):
             is_deleted=False
         )
         
-        # 非管理员用户不显示内部备注
-        if not request.user.is_staff:
+        # 非当前应用管理员不显示内部备注
+        if not can_manage_feedback_app(request.user, feedback.application_id):
             queryset = queryset.filter(is_internal_note=False)
         
         queryset = queryset.order_by('created_at')
@@ -119,15 +125,23 @@ class FeedbackReplyListView(APIView):
                 return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
         except Feedback.DoesNotExist:
             return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        is_app_manager = can_manage_feedback_app(request.user, feedback.application_id)
+        if not is_app_manager:
+            if getattr(request.user, 'is_super_admin', False) or getattr(request.user, 'is_superuser', False) or is_tenant_admin(request.user):
+                return Response({'detail': 'Feedback not found.'}, status=status.HTTP_404_NOT_FOUND)
+            if feedback.user_id != request.user.id:
+                return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = FeedbackReplyCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
+            is_internal_note = serializer.validated_data.get('is_internal_note', False) if is_app_manager else False
             # 使用服务创建回复（处理邮件发送）
             reply = FeedbackService.add_reply(
                 feedback=feedback,
                 content=serializer.validated_data['content'],
                 user=request.user,
-                is_internal_note=serializer.validated_data.get('is_internal_note', False)
+                is_internal_note=is_internal_note
             )
             
             result_serializer = FeedbackReplySerializer(reply, context={'request': request})
@@ -144,19 +158,25 @@ class FeedbackReplyDetailView(APIView):
         return [IsAuthenticated()]
     
     def get_object(self, feedback_pk, pk, request):
-        """获取回复对象并检查租户"""
+        """获取回复对象并检查租户与应用管辖权限"""
         try:
             # 先检查反馈是否存在且属于当前租户
             tenant = get_tenant_from_request(request)
             feedback = Feedback.objects.get(pk=feedback_pk, is_deleted=False)
             if tenant and feedback.tenant != tenant:
                 return None
+
+            if request.user.is_authenticated:
+                if getattr(request.user, 'is_super_admin', False) or getattr(request.user, 'is_superuser', False):
+                    return None
+                if is_tenant_admin(request.user) and not can_manage_feedback_app(request.user, feedback.application_id):
+                    return None
             
             # 获取回复
-            reply = FeedbackReply.objects.get(pk=pk, feedback_id=feedback_pk, is_deleted=False)
+            reply = FeedbackReply.objects.select_related('feedback').get(pk=pk, feedback_id=feedback_pk, is_deleted=False)
             
-            # 非管理员用户不能访问内部备注
-            if not request.user.is_staff and reply.is_internal_note:
+            # 非当前应用管理员不能访问内部备注
+            if not can_manage_feedback_app(request.user, feedback.application_id) and reply.is_internal_note:
                 return None
             
             return reply
@@ -209,6 +229,9 @@ class FeedbackReplyDetailView(APIView):
         reply = self.get_object(feedback_pk, pk, request)
         if not reply:
             return Response({'detail': 'Reply not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not can_manage_feedback_app(request.user, reply.feedback.application_id) and reply.user_id != request.user.id:
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = FeedbackReplySerializer(reply, data=request.data, partial=partial, context={'request': request})
         if serializer.is_valid():
@@ -233,6 +256,9 @@ class FeedbackReplyDetailView(APIView):
         reply = self.get_object(feedback_pk, pk, request)
         if not reply:
             return Response({'detail': 'Reply not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not can_manage_feedback_app(request.user, reply.feedback.application_id) and reply.user_id != request.user.id:
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         
         reply.is_deleted = True
         reply.save(update_fields=['is_deleted'])
